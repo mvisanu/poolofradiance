@@ -320,9 +320,13 @@ namespace RadiantPool.Game
             GameAudio.Play(!hit ? "miss" : crit ? "crit" : "hit");
             if (fx == null || target?.Visual == null) return;
             if (attacker?.Visual != null)
+            {
                 fx.Lunge(attacker.Visual, target.Visual.position);
+                CharacterVisuals.Trigger(attacker.Visual, "Attack");
+            }
             if (hit)
             {
+                CharacterVisuals.Trigger(target.Visual, "Hit");
                 fx.Flash(target.Visual, new Color(1f, 0.35f, 0.3f));
                 fx.Popup(target.Visual.position, crit ? $"{damage}!" : damage.ToString(),
                     crit ? new Color(1f, 0.6f, 0.15f) : Color.white, crit ? 1.4f : 1f);
@@ -350,7 +354,10 @@ namespace RadiantPool.Game
             };
             var color = palette[Mathf.Clamp(colorIdx, 0, palette.Length - 1)];
             if (caster?.Visual != null && caster != target)
+            {
+                CharacterVisuals.Trigger(caster.Visual, "Attack");
                 fx.Bolt(caster.Visual.position, target.Visual.position, color);
+            }
             if (isHeal)
                 fx.Popup(target.Visual.position, $"+{amount}", palette[3]);
             else if (amount > 0)
@@ -603,6 +610,17 @@ namespace RadiantPool.Game
             BuildOverlay();
         }
 
+        /// <summary>Monster id → (KayKit model, tint, scale). Fallback is a red capsule.</summary>
+        private static readonly Dictionary<string, (string model, Color tint, float scale)>
+            MonsterModels = new Dictionary<string, (string, Color, float)>
+        {
+            { "marsh_skulker", ("Ranger", new Color(0.75f, 0.8f, 0.6f), 1f) },
+            { "risen_drowned", ("Skeleton_Minion", new Color(0.6f, 0.85f, 0.7f), 1f) },
+            { "bonewalker", ("Skeleton_Warrior", Color.white, 1f) },
+            { "kindled_zealot", ("Rogue_Hooded", new Color(1f, 0.55f, 0.45f), 1f) },
+            { "hollow_warden", ("Knight", new Color(0.65f, 0.4f, 0.4f), 1.3f) },
+        };
+
         private Transform ResolveVisual(UnitView view)
         {
             if (view.IsPc)
@@ -611,6 +629,22 @@ namespace RadiantPool.Game
                     .FirstOrDefault(p => p.OwnerId == view.OwnerId);
                 return holder != null ? holder.transform : null;
             }
+
+            // Character model when we have one (id format: m<i>_<monsterId>).
+            string monsterId = view.Id.Substring(view.Id.IndexOf('_') + 1);
+            if (MonsterModels.TryGetValue(monsterId, out var spec))
+            {
+                var root = new GameObject($"Monster_{view.Id}");
+                var model = CharacterVisuals.Attach(root.transform, spec.model,
+                    spec.tint, spec.scale);
+                if (model != null)
+                {
+                    AttachLabel(root.transform, view.Name);
+                    return root.transform;
+                }
+                Destroy(root);
+            }
+
             var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             go.name = $"Monster_{view.Id}";
             bool boss = view.MaxHp >= 30;   // bosses loom larger and darker
@@ -619,17 +653,22 @@ namespace RadiantPool.Game
             var renderer = go.GetComponent<Renderer>();
             renderer.material.color = boss
                 ? new Color(0.55f, 0.1f, 0.12f) : new Color(0.75f, 0.25f, 0.2f);
+            AttachLabel(go.transform, view.Name);
+            return go.transform;
+        }
+
+        private static void AttachLabel(Transform parent, string text)
+        {
             var label = new GameObject("Label");
-            label.transform.SetParent(go.transform, false);
-            label.transform.localPosition = new Vector3(0f, 1.6f, 0f);
+            label.transform.SetParent(parent, false);
+            label.transform.localPosition = new Vector3(0f, 1.9f, 0f);
             var tm = label.AddComponent<TextMesh>();
-            tm.text = view.Name;
+            tm.text = text;
             tm.characterSize = 0.09f;
             tm.fontSize = 40;
             tm.anchor = TextAnchor.LowerCenter;
             tm.color = new Color(1f, 0.7f, 0.6f);
             label.AddComponent<Billboard>();
-            return go.transform;
         }
 
         private void SnapVisual(UnitView view)
@@ -638,7 +677,11 @@ namespace RadiantPool.Game
             if (view.IsPc && view.OwnerId == LocalConnection.ClientId)
                 view.Visual.position = pos;                       // my own controller
             else if (!view.IsPc)
-                view.Visual.position = pos + Vector3.up;          // capsule pivot
+            {
+                // Character-model roots sit at ground level; bare capsules pivot mid-body.
+                bool hasModel = view.Visual.Find(CharacterVisuals.VisualName) != null;
+                view.Visual.position = pos + (hasModel ? Vector3.zero : Vector3.up);
+            }
             else if (view.Visual.GetComponent<NetworkObject>()?.IsOwner != true)
                 return;                                            // other players sync via NT
         }
@@ -683,11 +726,22 @@ namespace RadiantPool.Game
             view.Hp = hp;
             view.Down = down;
             view.Dead = dead;
-            if (view.Visual != null && !view.IsPc)
+            if (view.Visual == null) return;
+            bool hasModel = view.Visual.Find(CharacterVisuals.VisualName) != null;
+            if (hasModel)
+            {
+                // Character models play their death pose and stay as corpses.
+                CharacterVisuals.SetDead(view.Visual, dead || down);
+            }
+            else if (!view.IsPc)
+            {
                 view.Visual.gameObject.SetActive(!dead);
-            if (view.Visual != null && view.IsPc)
+            }
+            else
+            {
                 view.Visual.localRotation = down || dead
                     ? Quaternion.Euler(90f, 0f, 0f) : Quaternion.identity;
+            }
         }
 
         [FishNet.Object.TargetRpc]

@@ -1,0 +1,220 @@
+using System.Linq;
+using UnityEditor;
+using UnityEditor.Animations;
+using UnityEngine;
+
+namespace RadiantPool.EditorTools
+{
+    /// <summary>Integration for the CC0 KayKit character packs (Adventurers + Skeletons):
+    /// URP material remap per character texture, looping import settings and a shared
+    /// AnimatorController built from the Rig_Medium clips, and one prefab per character
+    /// under Resources/Characters so runtime code can swap capsules for real people.</summary>
+    public static class KayKitArt
+    {
+        private const string Root = "Assets/Art/KayKit";
+        private const string ControllerPath = Root + "/CharacterAnimator.controller";
+        private const string PrefabDir = "Assets/Resources/Characters";
+
+        public static void Setup()
+        {
+            if (!AssetDatabase.IsValidFolder(Root))
+            {
+                Debug.LogWarning("[Bootstrap] No KayKit assets found; characters stay capsules.");
+                return;
+            }
+            SetupMaterialsAndImport();
+            var controller = BuildAnimator();
+            BuildPrefabs(controller);
+            Debug.Log("[Bootstrap] KayKit characters ready.");
+        }
+
+        private static void SetupMaterialsAndImport()
+        {
+            foreach (string folder in new[] { "Characters", "Skeletons" })
+            {
+                string dir = $"{Root}/{folder}";
+                if (!AssetDatabase.IsValidFolder(dir)) continue;
+                foreach (string guid in AssetDatabase.FindAssets("t:Model", new[] { dir }))
+                {
+                    string path = AssetDatabase.GUIDToAssetPath(guid);
+                    string baseName = System.IO.Path.GetFileNameWithoutExtension(path);
+
+                    // Texture: <name>_texture.png, else the folder's shared texture.
+                    string texName = baseName.ToLowerInvariant().Replace("_hooded", "") + "_texture";
+                    var tex = AssetDatabase.LoadAssetAtPath<Texture2D>($"{dir}/{texName}.png")
+                              ?? AssetDatabase.FindAssets("t:Texture2D", new[] { dir })
+                                  .Select(AssetDatabase.GUIDToAssetPath)
+                                  .Select(AssetDatabase.LoadAssetAtPath<Texture2D>)
+                                  .FirstOrDefault();
+
+                    string matPath = $"{dir}/M_{baseName}.mat";
+                    var mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+                    if (mat == null)
+                    {
+                        mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                        if (tex != null) mat.SetTexture("_BaseMap", tex);
+                        mat.SetFloat("_Smoothness", 0.05f);
+                        AssetDatabase.CreateAsset(mat, matPath);
+                    }
+
+                    var importer = (ModelImporter)AssetImporter.GetAtPath(path);
+                    bool changed = false;
+                    var embedded = AssetDatabase.LoadAllAssetsAtPath(path)
+                        .OfType<Material>().Select(m => m.name).Distinct();
+                    var map = importer.GetExternalObjectMap();
+                    foreach (string name in embedded)
+                    {
+                        var id = new AssetImporter.SourceAssetIdentifier(typeof(Material), name);
+                        if (map.ContainsKey(id)) continue;
+                        importer.AddRemap(id, mat);
+                        changed = true;
+                    }
+                    if (changed) AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+                }
+            }
+
+            // Animation FBXes: mark idle/walk/run clips as looping.
+            string animDir = $"{Root}/Animations";
+            foreach (string guid in AssetDatabase.FindAssets("t:Model", new[] { animDir }))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                var importer = (ModelImporter)AssetImporter.GetAtPath(path);
+                var clips = importer.defaultClipAnimations;
+                if (clips.Length == 0) continue;
+                bool changed = false;
+                foreach (var clip in clips)
+                {
+                    bool shouldLoop = clip.name.Contains("Idle") || clip.name.Contains("Walking")
+                        || clip.name.Contains("Running");
+                    if (shouldLoop && !clip.loopTime) { clip.loopTime = true; changed = true; }
+                }
+                if (changed || importer.clipAnimations.Length == 0)
+                {
+                    importer.clipAnimations = clips;
+                    AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+                }
+            }
+        }
+
+        private static AnimationClip FindClip(AnimationClip[] all, params string[] keywords)
+        {
+            foreach (string k in keywords)
+            {
+                var clip = all.FirstOrDefault(c => c.name.Contains(k));
+                if (clip != null) return clip;
+            }
+            return null;
+        }
+
+        private static AnimatorController BuildAnimator()
+        {
+            var clips = AssetDatabase.FindAssets("t:Model", new[] { $"{Root}/Animations" })
+                .Select(AssetDatabase.GUIDToAssetPath)
+                .SelectMany(AssetDatabase.LoadAllAssetsAtPath)
+                .OfType<AnimationClip>()
+                .Where(c => !c.name.StartsWith("__"))
+                .ToArray();
+            Debug.Log($"[Bootstrap] KayKit animation clips: {clips.Length}");
+
+            AssetDatabase.DeleteAsset(ControllerPath);
+            var controller = AnimatorController.CreateAnimatorControllerAtPath(ControllerPath);
+            controller.AddParameter("Speed", AnimatorControllerParameterType.Float);
+            controller.AddParameter("Attack", AnimatorControllerParameterType.Trigger);
+            controller.AddParameter("Hit", AnimatorControllerParameterType.Trigger);
+            controller.AddParameter("Dead", AnimatorControllerParameterType.Bool);
+
+            var sm = controller.layers[0].stateMachine;
+            var idle = sm.AddState("Idle");
+            idle.motion = FindClip(clips, "Idle");
+            sm.defaultState = idle;
+            var move = sm.AddState("Move");
+            move.motion = FindClip(clips, "Walking_A", "Walking", "Running");
+            var attack = sm.AddState("Attack");
+            attack.motion = FindClip(clips, "1H_Melee_Attack_Slice", "1H_Melee_Attack",
+                "Melee_Attack", "Attack");
+            var hit = sm.AddState("Hit");
+            hit.motion = FindClip(clips, "Hit_A", "Hit");
+            var dead = sm.AddState("Dead");
+            dead.motion = FindClip(clips, "Death_A", "Death");
+
+            var toMove = idle.AddTransition(move);
+            toMove.AddCondition(AnimatorConditionMode.Greater, 0.15f, "Speed");
+            toMove.hasExitTime = false;
+            toMove.duration = 0.12f;
+            var toIdle = move.AddTransition(idle);
+            toIdle.AddCondition(AnimatorConditionMode.Less, 0.15f, "Speed");
+            toIdle.hasExitTime = false;
+            toIdle.duration = 0.12f;
+
+            var anyAttack = sm.AddAnyStateTransition(attack);
+            anyAttack.AddCondition(AnimatorConditionMode.If, 0, "Attack");
+            anyAttack.hasExitTime = false;
+            anyAttack.duration = 0.05f;
+            var attackDone = attack.AddTransition(idle);
+            attackDone.hasExitTime = true;
+            attackDone.exitTime = 0.9f;
+            attackDone.duration = 0.1f;
+
+            var anyHit = sm.AddAnyStateTransition(hit);
+            anyHit.AddCondition(AnimatorConditionMode.If, 0, "Hit");
+            anyHit.hasExitTime = false;
+            anyHit.duration = 0.05f;
+            var hitDone = hit.AddTransition(idle);
+            hitDone.hasExitTime = true;
+            hitDone.exitTime = 0.85f;
+            hitDone.duration = 0.1f;
+
+            var anyDead = sm.AddAnyStateTransition(dead);
+            anyDead.AddCondition(AnimatorConditionMode.If, 0, "Dead");
+            anyDead.hasExitTime = false;
+            anyDead.duration = 0.1f;
+            var revive = dead.AddTransition(idle);
+            revive.AddCondition(AnimatorConditionMode.IfNot, 0, "Dead");
+            revive.hasExitTime = false;
+            revive.duration = 0.1f;
+
+            return controller;
+        }
+
+        private static void BuildPrefabs(AnimatorController controller)
+        {
+            if (!AssetDatabase.IsValidFolder("Assets/Resources"))
+                AssetDatabase.CreateFolder("Assets", "Resources");
+            if (!AssetDatabase.IsValidFolder(PrefabDir))
+                AssetDatabase.CreateFolder("Assets/Resources", "Characters");
+
+            foreach (string folder in new[] { "Characters", "Skeletons" })
+            {
+                string dir = $"{Root}/{folder}";
+                if (!AssetDatabase.IsValidFolder(dir)) continue;
+                foreach (string guid in AssetDatabase.FindAssets("t:Model", new[] { dir }))
+                {
+                    string path = AssetDatabase.GUIDToAssetPath(guid);
+                    string name = System.IO.Path.GetFileNameWithoutExtension(path);
+                    var model = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                    if (model == null) continue;
+
+                    var instance = (GameObject)PrefabUtility.InstantiatePrefab(model);
+                    // Normalize height to ~1.85 m so all bodies match the controller capsule.
+                    var renderers = instance.GetComponentsInChildren<Renderer>();
+                    if (renderers.Length > 0)
+                    {
+                        var bounds = renderers[0].bounds;
+                        foreach (var r in renderers.Skip(1)) bounds.Encapsulate(r.bounds);
+                        if (bounds.size.y > 0.01f)
+                            instance.transform.localScale =
+                                Vector3.one * (1.85f / bounds.size.y);
+                    }
+                    // Explicit null check — Unity's fake-null objects defeat "??".
+                    var animator = instance.GetComponent<Animator>();
+                    if (animator == null) animator = instance.AddComponent<Animator>();
+                    animator.runtimeAnimatorController = controller;
+                    animator.applyRootMotion = false;
+
+                    PrefabUtility.SaveAsPrefabAsset(instance, $"{PrefabDir}/{name}.prefab");
+                    Object.DestroyImmediate(instance);
+                }
+            }
+        }
+    }
+}

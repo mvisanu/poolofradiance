@@ -19,36 +19,29 @@ namespace RadiantPool.Game
 
         public CharacterClass Class => (CharacterClass)Mathf.Max(0, ClassIndex.Value);
 
-        private static readonly Color[] ClassColors =
-        {
-            new Color(0.42f, 0.55f, 0.85f),  // fighter — steel blue
-            new Color(0.92f, 0.78f, 0.35f),  // cleric — gold
-            new Color(0.62f, 0.4f, 0.85f),   // wizard — violet
-            new Color(0.4f, 0.75f, 0.45f)    // rogue — green
-        };
+        /// <summary>Class → KayKit Adventurers model (CC0, Resources/Characters).</summary>
+        private static readonly string[] ClassModels =
+            { "Knight", "Barbarian", "Mage", "Rogue_Hooded" };
 
         private void Awake()
         {
-            ClassIndex.OnChange += (_, next, _) => TintBody(next);
+            ClassIndex.OnChange += (_, next, _) => ApplyClassVisual(next);
         }
 
         public override void OnStartClient()
         {
             base.OnStartClient();
-            TintBody(ClassIndex.Value);
+            ApplyClassVisual(ClassIndex.Value);
             if (!IsOwner) return;
             var b = CharacterBuild.Local;
             CmdSubmitBuild(SessionLauncher.LocalDisplayName, b.ClassIndex, b.RaceIndex,
                 b.Str, b.Dex, b.Con, b.Int, b.Wis, b.Cha);
         }
 
-        /// <summary>Class-colored body so party members read at a glance (gray-box art).</summary>
-        private void TintBody(int classIndex)
+        private void ApplyClassVisual(int classIndex)
         {
-            if (classIndex < 0 || classIndex >= ClassColors.Length) return;
-            foreach (var r in GetComponentsInChildren<Renderer>())
-                if (r.gameObject.name == "Capsule")
-                    r.material.color = ClassColors[classIndex];
+            if (classIndex < 0 || classIndex >= ClassModels.Length) return;
+            CharacterVisuals.Attach(transform, ClassModels[classIndex]);
         }
 
         [ServerRpc]

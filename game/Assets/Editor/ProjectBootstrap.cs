@@ -33,6 +33,7 @@ namespace RadiantPool.EditorTools
             SetupPlayerSettings();
             SetupUrp();
             KenneyArt.SetupMaterials();
+            KayKitArt.Setup();
             var playerPrefab = CreatePlayerPrefab();
             CreateGrayboxScene(playerPrefab);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
@@ -392,6 +393,7 @@ namespace RadiantPool.EditorTools
             veresk.transform.position = new Vector3(0, 1.3f, -16);
             veresk.GetComponent<Renderer>().sharedMaterial =
                 Mat("M_Npc", new Color(0.85f, 0.75f, 0.35f));
+            veresk.AddComponent<NpcVisual>().Model = "Mage";   // robed councilor
             veresk.AddComponent<NpcInteract>();
             var plateGo = new GameObject("Nameplate");
             plateGo.transform.SetParent(veresk.transform, false);
@@ -479,6 +481,7 @@ namespace RadiantPool.EditorTools
             vendor.transform.position = new Vector3(4, 1.3f, -13);
             vendor.GetComponent<Renderer>().sharedMaterial =
                 Mat("M_Vendor", new Color(0.4f, 0.75f, 0.5f));
+            vendor.AddComponent<NpcVisual>().Model = "Barbarian";  // burly trader
             vendor.AddComponent<VendorInteract>();
             var vplateGo = new GameObject("Nameplate");
             vplateGo.transform.SetParent(vendor.transform, false);
