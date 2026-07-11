@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "hollow_warden",
+  "name": "Warden Sorrel, Hollow-Flame Host",
+  "srdRef": "Knight (SRD 5.1)",
+  "size": "Medium",
+  "ac": 18,
+  "hpDice": "8d8+16",
+  "speed": 30,
+  "abilities": { "str": 16, "dex": 11, "con": 14, "int": 11, "wis": 11, "cha": 15 },
+  "attacks": [
+    { "name": "Flame-Wreathed Blade", "toHit": 5, "damage": "2d6+3", "damageType": "slashing", "rangeFeet": 5 },
+    { "name": "Gout of Radiance", "toHit": 4, "damage": "2d6", "damageType": "fire", "rangeFeet": 30 }
+  ],
+  "xp": 700,
+  "ai": "boss",
+  "lootTable": "lt_sunken_vault"
+}

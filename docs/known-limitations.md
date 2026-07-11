@@ -1,8 +1,8 @@
 # Known limitations — v1 vertical slice
 
 Gameplay
-- One zone (Old Docks) is playable in-engine; Drowned Market and Glasslit Temple exist as
-  content JSON but have no scenes yet (they arrive with the 3f art pass).
+- All three zones (Old Docks, Drowned Market, Glasslit Temple) are playable gray-box in
+  one map with quest-gated barriers; per-zone scenes with real art arrive at 3f.
 - Level-ups apply automatically (HP/slots/features per SRD); no choice UI (e.g. ASI
   allocation is deferred — flagged for 3c-full).
 - Rogue Sneak Attack, Fighter Action Surge/Second Wind, and Cleric Channel Divinity are

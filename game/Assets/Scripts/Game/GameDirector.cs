@@ -8,29 +8,35 @@ namespace RadiantPool.Game
 {
     public enum QuestState { Locked = 0, Active = 1, ObjectivesMet = 2, Completed = 3 }
 
-    /// <summary>Server-owned campaign state for the vertical slice: the muster quest and
-    /// the first zone-clearing quest (content ids from /content/quests). Zone-clear
-    /// progress, party gold, XP awards, and the shared journal all live here. A
-    /// data-driven quest engine over ContentDb replaces the hardcoded chain in 3d-full.</summary>
+    /// <summary>Server-owned campaign state for the full first region: the muster quest
+    /// plus one zone-clearing quest per zone, in a fixed chain (docks → market → temple).
+    /// Zone data mirrors /content/zones + /content/quests JSON and is wired by the
+    /// bootstrap. Gold, stash, XP awards, saves, and the journal all live here.</summary>
     public class GameDirector : NetworkBehaviour
     {
         public static GameDirector Instance { get; private set; }
 
-        [Header("Zone quest (from content/zones + quests JSON)")]
-        public string ZoneId = "old_docks";
-        public string ZoneDisplayName = "The Old Docks";
-        public int RequiredEncounters = 3;
-        public int QuestXpEach = 300;
-        public int QuestGold = 100;
+        [System.Serializable]
+        public class ZoneConfig
+        {
+            public string ZoneId = "";
+            public string DisplayName = "";
+            public string QuestName = "";
+            public int RequiredEncounters = 3;
+            public int XpEach = 300;
+            public int Gold = 100;
+        }
+
+        [Header("Zone chain (from content JSON, wired by bootstrap)")]
+        public ZoneConfig[] Zones = System.Array.Empty<ZoneConfig>();
 
         public readonly SyncVar<int> MusterState = new SyncVar<int>((int)QuestState.Active);
-        public readonly SyncVar<int> ClearQuestState = new SyncVar<int>((int)QuestState.Locked);
-        public readonly SyncVar<int> EncountersCleared = new SyncVar<int>(0);
+        public readonly SyncList<int> ZoneStates = new SyncList<int>();
+        public readonly SyncList<int> ZoneClearedCounts = new SyncList<int>();
+        public readonly SyncVar<bool> CampaignComplete = new SyncVar<bool>(false);
         public readonly SyncVar<int> PartyGold = new SyncVar<int>(0);
-        public readonly SyncVar<bool> ZonePacified = new SyncVar<bool>(false);
 
-        /// <summary>Party-shared loot stash (item ids from content/items). Per-character
-        /// inventories arrive with the 3e equipment pass.</summary>
+        /// <summary>Party-shared loot stash (item ids from content/items).</summary>
         public readonly SyncList<string> Stash = new SyncList<string>();
 
         /// <summary>Sell value in gold = half list price (items.json costCp / 100 / 2).</summary>
@@ -50,9 +56,12 @@ namespace RadiantPool.Game
         private void Awake() => Instance = this;
         private void OnDestroy() { if (Instance == this) Instance = null; }
 
+        public QuestState GetZoneState(int index) =>
+            index >= 0 && index < ZoneStates.Count
+                ? (QuestState)ZoneStates[index] : QuestState.Locked;
+
         // ---------------- server ----------------
 
-        // Roster survives disconnects: a rejoining display name reclaims its character.
         private readonly System.Collections.Generic.Dictionary<string, RadiantPool.Rules.CharacterSheet>
             _roster = new System.Collections.Generic.Dictionary<string, RadiantPool.Rules.CharacterSheet>();
         private readonly System.Collections.Generic.Dictionary<string, CharacterBuild>
@@ -63,15 +72,24 @@ namespace RadiantPool.Game
         public override void OnStartServer()
         {
             base.OnStartServer();
+            for (int i = 0; i < Zones.Length; i++)
+            {
+                ZoneStates.Add((int)QuestState.Locked);
+                ZoneClearedCounts.Add(0);
+            }
+
             if (!SaveSystem.Exists) return;
             var save = SaveSystem.Read();
             if (save == null) return;
 
             MusterState.Value = save.MusterState;
-            ClearQuestState.Value = save.ClearQuestState;
-            EncountersCleared.Value = save.EncountersCleared;
+            for (int i = 0; i < Zones.Length && i < save.ZoneStates.Count; i++)
+            {
+                ZoneStates[i] = save.ZoneStates[i];
+                ZoneClearedCounts[i] = save.ZoneClearedCounts[i];
+            }
+            CampaignComplete.Value = save.CampaignComplete;
             PartyGold.Value = save.PartyGold;
-            ZonePacified.Value = save.ZonePacified;
             Stash.Clear();
             foreach (var s in save.Stash) Stash.Add(s);
             foreach (var saved in save.Roster)
@@ -117,10 +135,10 @@ namespace RadiantPool.Game
             var save = new CampaignSave
             {
                 MusterState = MusterState.Value,
-                ClearQuestState = ClearQuestState.Value,
-                EncountersCleared = EncountersCleared.Value,
+                ZoneStates = ZoneStates.ToList(),
+                ZoneClearedCounts = ZoneClearedCounts.ToList(),
+                CampaignComplete = CampaignComplete.Value,
                 PartyGold = PartyGold.Value,
-                ZonePacified = ZonePacified.Value,
                 Stash = Stash.ToList(),
                 ConsumedEncounters = _consumedEncounters.ToList(),
                 Roster = _roster.Select(kv =>
@@ -132,23 +150,25 @@ namespace RadiantPool.Game
         [Server]
         public void ServerEncounterCleared(EncounterTrigger trigger)
         {
-            if (trigger == null || trigger.ZoneId != ZoneId) return;
+            if (trigger == null) return;
+            int zone = System.Array.FindIndex(Zones, z => z.ZoneId == trigger.ZoneId);
             trigger.Consume();
             _consumedEncounters.Add(trigger.EncounterId);
             ServerSaveCampaign();   // autosave at every cleared block
-            if (!trigger.RequiredForClear) return;
+            if (zone < 0 || !trigger.RequiredForClear) return;
 
-            EncountersCleared.Value++;
-            if (ClearQuestState.Value == (int)QuestState.Active
-                && EncountersCleared.Value >= RequiredEncounters)
+            ZoneClearedCounts[zone]++;
+            var cfg = Zones[zone];
+            if (GetZoneState(zone) == QuestState.Active
+                && ZoneClearedCounts[zone] >= cfg.RequiredEncounters)
             {
-                ClearQuestState.Value = (int)QuestState.ObjectivesMet;
-                RpcNotice($"{ZoneDisplayName} has been cleared! Return to Councilor Veresk.");
+                ZoneStates[zone] = (int)QuestState.ObjectivesMet;
+                RpcNotice($"{cfg.DisplayName} has been cleared! Return to Councilor Veresk.");
             }
             else
             {
-                RpcNotice($"Encounter cleared ({EncountersCleared.Value}/{RequiredEncounters} " +
-                          $"in {ZoneDisplayName}).");
+                RpcNotice($"Encounter cleared ({Mathf.Min(ZoneClearedCounts[zone], cfg.RequiredEncounters)}" +
+                          $"/{cfg.RequiredEncounters} in {cfg.DisplayName}).");
             }
         }
 
@@ -156,24 +176,37 @@ namespace RadiantPool.Game
         [ServerRpc(RequireOwnership = false)]
         public void CmdDialogueChoice(string action, NetworkConnection conn = null)
         {
-            switch (action)
+            if (action == "muster_accept" && MusterState.Value == (int)QuestState.Active)
             {
-                case "muster_accept" when MusterState.Value == (int)QuestState.Active:
-                    MusterState.Value = (int)QuestState.Completed;
-                    ClearQuestState.Value = (int)QuestState.Active;
-                    AwardXpToAll(50);
-                    RpcNotice("New quest: Retake the Old Docks (journal: J).");
-                    break;
+                MusterState.Value = (int)QuestState.Completed;
+                if (Zones.Length > 0) ZoneStates[0] = (int)QuestState.Active;
+                AwardXpToAll(50);
+                RpcNotice($"New quest: {Zones[0].QuestName} (journal: J).");
+                ServerSaveCampaign();
+                return;
+            }
 
-                case "docks_turnin" when ClearQuestState.Value == (int)QuestState.ObjectivesMet:
-                    ClearQuestState.Value = (int)QuestState.Completed;
-                    ZonePacified.Value = true;
-                    PartyGold.Value += QuestGold;
-                    AwardXpToAll(QuestXpEach);
-                    ServerSaveCampaign();
-                    RpcNotice($"Quest complete! +{QuestXpEach} XP each, +{QuestGold} gold. " +
-                              "The Old Docks are safe forever.");
-                    break;
+            if (action.StartsWith("turnin_") && int.TryParse(action.Substring(7), out int zone)
+                && zone >= 0 && zone < Zones.Length
+                && GetZoneState(zone) == QuestState.ObjectivesMet)
+            {
+                var cfg = Zones[zone];
+                ZoneStates[zone] = (int)QuestState.Completed;
+                PartyGold.Value += cfg.Gold;
+                AwardXpToAll(cfg.XpEach);
+                if (zone + 1 < Zones.Length)
+                {
+                    ZoneStates[zone + 1] = (int)QuestState.Active;
+                    RpcNotice($"Quest complete! +{cfg.XpEach} XP each, +{cfg.Gold} gold. " +
+                              $"New quest: {Zones[zone + 1].QuestName}.");
+                }
+                else
+                {
+                    CampaignComplete.Value = true;
+                    RpcNotice($"Quest complete! +{cfg.XpEach} XP each, +{cfg.Gold} gold. " +
+                              "The Hollow Flame recedes — Aldenmere is free!");
+                }
+                ServerSaveCampaign();
             }
         }
 
@@ -283,15 +316,22 @@ namespace RadiantPool.Game
             }
 
             if (!_journalOpen) return;
-            GUILayout.BeginArea(new Rect(Screen.width / 2f - 210, 70, 420, 240), GUI.skin.box);
+            GUILayout.BeginArea(new Rect(Screen.width / 2f - 210, 70, 420, 300), GUI.skin.box);
             GUILayout.Label("<b>Journal</b> (J to close)",
                 new GUIStyle(GUI.skin.label) { richText = true });
 
             DrawQuest("Report to the Council", (QuestState)MusterState.Value,
                 "Speak with Councilor Veresk at the Council Hall.");
-            DrawQuest("Retake the Old Docks", (QuestState)ClearQuestState.Value,
-                $"Defeat the squatters ({Mathf.Min(EncountersCleared.Value, RequiredEncounters)}" +
-                $"/{RequiredEncounters}), then return to Veresk.");
+            for (int i = 0; i < Zones.Length; i++)
+            {
+                var cfg = Zones[i];
+                DrawQuest(cfg.QuestName, GetZoneState(i),
+                    $"Clear {cfg.DisplayName} " +
+                    $"({Mathf.Min(i < ZoneClearedCounts.Count ? ZoneClearedCounts[i] : 0, cfg.RequiredEncounters)}" +
+                    $"/{cfg.RequiredEncounters}), then return to Veresk.");
+            }
+            if (CampaignComplete.Value)
+                GUILayout.Label("★ Aldenmere stands free. The campaign is complete!");
 
             GUILayout.Space(8);
             int potions = Stash.Count(s => s == "potion_healing");
@@ -307,8 +347,6 @@ namespace RadiantPool.Game
                 if (GUILayout.Button("Long rest")) CmdLongRest();
                 GUILayout.EndHorizontal();
             }
-            if (ZonePacified.Value)
-                GUILayout.Label("The Old Docks are pacified — lanterns lit, no more ambushes.");
             GUILayout.EndArea();
         }
 

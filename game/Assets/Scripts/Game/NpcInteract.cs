@@ -4,12 +4,31 @@ using UnityEngine;
 namespace RadiantPool.Game
 {
     /// <summary>Walk up to the NPC and press E; dialogue reflects the shared quest state
-    /// (lines abridged from content/dialogue/npc_council_veresk.json). Choices go to the
-    /// server via GameDirector, so both players see quest state advance together.</summary>
+    /// across the whole zone chain (lines abridged from content/dialogue JSON). Choices
+    /// go to the server via GameDirector, so all players see quest state advance.</summary>
     public class NpcInteract : MonoBehaviour
     {
         public string NpcName = "Councilor Veresk";
         public float InteractRange = 3.5f;
+
+        private static readonly string[] ZoneBriefs =
+        {
+            "\"The squatter gangs hold three yards along the waterfront. Break them all and " +
+            "the docks are ours again. Watch for the rats — they hunt in packs.\"",
+            "\"The flooded Market is worse — the dead of the eruption never left. Lay them " +
+            "to rest, all four hauntings, and mind the Toll-Keeper.\"",
+            "\"Only the Temple remains. The cult there serves something that wears our own " +
+            "Warden like a cloak. Break their five circles and end it.\""
+        };
+
+        private static readonly string[] ZoneTurnins =
+        {
+            "\"The lamps are lit on the waterfront tonight — first time in nine years. The " +
+            "Council is in your debt.\"",
+            "\"You gave the drowned their rest. The market bells will ring again because of you.\"",
+            "\"Sorrel lives — freed after nine years in that thing's grip. The Flame has fled " +
+            "deep into the Lightwell, and Aldenmere is ours to the last stone.\""
+        };
 
         private bool _open;
 
@@ -49,40 +68,55 @@ namespace RadiantPool.Game
             if (!_open) return;
 
             var director = GameDirector.Instance;
-            if (director == null) return;
+            if (director == null || director.Zones.Length == 0) return;
 
-            GUILayout.BeginArea(new Rect(Screen.width / 2f - 260, Screen.height / 2f - 120, 520, 240),
+            GUILayout.BeginArea(new Rect(Screen.width / 2f - 260, Screen.height / 2f - 130, 520, 260),
                 GUI.skin.box);
             GUILayout.Label($"<b>{NpcName}</b>", new GUIStyle(GUI.skin.label) { richText = true });
 
-            var muster = (QuestState)director.MusterState.Value;
-            var clear = (QuestState)director.ClearQuestState.Value;
-
-            if (muster == QuestState.Active)
+            if ((QuestState)director.MusterState.Value == QuestState.Active)
             {
                 GUILayout.Label("\"So the Exchange found us another company willing to brave the " +
                     "old quarters. Aldenmere was a hundred lamplit streets once — we hold six. " +
                     "Prove yourselves at the Old Docks and the Council will pay in gold and gratitude.\"");
                 if (GUILayout.Button("We'll clear the docks."))
                 { director.CmdDialogueChoice("muster_accept"); _open = false; }
+                GUILayout.EndArea();
+                return;
             }
-            else if (clear == QuestState.Active)
+
+            // Find the first zone that still needs attention.
+            for (int i = 0; i < director.Zones.Length; i++)
             {
-                GUILayout.Label("\"The squatter gangs hold three yards along the waterfront. Break " +
-                    "them all and the docks are ours again. Watch for the rats — they hunt in packs.\"");
-                if (GUILayout.Button("We're on it.")) _open = false;
+                var state = director.GetZoneState(i);
+                if (state == QuestState.Active)
+                {
+                    GUILayout.Label(i < ZoneBriefs.Length ? ZoneBriefs[i]
+                        : $"\"Clear {director.Zones[i].DisplayName}, then return to me.\"");
+                    if (GUILayout.Button("We're on it.")) _open = false;
+                    GUILayout.EndArea();
+                    return;
+                }
+                if (state == QuestState.ObjectivesMet)
+                {
+                    GUILayout.Label(i < ZoneTurnins.Length ? ZoneTurnins[i]
+                        : $"\"{director.Zones[i].DisplayName} is clear. Well done.\"");
+                    if (GUILayout.Button($"{director.Zones[i].DisplayName} is clear. (Turn in)"))
+                    { director.CmdDialogueChoice($"turnin_{i}"); _open = false; }
+                    GUILayout.EndArea();
+                    return;
+                }
             }
-            else if (clear == QuestState.ObjectivesMet)
+
+            if (director.CampaignComplete.Value)
             {
-                GUILayout.Label("\"The lamps are lit on the waterfront tonight — first time in nine " +
-                    "years. The Council is in your debt.\"");
-                if (GUILayout.Button("The docks are clear. (Turn in)"))
-                { director.CmdDialogueChoice("docks_turnin"); _open = false; }
+                GUILayout.Label("\"Whatever you ask of this Council, heroes — it is yours. " +
+                    "Aldenmere stands free.\"");
+                if (GUILayout.Button("It was our honor.")) _open = false;
             }
-            else if (clear == QuestState.Completed)
+            else
             {
-                GUILayout.Label("\"Rest and resupply, heroes. The Drowned Market comes next — in the " +
-                    "full campaign.\"");
+                GUILayout.Label("\"The Council sits day and night until every quarter is reclaimed.\"");
                 if (GUILayout.Button("Farewell.")) _open = false;
             }
             GUILayout.EndArea();

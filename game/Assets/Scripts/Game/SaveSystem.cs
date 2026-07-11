@@ -13,8 +13,10 @@ namespace RadiantPool.Game
     {
         public int SchemaVersion = 1;
         public string SavedAtUtc = "";
-        public int MusterState, ClearQuestState, EncountersCleared, PartyGold;
-        public bool ZonePacified;
+        public int MusterState, PartyGold;
+        public List<int> ZoneStates = new List<int>();
+        public List<int> ZoneClearedCounts = new List<int>();
+        public bool CampaignComplete;
         public List<string> Stash = new List<string>();
         public List<string> ConsumedEncounters = new List<string>();
         public List<SavedCharacter> Roster = new List<SavedCharacter>();

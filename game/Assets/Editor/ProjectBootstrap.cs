@@ -148,10 +148,11 @@ namespace RadiantPool.EditorTools
             camGo.AddComponent<OrbitCamera>();
             camGo.transform.position = new Vector3(0f, 6f, -10f);
 
-            // Gray-box geometry: dockyard floor, water edge, crates/warehouses, perimeter.
+            // Gray-box geometry: 120x120 map, hub south-center, docks west,
+            // Drowned Market north (gated), Glasslit Temple east (gated).
             var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.name = "Ground";
-            ground.transform.localScale = new Vector3(8f, 1f, 8f); // 80x80 m
+            ground.transform.localScale = new Vector3(12f, 1f, 12f); // 120x120 m
             ground.GetComponent<Renderer>().sharedMaterial = Mat("M_Ground", new Color(0.42f, 0.4f, 0.38f));
 
             void Box(string name, Vector3 pos, Vector3 scale, Material mat)
@@ -166,41 +167,69 @@ namespace RadiantPool.EditorTools
             var wall = Mat("M_Wall", new Color(0.5f, 0.47f, 0.44f));
             var crate = Mat("M_Crate", new Color(0.55f, 0.42f, 0.28f));
             var water = Mat("M_Water", new Color(0.2f, 0.35f, 0.5f));
+            var gateMat = Mat("M_Gate", new Color(0.3f, 0.28f, 0.34f));
 
             // Perimeter walls.
-            Box("Wall_N", new Vector3(0, 1.5f, 40), new Vector3(80, 3, 1), wall);
-            Box("Wall_S", new Vector3(0, 1.5f, -40), new Vector3(80, 3, 1), wall);
-            Box("Wall_E", new Vector3(40, 1.5f, 0), new Vector3(1, 3, 80), wall);
-            Box("Wall_W", new Vector3(-40, 1.5f, 0), new Vector3(1, 3, 80), wall);
-            // "Water" strip along the east edge (visual only).
-            Box("Water", new Vector3(34, 0.05f, 0), new Vector3(11, 0.1f, 78), water);
-            // Warehouses.
-            Box("Warehouse_A", new Vector3(-18, 3, 14), new Vector3(14, 6, 10), wall);
-            Box("Warehouse_B", new Vector3(-15, 2.5f, -16), new Vector3(10, 5, 12), wall);
-            Box("Warehouse_C", new Vector3(12, 3, 22), new Vector3(12, 6, 8), wall);
-            // Crate clusters (future encounter sites).
-            Box("Crates_1", new Vector3(6, 0.75f, 2), new Vector3(1.5f, 1.5f, 1.5f), crate);
-            Box("Crates_2", new Vector3(8, 0.75f, 3.5f), new Vector3(1.5f, 1.5f, 1.5f), crate);
-            Box("Crates_3", new Vector3(7, 2f, 2.7f), new Vector3(1.4f, 1.0f, 1.4f), crate);
-            Box("Crates_4", new Vector3(-4, 0.75f, -24), new Vector3(1.5f, 1.5f, 1.5f), crate);
-            Box("Crates_5", new Vector3(18, 0.75f, -8), new Vector3(1.5f, 1.5f, 1.5f), crate);
+            Box("Wall_N", new Vector3(0, 1.5f, 60), new Vector3(120, 3, 1), wall);
+            Box("Wall_S", new Vector3(0, 1.5f, -60), new Vector3(120, 3, 1), wall);
+            Box("Wall_E", new Vector3(60, 1.5f, 0), new Vector3(1, 3, 120), wall);
+            Box("Wall_W", new Vector3(-60, 1.5f, 0), new Vector3(1, 3, 120), wall);
+            // Waterfront along the west edge (docks fiction, visual only).
+            Box("Water", new Vector3(-56, 0.05f, 0), new Vector3(7, 0.1f, 118), water);
 
-            // Spawn points.
+            // Market divider (z=25) with a 6 m gate gap at x=0.
+            Box("MarketWall_W", new Vector3(-31.5f, 1.5f, 25), new Vector3(57, 3, 1), wall);
+            Box("MarketWall_E", new Vector3(31.5f, 1.5f, 25), new Vector3(57, 3, 1), wall);
+            var gateMarket = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            gateMarket.name = "Gate_DrownedMarket";
+            gateMarket.transform.position = new Vector3(0, 1.5f, 25);
+            gateMarket.transform.localScale = new Vector3(6, 3, 1.2f);
+            gateMarket.GetComponent<Renderer>().sharedMaterial = gateMat;
+            gateMarket.AddComponent<ZoneGate>().ZoneIndex = 1;
+
+            // Temple divider (x=35, south of the market wall) with a 6 m gate gap at z=0.
+            Box("TempleWall_S", new Vector3(35, 1.5f, -31.5f), new Vector3(1, 3, 57), wall);
+            Box("TempleWall_N", new Vector3(35, 1.5f, 14), new Vector3(1, 3, 22), wall);
+            var gateTemple = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            gateTemple.name = "Gate_GlasslitTemple";
+            gateTemple.transform.position = new Vector3(35, 1.5f, 0);
+            gateTemple.transform.localScale = new Vector3(1.2f, 3, 6);
+            gateTemple.GetComponent<Renderer>().sharedMaterial = gateMat;
+            gateTemple.AddComponent<ZoneGate>().ZoneIndex = 2;
+
+            // Zone dressing.
+            Box("Docks_Warehouse_A", new Vector3(-40, 3, 8), new Vector3(14, 6, 10), wall);
+            Box("Docks_Warehouse_B", new Vector3(-25, 2.5f, -25), new Vector3(10, 5, 12), wall);
+            Box("Docks_Crates_1", new Vector3(-32, 0.75f, -6), new Vector3(1.5f, 1.5f, 1.5f), crate);
+            Box("Docks_Crates_2", new Vector3(-30.5f, 0.75f, -4.5f), new Vector3(1.5f, 1.5f, 1.5f), crate);
+            Box("Market_Stalls_1", new Vector3(-12, 1f, 40), new Vector3(6, 2, 3), crate);
+            Box("Market_Stalls_2", new Vector3(10, 1f, 48), new Vector3(6, 2, 3), crate);
+            Box("Market_Fountain", new Vector3(0, 0.6f, 45), new Vector3(4, 1.2f, 4), wall);
+            Box("Temple_Pillar_1", new Vector3(42, 2.5f, -6), new Vector3(1.5f, 5, 1.5f), wall);
+            Box("Temple_Pillar_2", new Vector3(42, 2.5f, 6), new Vector3(1.5f, 5, 1.5f), wall);
+            var lightwell = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            lightwell.name = "The Lightwell";
+            lightwell.transform.position = new Vector3(52, 0.3f, 20);
+            lightwell.transform.localScale = new Vector3(6, 0.3f, 6);
+            lightwell.GetComponent<Renderer>().sharedMaterial =
+                Mat("M_Lightwell", new Color(0.95f, 0.85f, 0.45f));
+
+            // Spawn points (hub plaza).
             var spawnParent = new GameObject("SpawnPoints");
             var spawns = new List<Transform>();
             for (int i = 0; i < 4; i++)
             {
                 var sp = new GameObject($"Spawn_{i}");
                 sp.transform.SetParent(spawnParent.transform);
-                sp.transform.position = new Vector3(-2f + i * 1.6f, 0.1f, -4f);
+                sp.transform.position = new Vector3(-2f + i * 1.6f, 0.1f, -8f);
                 spawns.Add(sp.transform);
             }
 
             // Council corner (hub stand-in): a raised platform + Veresk.
-            Box("CouncilPlatform", new Vector3(0, 0.15f, -12), new Vector3(8, 0.3f, 6), crate);
+            Box("CouncilPlatform", new Vector3(0, 0.15f, -15), new Vector3(8, 0.3f, 6), crate);
             var veresk = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             veresk.name = "Councilor Veresk";
-            veresk.transform.position = new Vector3(0, 1.3f, -13);
+            veresk.transform.position = new Vector3(0, 1.3f, -16);
             veresk.GetComponent<Renderer>().sharedMaterial =
                 Mat("M_Npc", new Color(0.85f, 0.75f, 0.35f));
             veresk.AddComponent<NpcInteract>();
@@ -215,9 +244,9 @@ namespace RadiantPool.EditorTools
             plate.color = new Color(1f, 0.92f, 0.6f);
             plateGo.AddComponent<Billboard>();
 
-            // Encounter blocks from content/zones/old_docks.json.
-            void Encounter(string id, string display, Vector3 pos, Vector3 size,
-                bool required, string[] monsters)
+            // Encounter blocks from content/zones/*.json.
+            void Encounter(string id, string zoneId, string display, Vector3 pos, Vector3 size,
+                bool required, string[] monsters, string bonusLoot = "")
             {
                 var go = new GameObject($"Encounter_{id}");
                 go.transform.position = pos;
@@ -226,26 +255,63 @@ namespace RadiantPool.EditorTools
                 box.size = size;
                 var trig = go.AddComponent<EncounterTrigger>();
                 trig.EncounterId = id;
-                trig.ZoneId = "old_docks";
+                trig.ZoneId = zoneId;
                 trig.DisplayName = display;
                 trig.RequiredForClear = required;
                 trig.MonsterIds = monsters;
+                trig.BonusLootTable = bonusLoot;
             }
 
-            Encounter("enc_docks_01", "the waterfront yard", new Vector3(-18, 1.5f, 2),
-                new Vector3(10, 3, 10), true,
+            // Zone 0 — The Old Docks (west).
+            Encounter("enc_docks_01", "old_docks", "the waterfront yard",
+                new Vector3(-30, 1.5f, 0), new Vector3(10, 3, 10), true,
                 new[] { "marsh_skulker", "marsh_skulker", "dock_rat" });
-            Encounter("enc_docks_02", "the rat nests", new Vector3(6, 1.5f, 14),
-                new Vector3(10, 3, 10), true,
+            Encounter("enc_docks_02", "old_docks", "the rat nests",
+                new Vector3(-45, 1.5f, 12), new Vector3(10, 3, 10), true,
                 new[] { "dock_rat", "dock_rat", "dock_rat" });
-            Encounter("enc_docks_03", "the smugglers' pier", new Vector3(22, 1.5f, -14),
-                new Vector3(12, 3, 12), true,
+            Encounter("enc_docks_03", "old_docks", "the smugglers' pier",
+                new Vector3(-40, 1.5f, -20), new Vector3(12, 3, 12), true,
                 new[] { "marsh_skulker", "marsh_skulker", "marsh_skulker", "marsh_skulker" });
-            Encounter("enc_docks_optional_warehouse", "the locked warehouse",
-                new Vector3(-15, 1.5f, -16), new Vector3(8, 3, 10), false,
-                new[] { "marsh_skulker", "marsh_skulker", "dock_rat", "dock_rat" });
-            GameObject.Find("Encounter_enc_docks_optional_warehouse")
-                .GetComponent<EncounterTrigger>().BonusLootTable = "lt_warehouse_cache";
+            Encounter("enc_docks_optional_warehouse", "old_docks", "the locked warehouse",
+                new Vector3(-22, 1.5f, -32), new Vector3(8, 3, 10), false,
+                new[] { "marsh_skulker", "marsh_skulker", "dock_rat", "dock_rat" },
+                "lt_warehouse_cache");
+
+            // Zone 1 — The Drowned Market (north, gated).
+            Encounter("enc_market_01", "drowned_market", "the flooded arcade",
+                new Vector3(-20, 1.5f, 38), new Vector3(10, 3, 10), true,
+                new[] { "risen_drowned", "risen_drowned", "bonewalker" });
+            Encounter("enc_market_02", "drowned_market", "the fountain square",
+                new Vector3(0, 1.5f, 40), new Vector3(10, 3, 8), true,
+                new[] { "bonewalker", "bonewalker", "risen_drowned" });
+            Encounter("enc_market_03", "drowned_market", "the sunken rows",
+                new Vector3(20, 1.5f, 35), new Vector3(10, 3, 10), true,
+                new[] { "risen_drowned", "risen_drowned", "risen_drowned", "bonewalker" });
+            Encounter("enc_market_04_tollkeeper", "drowned_market", "the Toll-Keeper's gate",
+                new Vector3(0, 1.5f, 54), new Vector3(12, 3, 8), true,
+                new[] { "bonewalker", "bonewalker", "bonewalker", "bonewalker" });
+            Encounter("enc_market_optional_vault", "drowned_market", "the sunken vault",
+                new Vector3(28, 1.5f, 52), new Vector3(8, 3, 8), false,
+                new[] { "risen_drowned", "risen_drowned", "bonewalker", "bonewalker" },
+                "lt_sunken_vault");
+
+            // Zone 2 — The Glasslit Temple (east, gated).
+            Encounter("enc_temple_01", "glasslit_temple", "the shattered nave",
+                new Vector3(42, 1.5f, -25), new Vector3(10, 3, 10), true,
+                new[] { "kindled_zealot", "kindled_zealot", "kindled_zealot" });
+            Encounter("enc_temple_02", "glasslit_temple", "the ember cloister",
+                new Vector3(52, 1.5f, -12), new Vector3(10, 3, 10), true,
+                new[] { "kindled_zealot", "kindled_zealot", "kindled_zealot", "kindled_zealot" });
+            Encounter("enc_temple_03", "glasslit_temple", "the processional",
+                new Vector3(44, 1.5f, 0), new Vector3(10, 3, 10), true,
+                new[] { "kindled_zealot", "kindled_zealot", "kindled_zealot",
+                        "kindled_zealot", "kindled_zealot" });
+            Encounter("enc_temple_04", "glasslit_temple", "the glass gallery",
+                new Vector3(52, 1.5f, 10), new Vector3(10, 3, 8), true,
+                new[] { "kindled_zealot", "kindled_zealot", "kindled_zealot", "kindled_zealot" });
+            Encounter("enc_temple_05_sorrel", "glasslit_temple", "the Lightwell",
+                new Vector3(50, 1.5f, 19), new Vector3(12, 3, 10), true,
+                new[] { "hollow_warden", "kindled_zealot", "kindled_zealot" });
 
             // Vendor NPC by the council platform.
             var vendor = GameObject.CreatePrimitive(PrimitiveType.Capsule);
@@ -278,11 +344,27 @@ namespace RadiantPool.EditorTools
             systemsGo.AddComponent<NetworkObject>();
             systemsGo.AddComponent<CombatManager>();
             var director = systemsGo.AddComponent<GameDirector>();
-            director.ZoneId = "old_docks";
-            director.ZoneDisplayName = "The Old Docks";
-            director.RequiredEncounters = 3;
-            director.QuestXpEach = 300;
-            director.QuestGold = 100;
+            director.Zones = new[]
+            {
+                new GameDirector.ZoneConfig
+                {
+                    ZoneId = "old_docks", DisplayName = "The Old Docks",
+                    QuestName = "Retake the Old Docks",
+                    RequiredEncounters = 3, XpEach = 300, Gold = 100
+                },
+                new GameDirector.ZoneConfig
+                {
+                    ZoneId = "drowned_market", DisplayName = "The Drowned Market",
+                    QuestName = "Silence the Drowned Market",
+                    RequiredEncounters = 4, XpEach = 700, Gold = 250
+                },
+                new GameDirector.ZoneConfig
+                {
+                    ZoneId = "glasslit_temple", DisplayName = "The Glasslit Temple",
+                    QuestName = "The Fire in the Glass",
+                    RequiredEncounters = 5, XpEach = 1800, Gold = 600
+                }
+            };
             systemsGo.AddComponent<CombatClientUI>();
             systemsGo.AddComponent<SettingsMenu>();
 

@@ -88,6 +88,18 @@ namespace RadiantPool.Rules
                     Xp = 25, LootTable = "lt_kindled", SrdRef = "Cultist (SRD 5.1 p.398)",
                     Attacks = { new AttackDefinition("Curved Blade", 3, "1d6+1", DamageType.Slashing, 5) }
                 },
+                new MonsterDefinition
+                {
+                    Id = "hollow_warden", Name = "Warden Sorrel, Hollow-Flame Host",
+                    ArmorClass = 18, HpDice = "8d8+16", Speed = 30,
+                    Abilities = new AbilityScores(16, 11, 14, 11, 11, 15),
+                    Xp = 700, LootTable = "lt_sunken_vault", SrdRef = "Knight (SRD 5.1 p.400)",
+                    Attacks =
+                    {
+                        new AttackDefinition("Flame-Wreathed Blade", 5, "2d6+3", DamageType.Slashing, 5),
+                        new AttackDefinition("Gout of Radiance", 4, "2d6", DamageType.Fire, 30)
+                    }
+                },
             };
 
             var dict = new Dictionary<string, MonsterDefinition>();
