@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    { "id": "dagger", "name": "Dagger", "slot": "mainhand", "costCp": 200, "weight": 1,
+      "weapon": { "damage": "1d4", "damageType": "piercing", "properties": ["finesse", "light", "thrown"], "rangeFeet": 5 } },
+    { "id": "shortsword", "name": "Shortsword", "slot": "mainhand", "costCp": 1000, "weight": 2,
+      "weapon": { "damage": "1d6", "damageType": "piercing", "properties": ["finesse", "light"], "rangeFeet": 5 } },
+    { "id": "longsword", "name": "Longsword", "slot": "mainhand", "costCp": 1500, "weight": 3,
+      "weapon": { "damage": "1d8", "damageType": "slashing", "properties": ["versatile"], "rangeFeet": 5 } },
+    { "id": "mace", "name": "Mace", "slot": "mainhand", "costCp": 500, "weight": 4,
+      "weapon": { "damage": "1d6", "damageType": "bludgeoning", "properties": [], "rangeFeet": 5 } },
+    { "id": "quarterstaff", "name": "Quarterstaff", "slot": "mainhand", "costCp": 20, "weight": 4,
+      "weapon": { "damage": "1d6", "damageType": "bludgeoning", "properties": ["versatile"], "rangeFeet": 5 } },
+    { "id": "light_crossbow", "name": "Light Crossbow", "slot": "mainhand", "costCp": 2500, "weight": 5,
+      "weapon": { "damage": "1d8", "damageType": "piercing", "properties": ["ammunition", "loading", "twoHanded"], "rangeFeet": 80 } },
+    { "id": "shortbow", "name": "Shortbow", "slot": "mainhand", "costCp": 2500, "weight": 2,
+      "weapon": { "damage": "1d6", "damageType": "piercing", "properties": ["ammunition", "twoHanded"], "rangeFeet": 80 } },
+    { "id": "leather_armor", "name": "Leather Armor", "slot": "armor", "costCp": 1000, "weight": 10,
+      "armor": { "kind": "light", "baseAc": 11, "maxDexBonus": 99 } },
+    { "id": "scale_mail", "name": "Scale Mail", "slot": "armor", "costCp": 5000, "weight": 45,
+      "armor": { "kind": "medium", "baseAc": 14, "maxDexBonus": 2 } },
+    { "id": "chain_mail", "name": "Chain Mail", "slot": "armor", "costCp": 7500, "weight": 55,
+      "armor": { "kind": "heavy", "baseAc": 16, "maxDexBonus": 0 } },
+    { "id": "shield", "name": "Shield", "slot": "offhand", "costCp": 1000, "weight": 6,
+      "armor": { "kind": "shield", "acBonus": 2 } },
+    { "id": "potion_healing", "name": "Potion of Healing", "slot": "consumable", "costCp": 5000, "weight": 0.5,
+      "consumable": { "effect": "heal", "dice": "2d4+2" } },
+    { "id": "torch", "name": "Torch", "slot": "consumable", "costCp": 1, "weight": 1,
+      "consumable": { "effect": "light" } }
+  ]
+}

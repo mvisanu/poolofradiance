@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "drowned_market",
+  "name": "The Drowned Market",
+  "scene": "Zone_DrownedMarket",
+  "levelBand": [2, 3],
+  "locked": true,
+  "encounters": [
+    { "id": "enc_market_01", "trigger": "vol_market_01",
+      "units": ["risen_drowned", "risen_drowned", "bonewalker"], "requiredForClear": true },
+    { "id": "enc_market_02", "trigger": "vol_market_02",
+      "units": ["bonewalker", "bonewalker", "risen_drowned"], "requiredForClear": true },
+    { "id": "enc_market_03", "trigger": "vol_market_03",
+      "units": ["risen_drowned", "risen_drowned", "risen_drowned", "bonewalker"], "requiredForClear": true },
+    { "id": "enc_market_04_tollkeeper", "trigger": "vol_market_04",
+      "units": ["bonewalker", "bonewalker", "bonewalker", "bonewalker"], "requiredForClear": true,
+      "bossName": "The Toll-Keeper" },
+    { "id": "enc_market_optional_vault", "trigger": "vol_market_05",
+      "units": ["risen_drowned", "risen_drowned", "bonewalker", "bonewalker"],
+      "requiredForClear": false, "bonusLootTable": "lt_sunken_vault" }
+  ],
+  "clearQuest": "q_clear_market",
+  "onCleared": { "pacify": true, "unlocks": "glasslit_temple" }
+}

@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "id": "npc_council_veresk",
+  "name": "Councilor Veresk",
+  "location": "hub_council_hall",
+  "nodes": [
+    {
+      "id": "greet_first",
+      "condition": { "questState": { "q_muster": "active" } },
+      "text": "So the Exchange found us another company willing to brave the old quarters. Good. Aldenmere was a hundred lamplit streets once — we hold six. Prove yourselves at the Old Docks and the Council will pay in gold and gratitude.",
+      "options": [
+        { "text": "We'll clear the docks.", "action": { "completeObjective": ["q_muster", "o1"], "acceptQuest": "q_clear_docks" } }
+      ]
+    },
+    {
+      "id": "docks_active",
+      "condition": { "questState": { "q_clear_docks": "active" } },
+      "text": "The squatter gangs hold three yards along the waterfront. Break them all and the docks are ours again. Watch for the rats — they hunt in packs.",
+      "options": [ { "text": "We're on it.", "action": null } ]
+    },
+    {
+      "id": "docks_turnin",
+      "condition": { "questState": { "q_clear_docks": "objectives_met" } },
+      "text": "The lamps are lit on the waterfront tonight — first time in nine years. The Council is in your debt. Rest, resupply... then we must speak of the Market. The dead walk there.",
+      "options": [
+        { "text": "Tell us about the Market.", "action": { "turnIn": "q_clear_docks", "acceptQuest": "q_clear_market" } }
+      ]
+    },
+    {
+      "id": "market_turnin",
+      "condition": { "questState": { "q_clear_market": "objectives_met" } },
+      "text": "You gave the drowned their rest. Now only the Temple remains — and I will not lie to you. The cult there serves something that wears our own Warden like a cloak. End it, and Aldenmere is truly free.",
+      "options": [
+        { "text": "We'll face the Hollow Flame.", "action": { "turnIn": "q_clear_market", "acceptQuest": "q_clear_temple" } }
+      ]
+    },
+    {
+      "id": "campaign_complete",
+      "condition": { "questState": { "q_clear_temple": "objectives_met" } },
+      "text": "Sorrel lives — freed after nine years in that thing's grip. The Flame has fled deep into the Lightwell, and Aldenmere's streets are ours to the last stone. Whatever you ask of this Council, it is yours.",
+      "options": [
+        { "text": "It was our honor.", "action": { "turnIn": "q_clear_temple" } }
+      ]
+    },
+    {
+      "id": "fallback",
+      "condition": null,
+      "text": "The Council sits day and night until every quarter is reclaimed. Speak to the Exchange if you need arms.",
+      "options": [ { "text": "Farewell.", "action": null } ]
+    }
+  ]
+}

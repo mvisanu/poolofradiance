@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "dock_rat",
+  "name": "Dock Rat",
+  "srdRef": "Giant Rat (SRD 5.1)",
+  "size": "Small",
+  "ac": 12,
+  "hpDice": "2d6",
+  "speed": 30,
+  "abilities": { "str": 7, "dex": 15, "con": 11, "int": 2, "wis": 10, "cha": 4 },
+  "attacks": [
+    { "name": "Bite", "toHit": 4, "damage": "1d4+2", "damageType": "piercing", "rangeFeet": 5 }
+  ],
+  "xp": 25,
+  "ai": "brute",
+  "lootTable": "lt_vermin"
+}

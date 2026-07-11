@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "q_clear_docks",
+  "name": "Retake the Old Docks",
+  "giver": "npc_council_veresk",
+  "type": "clear_zone",
+  "zone": "old_docks",
+  "objectives": [
+    { "id": "o1", "text": "Defeat the squatters holding the Old Docks", "counter": "encounters_cleared", "target": 3 },
+    { "id": "o2", "text": "Return to Councilor Veresk", "counter": "turned_in", "target": 1 }
+  ],
+  "rewards": { "xpEach": 300, "gold": 100, "storyBeat": "sb_docks_cleared" },
+  "unlocks": ["q_clear_market"]
+}

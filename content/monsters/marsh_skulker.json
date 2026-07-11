@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "marsh_skulker",
+  "name": "Marsh Skulker",
+  "srdRef": "Bandit (SRD 5.1)",
+  "size": "Medium",
+  "ac": 12,
+  "hpDice": "2d8+2",
+  "speed": 30,
+  "abilities": { "str": 11, "dex": 12, "con": 12, "int": 10, "wis": 10, "cha": 10 },
+  "attacks": [
+    { "name": "Rusty Blade", "toHit": 3, "damage": "1d6+1", "damageType": "slashing", "rangeFeet": 5 },
+    { "name": "Light Crossbow", "toHit": 3, "damage": "1d8+1", "damageType": "piercing", "rangeFeet": 80 }
+  ],
+  "xp": 25,
+  "ai": "skirmisher",
+  "lootTable": "lt_skulker"
+}

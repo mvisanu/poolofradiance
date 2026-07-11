@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "risen_drowned",
+  "name": "Risen Drowned",
+  "srdRef": "Zombie (SRD 5.1)",
+  "size": "Medium",
+  "ac": 8,
+  "hpDice": "3d8+9",
+  "speed": 20,
+  "abilities": { "str": 13, "dex": 6, "con": 16, "int": 3, "wis": 6, "cha": 5 },
+  "attacks": [
+    { "name": "Slam", "toHit": 3, "damage": "1d6+1", "damageType": "bludgeoning", "rangeFeet": 5 }
+  ],
+  "xp": 50,
+  "ai": "brute",
+  "lootTable": "lt_undead"
+}

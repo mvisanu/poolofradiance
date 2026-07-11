@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "q_muster",
+  "name": "Report to the Council",
+  "giver": "npc_council_veresk",
+  "type": "talk",
+  "objectives": [
+    { "id": "o1", "text": "Speak with Councilor Veresk at the Council Hall", "counter": "dialogue_complete", "target": 1 }
+  ],
+  "rewards": { "xpEach": 50, "gold": 0, "storyBeat": "sb_muster" },
+  "unlocks": ["q_clear_docks"],
+  "autoAccept": true
+}

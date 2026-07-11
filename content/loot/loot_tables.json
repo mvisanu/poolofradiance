@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "tables": [
+    { "id": "lt_skulker", "gold": "2d6", "rolls": 1,
+      "entries": [ { "weight": 70, "item": null }, { "weight": 25, "item": "dagger" }, { "weight": 5, "item": "potion_healing" } ] },
+    { "id": "lt_vermin", "gold": "1d4", "rolls": 1,
+      "entries": [ { "weight": 90, "item": null }, { "weight": 10, "item": "torch" } ] },
+    { "id": "lt_undead", "gold": "2d8", "rolls": 1,
+      "entries": [ { "weight": 60, "item": null }, { "weight": 20, "item": "shortsword" }, { "weight": 15, "item": "shortbow" }, { "weight": 5, "item": "potion_healing" } ] },
+    { "id": "lt_kindled", "gold": "3d6", "rolls": 1,
+      "entries": [ { "weight": 55, "item": null }, { "weight": 25, "item": "mace" }, { "weight": 15, "item": "potion_healing" }, { "weight": 5, "item": "scale_mail" } ] },
+    { "id": "lt_warehouse_cache", "gold": "6d6", "rolls": 2,
+      "entries": [ { "weight": 30, "item": "potion_healing" }, { "weight": 30, "item": "scale_mail" }, { "weight": 25, "item": "longsword" }, { "weight": 15, "item": "light_crossbow" } ] },
+    { "id": "lt_sunken_vault", "gold": "10d6", "rolls": 2,
+      "entries": [ { "weight": 40, "item": "potion_healing" }, { "weight": 30, "item": "chain_mail" }, { "weight": 30, "item": "longsword" } ] }
+  ]
+}

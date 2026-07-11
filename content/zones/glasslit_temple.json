@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "glasslit_temple",
+  "name": "The Glasslit Temple",
+  "scene": "Zone_GlasslitTemple",
+  "levelBand": [3, 5],
+  "locked": true,
+  "encounters": [
+    { "id": "enc_temple_01", "trigger": "vol_temple_01",
+      "units": ["kindled_zealot", "kindled_zealot", "kindled_zealot"], "requiredForClear": true },
+    { "id": "enc_temple_02", "trigger": "vol_temple_02",
+      "units": ["kindled_zealot", "kindled_zealot", "kindled_zealot", "kindled_zealot"], "requiredForClear": true },
+    { "id": "enc_temple_03", "trigger": "vol_temple_03",
+      "units": ["kindled_zealot", "kindled_zealot", "kindled_zealot", "kindled_zealot", "kindled_zealot"], "requiredForClear": true },
+    { "id": "enc_temple_04", "trigger": "vol_temple_04",
+      "units": ["kindled_zealot", "kindled_zealot", "kindled_zealot", "kindled_zealot"], "requiredForClear": true },
+    { "id": "enc_temple_05_sorrel", "trigger": "vol_temple_05",
+      "units": ["kindled_zealot", "kindled_zealot"], "requiredForClear": true,
+      "bossName": "Warden Sorrel, Hollow-Flame Host",
+      "storyBeatOnVictory": "sb_sorrel_freed" }
+  ],
+  "clearQuest": "q_clear_temple",
+  "onCleared": { "pacify": true, "unlocks": null, "campaignComplete": true }
+}
