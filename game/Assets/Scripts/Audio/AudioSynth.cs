@@ -1,0 +1,225 @@
+using System;
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace RadiantPool.Game
+{
+    /// <summary>Procedurally synthesized SFX and music — no audio assets required.
+    /// Every clip is generated once on first use and cached. Replaced/augmented by
+    /// licensed audio at the 3f art pass; the hooks stay the same.</summary>
+    public static class AudioSynth
+    {
+        private const int Rate = 44100;
+        private static readonly Dictionary<string, AudioClip> Cache =
+            new Dictionary<string, AudioClip>();
+        private static readonly System.Random Rand = new System.Random(1);
+
+        public static AudioClip Get(string id)
+        {
+            if (Cache.TryGetValue(id, out var clip)) return clip;
+            clip = Build(id);
+            Cache[id] = clip;
+            return clip;
+        }
+
+        private static AudioClip Build(string id) => id switch
+        {
+            "hit" => FromSamples(id, Hit(0.22f, 160f, 1f)),
+            "crit" => FromSamples(id, Hit(0.35f, 120f, 1.4f)),
+            "miss" => FromSamples(id, Whoosh(0.18f)),
+            "spell" => FromSamples(id, Zap(0.3f)),
+            "heal" => FromSamples(id, Chime(new[] { 523.25f, 659.25f, 783.99f }, 0.45f)),
+            "chime" => FromSamples(id, Chime(new[] { 440f, 554.37f }, 0.35f)),
+            "down" => FromSamples(id, Drone(0.6f, 82f)),
+            "combat_start" => FromSamples(id, CombatStart()),
+            "victory" => FromSamples(id, Arp(new[] { 392f, 493.88f, 587.33f, 783.99f }, 0.12f)),
+            "defeat" => FromSamples(id, Arp(new[] { 392f, 369.99f, 311.13f, 261.63f }, 0.2f)),
+            "explore_music" => FromSamples(id, ExploreLoop(), loop: true),
+            "combat_music" => FromSamples(id, CombatLoop(), loop: true),
+            _ => FromSamples(id, Whoosh(0.1f))
+        };
+
+        private static AudioClip FromSamples(string id, float[] samples, bool loop = false)
+        {
+            var clip = AudioClip.Create(id, samples.Length, 1, Rate, false);
+            clip.SetData(samples, 0);
+            return clip;
+        }
+
+        // ---------- one-shots ----------
+
+        private static float[] Hit(float dur, float thumpHz, float gain)
+        {
+            var s = New(dur);
+            for (int i = 0; i < s.Length; i++)
+            {
+                float t = (float)i / Rate;
+                float env = Mathf.Exp(-t * 18f);
+                float noise = ((float)Rand.NextDouble() * 2f - 1f) * Mathf.Exp(-t * 40f);
+                float thump = Mathf.Sin(2f * Mathf.PI * thumpHz * t * (1f - t * 0.8f));
+                s[i] = (0.5f * noise + 0.6f * thump * env) * gain * 0.6f;
+            }
+            return s;
+        }
+
+        private static float[] Whoosh(float dur)
+        {
+            var s = New(dur);
+            float last = 0f;
+            for (int i = 0; i < s.Length; i++)
+            {
+                float t = (float)i / Rate;
+                float env = Mathf.Sin(Mathf.PI * t / dur);      // swell in and out
+                float raw = (float)Rand.NextDouble() * 2f - 1f;
+                last += ((raw - last) * 0.12f);                  // crude low-pass
+                s[i] = last * env * 0.5f;
+            }
+            return s;
+        }
+
+        private static float[] Zap(float dur)
+        {
+            var s = New(dur);
+            for (int i = 0; i < s.Length; i++)
+            {
+                float t = (float)i / Rate;
+                float env = Mathf.Exp(-t * 9f);
+                float freq = 880f - 620f * (t / dur);            // falling pitch
+                float saw = 2f * (t * freq - Mathf.Floor(t * freq + 0.5f));
+                s[i] = saw * env * 0.35f;
+            }
+            return s;
+        }
+
+        private static float[] Chime(float[] freqs, float dur)
+        {
+            var s = New(dur);
+            for (int i = 0; i < s.Length; i++)
+            {
+                float t = (float)i / Rate;
+                float env = Mathf.Exp(-t * 5f);
+                float v = 0f;
+                for (int f = 0; f < freqs.Length; f++)
+                {
+                    float delay = f * 0.06f;
+                    if (t > delay)
+                        v += Mathf.Sin(2f * Mathf.PI * freqs[f] * (t - delay))
+                             * Mathf.Exp(-(t - delay) * 6f);
+                }
+                s[i] = v * env * 0.3f;
+            }
+            return s;
+        }
+
+        private static float[] Drone(float dur, float hz)
+        {
+            var s = New(dur);
+            for (int i = 0; i < s.Length; i++)
+            {
+                float t = (float)i / Rate;
+                float env = Mathf.Exp(-t * 4f);
+                s[i] = (Mathf.Sin(2f * Mathf.PI * hz * t)
+                        + 0.5f * Mathf.Sin(2f * Mathf.PI * hz * 0.5f * t)) * env * 0.4f;
+            }
+            return s;
+        }
+
+        private static float[] CombatStart()
+        {
+            var s = New(0.7f);
+            for (int i = 0; i < s.Length; i++)
+            {
+                float t = (float)i / Rate;
+                float boom = Mathf.Sin(2f * Mathf.PI * 65f * t) * Mathf.Exp(-t * 6f);
+                float snare = ((float)Rand.NextDouble() * 2f - 1f) * Mathf.Exp(-t * 25f) * 0.4f;
+                float horn = t > 0.15f
+                    ? Mathf.Sin(2f * Mathf.PI * 196f * (t - 0.15f)) * Mathf.Exp(-(t - 0.15f) * 4f) * 0.35f
+                    : 0f;
+                s[i] = (boom + snare + horn) * 0.6f;
+            }
+            return s;
+        }
+
+        private static float[] Arp(float[] notes, float noteDur)
+        {
+            var s = New(notes.Length * noteDur + 0.4f);
+            for (int n = 0; n < notes.Length; n++)
+            {
+                int start = (int)(n * noteDur * Rate);
+                float sustain = n == notes.Length - 1 ? 0.4f : noteDur;
+                int len = (int)((noteDur + sustain) * Rate);
+                for (int i = 0; i < len && start + i < s.Length; i++)
+                {
+                    float t = (float)i / Rate;
+                    s[start + i] += (Mathf.Sin(2f * Mathf.PI * notes[n] * t)
+                        + 0.3f * Mathf.Sin(4f * Mathf.PI * notes[n] * t))
+                        * Mathf.Exp(-t * 5f) * 0.3f;
+                }
+            }
+            return s;
+        }
+
+        // ---------- music loops ----------
+
+        /// <summary>Explore ambience: slow Am–F–C–G pad, ~19 s seamless loop.</summary>
+        private static float[] ExploreLoop()
+        {
+            float[][] chords =
+            {
+                new[] { 220f, 261.63f, 329.63f },   // Am
+                new[] { 174.61f, 220f, 261.63f },   // F
+                new[] { 130.81f, 196f, 261.63f },   // C
+                new[] { 196f, 246.94f, 293.66f }    // G
+            };
+            const float chordDur = 4.8f;
+            var s = New(chords.Length * chordDur);
+            for (int c = 0; c < chords.Length; c++)
+            {
+                int start = (int)(c * chordDur * Rate);
+                int len = (int)(chordDur * Rate);
+                for (int i = 0; i < len; i++)
+                {
+                    float t = (float)i / Rate;
+                    // Crossfade chord edges for a seamless loop.
+                    float fade = Mathf.Min(1f, Mathf.Min(t / 0.8f, (chordDur - t) / 0.8f));
+                    float v = 0f;
+                    foreach (float f in chords[c])
+                        v += Mathf.Sin(2f * Mathf.PI * f * t)
+                             * (1f + 0.15f * Mathf.Sin(2f * Mathf.PI * 0.25f * t));
+                    s[start + i] = v / chords[c].Length * fade * 0.16f;
+                }
+            }
+            return s;
+        }
+
+        /// <summary>Combat loop: driving low pulse in A minor with percussion ticks, ~7.7 s.</summary>
+        private static float[] CombatLoop()
+        {
+            const float bpm = 100f;
+            const float beat = 60f / bpm;
+            const int beats = 16;
+            var s = New(beats * beat);
+            float[] bass = { 110f, 110f, 130.81f, 98f };      // A A C G
+            for (int b = 0; b < beats; b++)
+            {
+                int start = (int)(b * beat * Rate);
+                int len = (int)(beat * Rate);
+                float note = bass[(b / 4) % 4];
+                for (int i = 0; i < len; i++)
+                {
+                    float t = (float)i / Rate;
+                    float pulse = Mathf.Sin(2f * Mathf.PI * note * t) * Mathf.Exp(-t * 5f) * 0.3f;
+                    float tick = b % 2 == 0 && t < 0.03f
+                        ? ((float)Rand.NextDouble() * 2f - 1f) * (1f - t / 0.03f) * 0.25f
+                        : 0f;
+                    float fifth = Mathf.Sin(2f * Mathf.PI * note * 1.5f * t)
+                                  * Mathf.Exp(-t * 7f) * 0.12f;
+                    s[start + i] = pulse + tick + fifth;
+                }
+            }
+            return s;
+        }
+
+        private static float[] New(float seconds) => new float[(int)(seconds * Rate)];
+    }
+}

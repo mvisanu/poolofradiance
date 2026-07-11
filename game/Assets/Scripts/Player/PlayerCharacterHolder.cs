@@ -19,13 +19,36 @@ namespace RadiantPool.Game
 
         public CharacterClass Class => (CharacterClass)Mathf.Max(0, ClassIndex.Value);
 
+        private static readonly Color[] ClassColors =
+        {
+            new Color(0.42f, 0.55f, 0.85f),  // fighter — steel blue
+            new Color(0.92f, 0.78f, 0.35f),  // cleric — gold
+            new Color(0.62f, 0.4f, 0.85f),   // wizard — violet
+            new Color(0.4f, 0.75f, 0.45f)    // rogue — green
+        };
+
+        private void Awake()
+        {
+            ClassIndex.OnChange += (_, next, _) => TintBody(next);
+        }
+
         public override void OnStartClient()
         {
             base.OnStartClient();
+            TintBody(ClassIndex.Value);
             if (!IsOwner) return;
             var b = CharacterBuild.Local;
             CmdSubmitBuild(SessionLauncher.LocalDisplayName, b.ClassIndex, b.RaceIndex,
                 b.Str, b.Dex, b.Con, b.Int, b.Wis, b.Cha);
+        }
+
+        /// <summary>Class-colored body so party members read at a glance (gray-box art).</summary>
+        private void TintBody(int classIndex)
+        {
+            if (classIndex < 0 || classIndex >= ClassColors.Length) return;
+            foreach (var r in GetComponentsInChildren<Renderer>())
+                if (r.gameObject.name == "Capsule")
+                    r.material.color = ClassColors[classIndex];
         }
 
         [ServerRpc]

@@ -56,12 +56,13 @@ namespace RadiantPool.Game
 
         private void OnGUI()
         {
+            Ui.Begin();
             if (CombatManager.Instance != null && CombatManager.Instance.InCombat.Value) return;
 
             if (!_open && InRange())
             {
                 var hint = new GUIStyle(GUI.skin.box) { alignment = TextAnchor.MiddleCenter };
-                GUI.Box(new Rect(Screen.width / 2f - 130, Screen.height - 60, 260, 28),
+                GUI.Box(new Rect(Ui.W / 2f - 130, Ui.H - 60, 260, 28),
                     $"[E] Talk to {NpcName}", hint);
                 return;
             }
@@ -70,7 +71,7 @@ namespace RadiantPool.Game
             var director = GameDirector.Instance;
             if (director == null || director.Zones.Length == 0) return;
 
-            GUILayout.BeginArea(new Rect(Screen.width / 2f - 260, Screen.height / 2f - 130, 520, 260),
+            GUILayout.BeginArea(new Rect(Ui.W / 2f - 260, Ui.H / 2f - 130, 520, 260),
                 GUI.skin.box);
             GUILayout.Label($"<b>{NpcName}</b>", new GUIStyle(GUI.skin.label) { richText = true });
 

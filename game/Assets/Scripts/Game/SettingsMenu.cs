@@ -42,8 +42,9 @@ namespace RadiantPool.Game
 
         private void OnGUI()
         {
+            Ui.Begin();
             if (!_open) return;
-            GUILayout.BeginArea(new Rect(Screen.width / 2f - 170, Screen.height / 2f - 130,
+            GUILayout.BeginArea(new Rect(Ui.W / 2f - 170, Ui.H / 2f - 130,
                 340, 260), GUI.skin.box);
             GUILayout.Label("<b>Settings</b> (Esc to close)",
                 new GUIStyle(GUI.skin.label) { richText = true });

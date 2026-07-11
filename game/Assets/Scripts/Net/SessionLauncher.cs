@@ -94,7 +94,7 @@ namespace RadiantPool.Game
             if (args.ConnectionState == LocalConnectionState.Started)
             {
                 var ip = InviteCode.LocalAddress();
-                _hostCode = InviteCode.Encode(ip, DefaultPort);
+                _hostCode = InviteCode.Encode(ip, _hostPort);
                 _status = $"Hosting — invite code: {_hostCode}";
                 Debug.Log($"[RadiantPool] server started, invite code {_hostCode}");
             }
@@ -128,12 +128,32 @@ namespace RadiantPool.Game
             }
         }
 
+        private ushort _hostPort = DefaultPort;
+
+        /// <summary>First free UDP port in 7770-7779 (a second instance on the same
+        /// machine — or a crashed one holding the socket — must not block hosting).
+        /// The invite code carries the port, so joiners never notice.</summary>
+        private static ushort FirstFreePort()
+        {
+            var inUse = System.Net.NetworkInformation.IPGlobalProperties
+                .GetIPGlobalProperties().GetActiveUdpListeners();
+            for (ushort port = DefaultPort; port < DefaultPort + 10; port++)
+            {
+                bool taken = false;
+                foreach (var listener in inUse)
+                    if (listener.Port == port) { taken = true; break; }
+                if (!taken) return port;
+            }
+            return DefaultPort;
+        }
+
         public void Host()
         {
             LocalDisplayName = Sanitize(_displayName);
             PlayerPrefs.SetString("displayName", LocalDisplayName);
             _error = "";
-            _tugboat.SetPort(DefaultPort);
+            _hostPort = FirstFreePort();
+            _tugboat.SetPort(_hostPort);
             if (!_network.ServerManager.StartConnection())
             {
                 _error = "Failed to start server (is another host using the port?).";
@@ -170,10 +190,41 @@ namespace RadiantPool.Game
 
         private void OnGUI()
         {
-            const int w = 360;
-            GUILayout.BeginArea(new Rect(12, 12, w, _sessionStarted ? 150 : 470), GUI.skin.box);
-            GUILayout.Label("<b>Radiant Pool — session</b>",
-                new GUIStyle(GUI.skin.label) { richText = true });
+            Ui.Begin();
+            if (!_sessionStarted)
+            {
+                DrawTitleScreen();
+                return;
+            }
+
+            // In-session: compact status strip, top-left.
+            GUILayout.BeginArea(new Rect(12, 12, 360, 96), GUI.skin.box);
+            GUILayout.Label(_status);
+            if (_hostCode.Length > 0)
+            {
+                if (GUILayout.Button($"Copy invite code  {_hostCode}"))
+                    GUIUtility.systemCopyBuffer = _hostCode;
+            }
+            GUILayout.Label("WASD move · RMB camera · E talk · J journal · Esc settings");
+            GUILayout.EndArea();
+        }
+
+        private Vector2 _titleScroll;
+
+        /// <summary>Centered title/creation screen. The play/join buttons are pinned to
+        /// the bottom of the panel — always visible; the creation section scrolls if the
+        /// window is short.</summary>
+        private void DrawTitleScreen()
+        {
+            float w = Mathf.Min(540f, Ui.W - 20f);
+            float h = Mathf.Min(600f, Ui.H - 16f);
+            var rect = new Rect((Ui.W - w) / 2f, (Ui.H - h) / 2f, w, h);
+            GUILayout.BeginArea(rect, GUI.skin.box);
+            GUILayout.BeginVertical();
+
+            var title = new GUIStyle(GUI.skin.label)
+                { richText = true, alignment = TextAnchor.MiddleCenter, fontSize = 24 };
+            GUILayout.Label("<b>RADIANT POOL</b>", title);
             GUILayout.Label(_status);
             if (_error.Length > 0)
             {
@@ -181,34 +232,33 @@ namespace RadiantPool.Game
                 GUILayout.Label($"<color=#ff6666>{_error}</color>", errStyle);
             }
 
-            if (!_sessionStarted)
-            {
-                GUILayout.BeginHorizontal();
-                GUILayout.Label("Name:", GUILayout.Width(45));
-                _displayName = GUILayout.TextField(_displayName, 20);
-                GUILayout.EndHorizontal();
+            // Scrollable middle: name + character creation.
+            _titleScroll = GUILayout.BeginScrollView(_titleScroll, GUILayout.ExpandHeight(true));
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Name:", GUILayout.Width(52));
+            _displayName = GUILayout.TextField(_displayName, 20);
+            GUILayout.EndHorizontal();
+            DrawCharacterCreation();
+            GUILayout.EndScrollView();
 
-                DrawCharacterCreation();
-
-                bool valid = CharacterBuild.Local.Validate(out string buildError);
-                if (!valid)
-                {
-                    var errStyle = new GUIStyle(GUI.skin.label) { richText = true };
-                    GUILayout.Label($"<color=#ffcc66>{buildError}</color>", errStyle);
-                }
-                GUI.enabled = valid;
-                if (GUILayout.Button("Host a campaign")) Host();
-                GUILayout.BeginHorizontal();
-                _joinCode = GUILayout.TextField(_joinCode, 12);
-                if (GUILayout.Button("Join", GUILayout.Width(70))) Join(_joinCode);
-                GUILayout.EndHorizontal();
-                GUI.enabled = true;
-            }
-            else if (_hostCode.Length > 0)
+            // Pinned bottom: always-reachable play/join controls.
+            bool valid = CharacterBuild.Local.Validate(out string buildError);
+            if (!valid)
             {
-                GUILayout.Label($"Share this code with friends: {_hostCode}");
-                if (GUILayout.Button("Copy code")) GUIUtility.systemCopyBuffer = _hostCode;
+                var warnStyle = new GUIStyle(GUI.skin.label) { richText = true };
+                GUILayout.Label($"<color=#ffcc66>{buildError}</color>", warnStyle);
             }
+            GUI.enabled = valid;
+            var big = new GUIStyle(GUI.skin.button) { fontSize = 16, fixedHeight = 40 };
+            if (GUILayout.Button("▶  HOST A CAMPAIGN  (solo or with friends)", big))
+                Host();
+            GUILayout.BeginHorizontal();
+            _joinCode = GUILayout.TextField(_joinCode, 12);
+            if (GUILayout.Button("Join with invite code", GUILayout.Width(170))) Join(_joinCode);
+            GUILayout.EndHorizontal();
+            GUI.enabled = true;
+
+            GUILayout.EndVertical();
             GUILayout.EndArea();
         }
 
@@ -247,12 +297,19 @@ namespace RadiantPool.Game
                 GUILayout.EndHorizontal();
             }
 
+            // Two columns keep the panel short enough for small windows.
+            GUILayout.BeginHorizontal();
+            GUILayout.BeginVertical();
             Row("STR", ref b.Str);
             Row("DEX", ref b.Dex);
             Row("CON", ref b.Con);
+            GUILayout.EndVertical();
+            GUILayout.BeginVertical();
             Row("INT", ref b.Int);
             Row("WIS", ref b.Wis);
             Row("CHA", ref b.Cha);
+            GUILayout.EndVertical();
+            GUILayout.EndHorizontal();
 
             CharacterBuild.Local = b;
         }

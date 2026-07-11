@@ -36,6 +36,7 @@ namespace RadiantPool.Game
 
         private void OnGUI()
         {
+            Ui.Begin();
             if (CombatManager.Instance != null && CombatManager.Instance.InCombat.Value) return;
             var director = GameDirector.Instance;
             if (director == null) return;
@@ -43,13 +44,13 @@ namespace RadiantPool.Game
             if (!_open && InRange())
             {
                 var hint = new GUIStyle(GUI.skin.box) { alignment = TextAnchor.MiddleCenter };
-                GUI.Box(new Rect(Screen.width / 2f - 130, Screen.height - 92, 260, 28),
+                GUI.Box(new Rect(Ui.W / 2f - 130, Ui.H - 92, 260, 28),
                     $"[E] Trade at {VendorName}", hint);
                 return;
             }
             if (!_open) return;
 
-            GUILayout.BeginArea(new Rect(Screen.width / 2f - 200, Screen.height / 2f - 100, 400, 200),
+            GUILayout.BeginArea(new Rect(Ui.W / 2f - 200, Ui.H / 2f - 100, 400, 200),
                 GUI.skin.box);
             GUILayout.Label($"<b>{VendorName}</b>", new GUIStyle(GUI.skin.label) { richText = true });
             GUILayout.Label($"Party gold: {director.PartyGold.Value}");

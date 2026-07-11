@@ -308,15 +308,16 @@ namespace RadiantPool.Game
 
         private void OnGUI()
         {
+            Ui.Begin();
             if (Time.time < _noticeUntil && LocalNotice.Length > 0)
             {
                 var style = new GUIStyle(GUI.skin.box)
                     { alignment = TextAnchor.MiddleCenter, fontSize = 15 };
-                GUI.Box(new Rect(Screen.width / 2f - 260, 16, 520, 34), LocalNotice, style);
+                GUI.Box(new Rect(Ui.W / 2f - 260, 16, 520, 34), LocalNotice, style);
             }
 
             if (!_journalOpen) return;
-            GUILayout.BeginArea(new Rect(Screen.width / 2f - 210, 70, 420, 300), GUI.skin.box);
+            GUILayout.BeginArea(new Rect(Ui.W / 2f - 210, 70, 420, 300), GUI.skin.box);
             GUILayout.Label("<b>Journal</b> (J to close)",
                 new GUIStyle(GUI.skin.label) { richText = true });
 

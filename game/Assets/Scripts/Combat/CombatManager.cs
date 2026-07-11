@@ -131,6 +131,7 @@ namespace RadiantPool.Game
                 ordered.Select(u => u.Cell.y).ToArray(),
                 ordered.Select(u => u.Player != null ? u.Player.OwnerId : -1).ToArray());
             ServerLog($"Ambush at {encounter.DisplayName}! Roll initiative.");
+            RpcSfx("combat_start");
             StartCoroutine(TurnLoop());
         }
 
@@ -271,6 +272,7 @@ namespace RadiantPool.Game
                 }
                 GameDirector.Instance?.ServerAddLoot(gold, items);
                 GameDirector.Instance?.ServerEncounterCleared(_encounter);
+                RpcSfx("victory");
                 RpcCombatEnded(true, xpEach);
             }
             else
@@ -278,6 +280,7 @@ namespace RadiantPool.Game
                 foreach (var pc in _server.Values.Where(u => u.Player != null))
                     pc.Player.Sheet.ReviveFull();
                 ServerLog("The party falls… and wakes back at Havenrock, bruised but alive.");
+                RpcSfx("defeat");
                 RpcCombatEnded(false, 0);
             }
             _engine = null;
@@ -301,7 +304,12 @@ namespace RadiantPool.Game
                   (r.TargetDied ? $" {target.Name} is slain!" :
                    r.TargetDowned ? $" {target.Name} goes down!" : "");
             ServerLog(line);
+            RpcSfx(!r.Hit ? "miss" : r.Critical ? "crit" : "hit");
+            if (r.TargetDied || r.TargetDowned) RpcSfx("down");
         }
+
+        [ObserversRpc]
+        private void RpcSfx(string id) => GameAudio.Play(id);
 
         [Server]
         private void SyncHp(string unitId)
@@ -484,12 +492,16 @@ namespace RadiantPool.Game
                         ServerLog($"{spell.Name} deals {d.Damage} {d.DamageType} to {targetName}." +
                                   (d.TargetDied ? $" {targetName} is destroyed!" :
                                    d.TargetDowned ? $" {targetName} goes down!" : ""));
+                        RpcSfx("spell");
+                        if (d.TargetDied || d.TargetDowned) RpcSfx("down");
                         break;
                     case SpellHealEvent h:
                         ServerLog($"{spell.Name} restores {h.Healed} HP to {targetName}.");
+                        RpcSfx("heal");
                         break;
                     case SpellConditionEvent c:
                         ServerLog($"{targetName} is {c.Condition} ({spell.Name}).");
+                        RpcSfx("chime");
                         break;
                 }
             }
@@ -550,9 +562,12 @@ namespace RadiantPool.Game
             }
             var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             go.name = $"Monster_{view.Id}";
-            go.transform.localScale = new Vector3(0.9f, 0.9f, 0.9f);
+            bool boss = view.MaxHp >= 30;   // bosses loom larger and darker
+            go.transform.localScale = boss
+                ? new Vector3(1.35f, 1.35f, 1.35f) : new Vector3(0.9f, 0.9f, 0.9f);
             var renderer = go.GetComponent<Renderer>();
-            renderer.material.color = new Color(0.75f, 0.25f, 0.2f);
+            renderer.material.color = boss
+                ? new Color(0.55f, 0.1f, 0.12f) : new Color(0.75f, 0.25f, 0.2f);
             var label = new GameObject("Label");
             label.transform.SetParent(go.transform, false);
             label.transform.localPosition = new Vector3(0f, 1.6f, 0f);

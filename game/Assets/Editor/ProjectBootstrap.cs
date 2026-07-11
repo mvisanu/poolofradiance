@@ -75,6 +75,44 @@ namespace RadiantPool.EditorTools
             QualitySettings.renderPipeline = existing;
         }
 
+        /// <summary>Procedural cobblestone-ish tile so the ground reads as a surface,
+        /// not a void. Replaced by real textures at the 3f asset pass.</summary>
+        private static Texture2D GroundTexture()
+        {
+            string path = SettingsDir + "/T_Ground.png";
+            var existing = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            if (existing != null) return existing;
+
+            const int size = 128;
+            var tex = new Texture2D(size, size, TextureFormat.RGB24, false);
+            var rand = new System.Random(7);
+            // 4x4 stones per tile with mortar lines and per-stone tint.
+            const int stones = 4;
+            var tints = new float[stones, stones];
+            for (int sx = 0; sx < stones; sx++)
+                for (int sy = 0; sy < stones; sy++)
+                    tints[sx, sy] = 0.82f + (float)rand.NextDouble() * 0.28f;
+            for (int x = 0; x < size; x++)
+            {
+                for (int y = 0; y < size; y++)
+                {
+                    int cell = size / stones;
+                    int sx = x / cell, sy = y / cell;
+                    bool mortar = x % cell < 2 || y % cell < 2;
+                    float noise = 0.94f + (float)rand.NextDouble() * 0.12f;
+                    float v = mortar ? 0.62f : tints[sx, sy] * noise;
+                    tex.SetPixel(x, y, new Color(0.5f * v, 0.49f * v, 0.47f * v));
+                }
+            }
+            tex.Apply();
+            System.IO.File.WriteAllBytes(path, tex.EncodeToPNG());
+            AssetDatabase.ImportAsset(path);
+            var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+            importer.wrapMode = TextureWrapMode.Repeat;
+            importer.SaveAndReimport();
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+        }
+
         private static Material Mat(string name, Color color)
         {
             string path = $"{SettingsDir}/{name}.mat";
@@ -130,31 +168,63 @@ namespace RadiantPool.EditorTools
         {
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-            // Lighting.
+            // Lighting: late-afternoon sun, soft shadows, distance fog for depth.
             var lightGo = new GameObject("Directional Light");
             var light = lightGo.AddComponent<Light>();
             light.type = LightType.Directional;
-            light.intensity = 1.15f;
-            light.color = new Color(1f, 0.96f, 0.88f);
-            lightGo.transform.rotation = Quaternion.Euler(55f, -35f, 0f);
+            light.intensity = 1.35f;
+            light.color = new Color(1f, 0.93f, 0.8f);
+            light.shadows = LightShadows.Soft;
+            lightGo.transform.rotation = Quaternion.Euler(48f, -38f, 0f);
             RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.55f, 0.62f, 0.75f);
-            RenderSettings.ambientEquatorColor = new Color(0.45f, 0.45f, 0.5f);
-            RenderSettings.ambientGroundColor = new Color(0.25f, 0.24f, 0.22f);
+            RenderSettings.ambientSkyColor = new Color(0.6f, 0.68f, 0.82f);
+            RenderSettings.ambientEquatorColor = new Color(0.5f, 0.48f, 0.52f);
+            RenderSettings.ambientGroundColor = new Color(0.26f, 0.25f, 0.23f);
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Exponential;
+            RenderSettings.fogColor = new Color(0.62f, 0.68f, 0.78f);
+            RenderSettings.fogDensity = 0.008f;
 
-            // Camera.
+            // Camera with URP post-processing (bloom + vignette + slight warmth).
             var camGo = new GameObject("Main Camera") { tag = "MainCamera" };
-            camGo.AddComponent<Camera>();
+            var cam = camGo.AddComponent<Camera>();
             camGo.AddComponent<AudioListener>();
             camGo.AddComponent<OrbitCamera>();
             camGo.transform.position = new Vector3(0f, 6f, -10f);
+            var camData = camGo.AddComponent<UniversalAdditionalCameraData>();
+            camData.renderPostProcessing = true;
+            cam.allowHDR = true;
+
+            var profilePath = SettingsDir + "/PostFX.asset";
+            var profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(profilePath);
+            if (profile == null)
+            {
+                profile = ScriptableObject.CreateInstance<VolumeProfile>();
+                AssetDatabase.CreateAsset(profile, profilePath);
+                var bloom = profile.Add<Bloom>();
+                bloom.intensity.Override(0.65f);
+                bloom.threshold.Override(1.05f);
+                var vignette = profile.Add<Vignette>();
+                vignette.intensity.Override(0.22f);
+                var colors = profile.Add<ColorAdjustments>();
+                colors.postExposure.Override(0.2f);
+                colors.saturation.Override(16f);   // hand-painted warmth, Albion-leaning
+                AssetDatabase.SaveAssets();
+            }
+            var volumeGo = new GameObject("Global PostFX");
+            var volume = volumeGo.AddComponent<Volume>();
+            volume.isGlobal = true;
+            volume.profile = profile;
 
             // Gray-box geometry: 120x120 map, hub south-center, docks west,
             // Drowned Market north (gated), Glasslit Temple east (gated).
             var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.name = "Ground";
             ground.transform.localScale = new Vector3(12f, 1f, 12f); // 120x120 m
-            ground.GetComponent<Renderer>().sharedMaterial = Mat("M_Ground", new Color(0.42f, 0.4f, 0.38f));
+            var groundMat = Mat("M_Ground", new Color(0.72f, 0.7f, 0.66f));
+            groundMat.mainTexture = GroundTexture();
+            groundMat.mainTextureScale = new Vector2(48f, 48f);
+            ground.GetComponent<Renderer>().sharedMaterial = groundMat;
 
             void Box(string name, Vector3 pos, Vector3 scale, Material mat)
             {
@@ -198,22 +268,48 @@ namespace RadiantPool.EditorTools
             gateTemple.GetComponent<Renderer>().sharedMaterial = gateMat;
             gateTemple.AddComponent<ZoneGate>().ZoneIndex = 2;
 
-            // Zone dressing.
-            Box("Docks_Warehouse_A", new Vector3(-40, 3, 8), new Vector3(14, 6, 10), wall);
-            Box("Docks_Warehouse_B", new Vector3(-25, 2.5f, -25), new Vector3(10, 5, 12), wall);
+            // Zone dressing — Albion-style district color zoning: each quarter has its
+            // own saturated palette so you always know where you are at a glance.
+            var docksWood = Mat("M_DocksWood", new Color(0.45f, 0.33f, 0.22f));   // tarred timber
+            var docksRoof = Mat("M_DocksRoof", new Color(0.25f, 0.42f, 0.45f));   // teal slate
+            var marketWood = Mat("M_MarketWood", new Color(0.72f, 0.6f, 0.4f));   // pale timber
+            var marketCloth = Mat("M_MarketCloth", new Color(0.55f, 0.68f, 0.3f)); // awning green
+            var templeStone = Mat("M_TempleStone", new Color(0.78f, 0.68f, 0.5f)); // warm sandstone
+            var templeEmber = Mat("M_TempleEmber", new Color(0.75f, 0.3f, 0.18f)); // cult ember
+
+            void Roofed(string name, Vector3 pos, Vector3 scale, Material body, Material roof)
+            {
+                Box(name, pos, scale, body);
+                Box(name + "_Roof",
+                    new Vector3(pos.x, pos.y + scale.y / 2f + 0.35f, pos.z),
+                    new Vector3(scale.x + 1.2f, 0.7f, scale.z + 1.2f), roof);
+            }
+
+            Roofed("Docks_Warehouse_A", new Vector3(-40, 3, 8), new Vector3(14, 6, 10), docksWood, docksRoof);
+            Roofed("Docks_Warehouse_B", new Vector3(-25, 2.5f, -25), new Vector3(10, 5, 12), docksWood, docksRoof);
             Box("Docks_Crates_1", new Vector3(-32, 0.75f, -6), new Vector3(1.5f, 1.5f, 1.5f), crate);
             Box("Docks_Crates_2", new Vector3(-30.5f, 0.75f, -4.5f), new Vector3(1.5f, 1.5f, 1.5f), crate);
-            Box("Market_Stalls_1", new Vector3(-12, 1f, 40), new Vector3(6, 2, 3), crate);
-            Box("Market_Stalls_2", new Vector3(10, 1f, 48), new Vector3(6, 2, 3), crate);
-            Box("Market_Fountain", new Vector3(0, 0.6f, 45), new Vector3(4, 1.2f, 4), wall);
-            Box("Temple_Pillar_1", new Vector3(42, 2.5f, -6), new Vector3(1.5f, 5, 1.5f), wall);
-            Box("Temple_Pillar_2", new Vector3(42, 2.5f, 6), new Vector3(1.5f, 5, 1.5f), wall);
+            Roofed("Market_Stalls_1", new Vector3(-12, 1f, 40), new Vector3(6, 2, 3), marketWood, marketCloth);
+            Roofed("Market_Stalls_2", new Vector3(10, 1f, 48), new Vector3(6, 2, 3), marketWood, marketCloth);
+            Box("Market_Fountain", new Vector3(0, 0.6f, 45), new Vector3(4, 1.2f, 4), templeStone);
+            Box("Temple_Pillar_1", new Vector3(42, 2.5f, -6), new Vector3(1.5f, 5, 1.5f), templeStone);
+            Box("Temple_Pillar_2", new Vector3(42, 2.5f, 6), new Vector3(1.5f, 5, 1.5f), templeStone);
+            Box("Temple_Brazier_1", new Vector3(46, 1f, -18), new Vector3(1, 2, 1), templeEmber);
+            Box("Temple_Brazier_2", new Vector3(54, 1f, 4), new Vector3(1, 2, 1), templeEmber);
             var lightwell = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             lightwell.name = "The Lightwell";
             lightwell.transform.position = new Vector3(52, 0.3f, 20);
             lightwell.transform.localScale = new Vector3(6, 0.3f, 6);
-            lightwell.GetComponent<Renderer>().sharedMaterial =
-                Mat("M_Lightwell", new Color(0.95f, 0.85f, 0.45f));
+            var wellMat = Mat("M_Lightwell", new Color(0.95f, 0.85f, 0.45f));
+            wellMat.EnableKeyword("_EMISSION");
+            wellMat.SetColor("_EmissionColor", new Color(1.6f, 1.2f, 0.45f)); // HDR glow → bloom
+            lightwell.GetComponent<Renderer>().sharedMaterial = wellMat;
+            var wellLight = new GameObject("Lightwell Glow").AddComponent<Light>();
+            wellLight.transform.position = new Vector3(52, 2.5f, 20);
+            wellLight.type = LightType.Point;
+            wellLight.color = new Color(1f, 0.85f, 0.45f);
+            wellLight.intensity = 3.5f;
+            wellLight.range = 18f;
 
             // Spawn points (hub plaza).
             var spawnParent = new GameObject("SpawnPoints");
@@ -343,6 +439,7 @@ namespace RadiantPool.EditorTools
 
             var systemsGo = new GameObject("GameSystems");
             systemsGo.AddComponent<NetworkObject>();
+            systemsGo.AddComponent<GameAudio>();
             systemsGo.AddComponent<CombatManager>();
             var director = systemsGo.AddComponent<GameDirector>();
             director.Zones = new[]

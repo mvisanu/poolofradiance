@@ -16,6 +16,7 @@ namespace RadiantPool.Game
 
         private void OnGUI()
         {
+            Ui.Begin();
             var combat = CombatManager.Instance;
             if (combat == null || combat.ClientUnits.Count == 0) return;
 
@@ -27,7 +28,7 @@ namespace RadiantPool.Game
 
         private void DrawInitiative(CombatManager combat)
         {
-            GUILayout.BeginArea(new Rect(Screen.width - 250, 12, 238, 320), GUI.skin.box);
+            GUILayout.BeginArea(new Rect(Ui.W - 250, 12, 238, 320), GUI.skin.box);
             GUILayout.Label($"— Round {combat.Round} —");
             foreach (var u in combat.ClientUnits)
             {
@@ -43,7 +44,7 @@ namespace RadiantPool.Game
 
         private void DrawLog(CombatManager combat)
         {
-            GUILayout.BeginArea(new Rect(12, Screen.height - 190, 520, 178), GUI.skin.box);
+            GUILayout.BeginArea(new Rect(12, Ui.H - 190, 520, 178), GUI.skin.box);
             _logScroll = GUILayout.BeginScrollView(_logScroll);
             foreach (var line in combat.Log.Skip(Mathf.Max(0, combat.Log.Count - 30)))
                 GUILayout.Label(line);
@@ -55,7 +56,7 @@ namespace RadiantPool.Game
 
         private void DrawActions(CombatManager combat)
         {
-            GUILayout.BeginArea(new Rect(Screen.width / 2f - 220, Screen.height - 330, 440, 128),
+            GUILayout.BeginArea(new Rect(Ui.W / 2f - 220, Ui.H - 330, 440, 128),
                 GUI.skin.box);
             GUILayout.Label($"YOUR TURN — move {combat.MoveLeft} ft, " +
                 $"action {(combat.ActionLeft ? "✔" : "✘")}, bonus {(combat.BonusLeft ? "✔" : "✘")}" +
@@ -85,7 +86,7 @@ namespace RadiantPool.Game
             var mine = combat.MyUnit;
             if (mine != null && !mine.Down && combat.MoveLeft >= 5)
             {
-                GUILayout.BeginArea(new Rect(Screen.width / 2f - 220, Screen.height - 196, 200, 120),
+                GUILayout.BeginArea(new Rect(Ui.W / 2f - 220, Ui.H - 196, 200, 120),
                     GUI.skin.box);
                 GUILayout.BeginHorizontal();
                 if (GUILayout.Button("NW")) combat.CmdMove(-1, 1);
