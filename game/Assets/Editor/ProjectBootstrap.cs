@@ -244,6 +244,26 @@ namespace RadiantPool.EditorTools
             Encounter("enc_docks_optional_warehouse", "the locked warehouse",
                 new Vector3(-15, 1.5f, -16), new Vector3(8, 3, 10), false,
                 new[] { "marsh_skulker", "marsh_skulker", "dock_rat", "dock_rat" });
+            GameObject.Find("Encounter_enc_docks_optional_warehouse")
+                .GetComponent<EncounterTrigger>().BonusLootTable = "lt_warehouse_cache";
+
+            // Vendor NPC by the council platform.
+            var vendor = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            vendor.name = "The Salvage Exchange";
+            vendor.transform.position = new Vector3(4, 1.3f, -13);
+            vendor.GetComponent<Renderer>().sharedMaterial =
+                Mat("M_Vendor", new Color(0.4f, 0.75f, 0.5f));
+            vendor.AddComponent<VendorInteract>();
+            var vplateGo = new GameObject("Nameplate");
+            vplateGo.transform.SetParent(vendor.transform, false);
+            vplateGo.transform.localPosition = new Vector3(0f, 1.4f, 0f);
+            var vplate = vplateGo.AddComponent<TextMesh>();
+            vplate.text = "Salvage Exchange";
+            vplate.characterSize = 0.09f;
+            vplate.fontSize = 40;
+            vplate.anchor = TextAnchor.LowerCenter;
+            vplate.color = new Color(0.7f, 1f, 0.8f);
+            vplateGo.AddComponent<Billboard>();
 
             // Networking + game systems.
             var netGo = new GameObject("NetworkManager");

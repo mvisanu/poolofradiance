@@ -251,6 +251,23 @@ namespace RadiantPool.Game
                     pc.Player.Sheet.Conditions.Remove(ConditionType.Blessed);
                 }
                 ServerLog($"Victory! Each hero gains {xpEach} XP.");
+
+                // Roll loot per monster (+ any bonus cache) server-side.
+                int gold = 0;
+                var items = new System.Collections.Generic.List<string>();
+                foreach (var mu in _server.Values.Where(u => u.MonsterDef != null))
+                {
+                    var roll = LootLibrary.Get(mu.MonsterDef.LootTable).Roll(_rng);
+                    gold += roll.Gold;
+                    items.AddRange(roll.ItemIds);
+                }
+                if (_encounter != null && !string.IsNullOrEmpty(_encounter.BonusLootTable))
+                {
+                    var bonus = LootLibrary.Get(_encounter.BonusLootTable).Roll(_rng);
+                    gold += bonus.Gold;
+                    items.AddRange(bonus.ItemIds);
+                }
+                GameDirector.Instance?.ServerAddLoot(gold, items);
                 GameDirector.Instance?.ServerEncounterCleared(_encounter);
                 RpcCombatEnded(true, xpEach);
             }

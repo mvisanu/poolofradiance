@@ -14,6 +14,7 @@ namespace RadiantPool.Game
         public string DisplayName = "";
         public bool RequiredForClear = true;
         public string[] MonsterIds = System.Array.Empty<string>();
+        public string BonusLootTable = "";
         public bool Consumed { get; private set; }
 
         private void Reset() => GetComponent<BoxCollider>().isTrigger = true;
