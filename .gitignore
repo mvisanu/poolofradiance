@@ -1,0 +1,25 @@
+# .NET
+rules/**/bin/
+rules/**/obj/
+*.user
+
+# Unity (game/ project)
+game/[Ll]ibrary/
+game/[Tt]emp/
+game/[Oo]bj/
+game/[Bb]uild/
+game/[Bb]uilds/
+game/[Ll]ogs/
+game/[Uu]serSettings/
+game/[Mm]emoryCaptures/
+game/*.csproj
+game/*.sln
+game/.vsconfig
+game/Assets/AssetStoreTools*
+
+# OS / editor
+.vs/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store
