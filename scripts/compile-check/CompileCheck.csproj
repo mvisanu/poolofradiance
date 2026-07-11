@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Compiles the game's runtime scripts against the installed Unity editor's managed
+       DLLs and a FishNet source checkout — catches compile errors WITHOUT needing a
+       Unity license or opening the editor. Run via scripts\compile-check.ps1.
+       Editor-folder scripts (ProjectBootstrap/HeadlessBuild) are NOT covered: they need
+       URP package sources, which only exist after a real package resolve. -->
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NoWarn>CS0649;CS0414;CS0067;CS1691;CS0109;CS0169;CS8632;CS0618</NoWarn>
+    <DefineConstants>UNITY_EDITOR;UNITY_6000_0_OR_NEWER;UNITY_2023_3_OR_NEWER;UNITY_2023_1_OR_NEWER;UNITY_2022_3_OR_NEWER;UNITY_2022_1_OR_NEWER;UNITY_2021_3_OR_NEWER;UNITY_2021_1_OR_NEWER;UNITY_2020_3_OR_NEWER;UNITY_2020_1_OR_NEWER;UNITY_2019_3_OR_NEWER;UNITY_2019_1_OR_NEWER;UNITY_2018_3_OR_NEWER;UNITY_2017_3_OR_NEWER;UNITY_5_3_OR_NEWER;UNITY_STANDALONE_WIN;UNITY_STANDALONE</DefineConstants>
+
+    <!-- Overridable: -p:UnityManaged=... -p:FishNet=... -->
+    <UnityManaged Condition="'$(UnityManaged)' == ''">C:\Program Files\Unity\Hub\Editor\6000.0.79f1\Editor\Data\Managed\UnityEngine</UnityManaged>
+    <FishNet Condition="'$(FishNet)' == ''">$(MSBuildThisFileDirectory)fishnet-src\Assets\FishNet</FishNet>
+    <Repo>$(MSBuildThisFileDirectory)..\..</Repo>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Game runtime scripts under test -->
+    <Compile Include="$(Repo)\game\Assets\Scripts\**\*.cs" />
+    <!-- Rules library source (compiled in, same as Unity's local package would be) -->
+    <Compile Include="$(Repo)\rules\RadiantPool.Rules\*.cs" />
+    <!-- FishNet runtime, minus files needing the uGUI package (unused by our code) -->
+    <Compile Include="$(FishNet)\Runtime\**\*.cs"
+             Exclude="$(FishNet)\Runtime\Plugins\GameKit\Dependencies\Utilities\Types\Canvases\**\*.cs;$(FishNet)\Runtime\Plugins\GameKit\Dependencies\Utilities\Types\ScrollbarValueSetter.cs;$(FishNet)\Runtime\Plugins\GameKit\Dependencies\Utilities\LayoutGroups.cs;$(FishNet)\Runtime\Plugins\GameKit\Dependencies\Utilities\Types\PointerMonoBehaviour.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <UnityDll Include="$(UnityManaged)\*.dll" />
+    <UnityDll Include="$(UnityManaged)\..\UnityEditor.*.dll" />
+    <UnityDll Include="$(FishNet)\Runtime\Plugins\CodeAnalysis\FishNet.CodeAnalysis.dll" />
+    <Reference Include="@(UnityDll)" Private="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+</Project>

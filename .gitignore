@@ -23,3 +23,8 @@ game/Assets/AssetStoreTools*
 *.swp
 Thumbs.db
 .DS_Store
+
+# compile-check FishNet clone
+scripts/compile-check/fishnet-src/
+scripts/compile-check/bin/
+scripts/compile-check/obj/
