@@ -33,6 +33,53 @@ namespace RadiantPool.Game
 
             _network.ServerManager.OnServerConnectionState += OnServerState;
             _network.ClientManager.OnClientConnectionState += OnClientState;
+
+            // Diagnostic breadcrumbs for the join pipeline (visible in Player.log).
+            _network.ServerManager.OnRemoteConnectionState += (conn, args) =>
+                Debug.Log($"[RadiantPool] remote connection {conn.ClientId}: {args.ConnectionState}");
+            _network.SceneManager.OnClientLoadedStartScenes += (conn, asServer) =>
+                Debug.Log($"[RadiantPool] client {conn.ClientId} loaded start scenes (asServer={asServer})");
+            var spawner = GetComponent<FishNet.Component.Spawning.PlayerSpawner>();
+            if (spawner != null)
+                spawner.OnSpawned += nob =>
+                    Debug.Log($"[RadiantPool] player object spawned for owner {nob.OwnerId}");
+        }
+
+        /// <summary>Unattended smoke-testing hooks:
+        ///   RadiantPool.exe -name Anna -autohost
+        ///   RadiantPool.exe -name Ben -autojoin <code|localhost></summary>
+        private void Start()
+        {
+            var args = Environment.GetCommandLineArgs();
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (args[i] == "-name" && i + 1 < args.Length)
+                    _displayName = args[i + 1];
+            }
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (args[i] == "-autohost")
+                {
+                    Debug.Log("[RadiantPool] autohost");
+                    Host();
+                }
+                else if (args[i] == "-autojoin" && i + 1 < args.Length)
+                {
+                    string code = args[i + 1];
+                    Debug.Log($"[RadiantPool] autojoin {code}");
+                    if (code.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+                    {
+                        LocalDisplayName = Sanitize(_displayName);
+                        _tugboat.SetClientAddress("127.0.0.1");
+                        _tugboat.SetPort(DefaultPort);
+                        _network.ClientManager.StartConnection();
+                    }
+                    else
+                    {
+                        Join(code);
+                    }
+                }
+            }
         }
 
         private void OnDestroy()
@@ -49,6 +96,7 @@ namespace RadiantPool.Game
                 var ip = InviteCode.LocalAddress();
                 _hostCode = InviteCode.Encode(ip, DefaultPort);
                 _status = $"Hosting — invite code: {_hostCode}";
+                Debug.Log($"[RadiantPool] server started, invite code {_hostCode}");
             }
             else if (args.ConnectionState == LocalConnectionState.Stopped)
             {
@@ -59,6 +107,7 @@ namespace RadiantPool.Game
 
         private void OnClientState(ClientConnectionStateArgs args)
         {
+            Debug.Log($"[RadiantPool] client state: {args.ConnectionState}");
             switch (args.ConnectionState)
             {
                 case LocalConnectionState.Starting:
@@ -90,7 +139,7 @@ namespace RadiantPool.Game
                 _error = "Failed to start server (is another host using the port?).";
                 return;
             }
-            _tugboat.SetClientAddress("localhost");
+            _tugboat.SetClientAddress("127.0.0.1");   // explicit IPv4: "localhost" can hit ::1
             _network.ClientManager.StartConnection();
         }
 

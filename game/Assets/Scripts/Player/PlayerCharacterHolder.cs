@@ -51,6 +51,8 @@ namespace RadiantPool.Game
                 : CreateSheetFromBuild(name, build);
             ClassIndex.Value = (int)Sheet.Class;
             CharacterName.Value = Sheet.Name;
+            Debug.Log($"[RadiantPool] character ready: {Sheet.Name} the {Sheet.Class}" +
+                      $" (owner {OwnerId}, HP {Sheet.MaxHp}, AC {Sheet.ArmorClass})");
         }
 
         public static CharacterSheet CreateSheetFromBuild(string name, CharacterBuild b)

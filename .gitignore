@@ -28,3 +28,8 @@ Thumbs.db
 scripts/compile-check/fishnet-src/
 scripts/compile-check/bin/
 scripts/compile-check/obj/
+
+# dotnet artifacts (redirected)
+artifacts/
+rules/**/bin.meta
+rules/**/obj.meta

@@ -1,0 +1,8 @@
+<Project>
+  <!-- Keep dotnet build artifacts out of the source tree: RadiantPool.Rules doubles as a
+       Unity local package, and bin/obj inside it would churn Unity's asset import. -->
+  <PropertyGroup>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)..\artifacts\$(MSBuildProjectName)\bin\</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)..\artifacts\$(MSBuildProjectName)\obj\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>

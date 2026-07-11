@@ -119,6 +119,7 @@ namespace RadiantPool.EditorTools
             if (clientAuth != null) { clientAuth.boolValue = true; so.ApplyModifiedPropertiesWithoutUndo(); }
             root.AddComponent<PlayerMotor>();
             root.AddComponent<PlayerIdentity>();
+            root.AddComponent<PlayerCharacterHolder>();
 
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
             Object.DestroyImmediate(root);
@@ -367,6 +368,23 @@ namespace RadiantPool.EditorTools
             };
             systemsGo.AddComponent<CombatClientUI>();
             systemsGo.AddComponent<SettingsMenu>();
+
+            // FishNet scene NetworkObjects need SceneIds; the editor UI stamps them via
+            // its own hooks, but a batchmode-generated scene must do it explicitly.
+            // CreateSceneId(Scene, bool force, out int changed) is internal — reflection.
+            var createSceneId = typeof(NetworkObject).GetMethod("CreateSceneId",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            if (createSceneId != null)
+            {
+                object[] sceneIdArgs = { scene, true, 0 };
+                createSceneId.Invoke(null, sceneIdArgs);
+                Debug.Log($"[Bootstrap] FishNet SceneIds stamped ({sceneIdArgs[2]} changed).");
+            }
+            else
+            {
+                Debug.LogWarning("[Bootstrap] Could not find NetworkObject.CreateSceneId — " +
+                    "run Tools > Fish-Networking > Utility > Reserialize NetworkObjects manually.");
+            }
 
             EditorSceneManager.SaveScene(scene, ScenePath);
             Debug.Log($"[Bootstrap] Scene saved to {ScenePath}");
