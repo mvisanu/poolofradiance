@@ -29,8 +29,10 @@ namespace RadiantPool.Game
 
             if (Input.GetMouseButton(1))
             {
-                _yaw += Input.GetAxis("Mouse X") * sensitivity;
-                _pitch -= Input.GetAxis("Mouse Y") * sensitivity;
+                float sens = SettingsMenu.MouseSensitivity > 0f
+                    ? SettingsMenu.MouseSensitivity : sensitivity;
+                _yaw += Input.GetAxis("Mouse X") * sens;
+                _pitch -= Input.GetAxis("Mouse Y") * sens;
                 _pitch = Mathf.Clamp(_pitch, pitchMin, pitchMax);
             }
 

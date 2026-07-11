@@ -289,6 +289,7 @@ namespace RadiantPool.EditorTools
             director.QuestXpEach = 300;
             director.QuestGold = 100;
             systemsGo.AddComponent<CombatClientUI>();
+            systemsGo.AddComponent<SettingsMenu>();
 
             EditorSceneManager.SaveScene(scene, ScenePath);
             Debug.Log($"[Bootstrap] Scene saved to {ScenePath}");
