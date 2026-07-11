@@ -242,9 +242,11 @@ namespace RadiantPool.Game
             InCombat.Value = false;
             if (playersWon)
             {
-                int xp = _server.Values.Where(u => u.MonsterDef != null).Sum(u => u.MonsterDef.Xp);
+                // Full encounter XP to every member (co-op convention; the level-1..5
+                // curve is tuned for this — see CampaignSimulationTests).
+                int xpEach = _server.Values.Where(u => u.MonsterDef != null)
+                    .Sum(u => u.MonsterDef.Xp);
                 var pcs = _server.Values.Where(u => u.Player != null).ToList();
-                int xpEach = Mathf.Max(1, xp / Mathf.Max(1, pcs.Count));
                 foreach (var pc in pcs)
                 {
                     pc.Player.Sheet.GainXp(xpEach);

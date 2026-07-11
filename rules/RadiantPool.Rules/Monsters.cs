@@ -91,7 +91,7 @@ namespace RadiantPool.Rules
                 new MonsterDefinition
                 {
                     Id = "hollow_warden", Name = "Warden Sorrel, Hollow-Flame Host",
-                    ArmorClass = 18, HpDice = "8d8+16", Speed = 30,
+                    ArmorClass = 18, HpDice = "6d8+12", Speed = 30,
                     Abilities = new AbilityScores(16, 11, 14, 11, 11, 15),
                     Xp = 700, LootTable = "lt_sunken_vault", SrdRef = "Knight (SRD 5.1 p.400)",
                     Attacks =

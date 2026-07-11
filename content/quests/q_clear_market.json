@@ -10,6 +10,6 @@
     { "id": "o1", "text": "Lay the dead of the Drowned Market to rest", "counter": "encounters_cleared", "target": 4 },
     { "id": "o2", "text": "Return to Councilor Veresk", "counter": "turned_in", "target": 1 }
   ],
-  "rewards": { "xpEach": 700, "gold": 250, "storyBeat": "sb_market_cleared" },
+  "rewards": { "xpEach": 900, "gold": 250, "storyBeat": "sb_market_cleared" },
   "unlocks": ["q_clear_temple"]
 }

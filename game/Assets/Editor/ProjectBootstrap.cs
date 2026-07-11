@@ -311,7 +311,7 @@ namespace RadiantPool.EditorTools
                 new[] { "kindled_zealot", "kindled_zealot", "kindled_zealot", "kindled_zealot" });
             Encounter("enc_temple_05_sorrel", "glasslit_temple", "the Lightwell",
                 new Vector3(50, 1.5f, 19), new Vector3(12, 3, 10), true,
-                new[] { "hollow_warden", "kindled_zealot", "kindled_zealot" });
+                new[] { "hollow_warden", "kindled_zealot" });
 
             // Vendor NPC by the council platform.
             var vendor = GameObject.CreatePrimitive(PrimitiveType.Capsule);
@@ -356,13 +356,13 @@ namespace RadiantPool.EditorTools
                 {
                     ZoneId = "drowned_market", DisplayName = "The Drowned Market",
                     QuestName = "Silence the Drowned Market",
-                    RequiredEncounters = 4, XpEach = 700, Gold = 250
+                    RequiredEncounters = 4, XpEach = 900, Gold = 250
                 },
                 new GameDirector.ZoneConfig
                 {
                     ZoneId = "glasslit_temple", DisplayName = "The Glasslit Temple",
                     QuestName = "The Fire in the Glass",
-                    RequiredEncounters = 5, XpEach = 1800, Gold = 600
+                    RequiredEncounters = 5, XpEach = 3400, Gold = 600
                 }
             };
             systemsGo.AddComponent<CombatClientUI>();

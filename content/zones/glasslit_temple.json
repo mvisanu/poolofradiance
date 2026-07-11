@@ -15,7 +15,7 @@
     { "id": "enc_temple_04", "trigger": "vol_temple_04",
       "units": ["kindled_zealot", "kindled_zealot", "kindled_zealot", "kindled_zealot"], "requiredForClear": true },
     { "id": "enc_temple_05_sorrel", "trigger": "vol_temple_05",
-      "units": ["kindled_zealot", "kindled_zealot"], "requiredForClear": true,
+      "units": ["hollow_warden", "kindled_zealot"], "requiredForClear": true,
       "bossName": "Warden Sorrel, Hollow-Flame Host",
       "storyBeatOnVictory": "sb_sorrel_freed" }
   ],

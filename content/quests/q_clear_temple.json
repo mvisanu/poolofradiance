@@ -10,6 +10,6 @@
     { "id": "o1", "text": "Break the Kindled hold on the Glasslit Temple", "counter": "encounters_cleared", "target": 5 },
     { "id": "o2", "text": "Return to Councilor Veresk", "counter": "turned_in", "target": 1 }
   ],
-  "rewards": { "xpEach": 1800, "gold": 600, "storyBeat": "sb_campaign_complete" },
+  "rewards": { "xpEach": 3400, "gold": 600, "storyBeat": "sb_campaign_complete" },
   "unlocks": []
 }

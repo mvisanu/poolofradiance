@@ -5,7 +5,7 @@
   "srdRef": "Knight (SRD 5.1)",
   "size": "Medium",
   "ac": 18,
-  "hpDice": "8d8+16",
+  "hpDice": "6d8+12",
   "speed": 30,
   "abilities": { "str": 16, "dex": 11, "con": 14, "int": 11, "wis": 11, "cha": 15 },
   "attacks": [
