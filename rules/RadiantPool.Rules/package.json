@@ -1,0 +1,7 @@
+{
+  "name": "com.radiantpool.rules",
+  "version": "0.1.0",
+  "displayName": "RadiantPool Rules",
+  "description": "Pure-C# SRD 5.1 rules library shared by server and client. No Unity dependencies.",
+  "unity": "2021.3"
+}

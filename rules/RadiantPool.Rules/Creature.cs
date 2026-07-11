@@ -149,6 +149,14 @@ namespace RadiantPool.Rules
             Conditions.Remove(ConditionType.Unconscious);
             ResetDeathSaves();
         }
+
+        /// <summary>Party-wipe recovery: clears death and fully restores. Server-only
+        /// path used when the party is carried back to the hub (no permadeath v1).</summary>
+        public void ReviveFull()
+        {
+            IsDead = false;
+            RestoreFull();
+        }
     }
 
     public readonly struct DamageOutcome
