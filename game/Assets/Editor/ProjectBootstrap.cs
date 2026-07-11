@@ -270,13 +270,8 @@ namespace RadiantPool.EditorTools
             netGo.AddComponent<NetworkManager>();
             netGo.AddComponent<Tugboat>();
             var spawner = netGo.AddComponent<PlayerSpawner>();
-            var so = new SerializedObject(spawner);
-            so.FindProperty("_playerPrefab").objectReferenceValue = playerPrefab;
-            var spawnsProp = so.FindProperty("_spawns");
-            spawnsProp.arraySize = spawns.Count;
-            for (int i = 0; i < spawns.Count; i++)
-                spawnsProp.GetArrayElementAtIndex(i).objectReferenceValue = spawns[i];
-            so.ApplyModifiedPropertiesWithoutUndo();
+            spawner.SetPlayerPrefab(playerPrefab);   // public API (verified vs FishNet source)
+            spawner.Spawns = spawns.ToArray();       // public field, not "_spawns"
             netGo.AddComponent<SessionLauncher>();
 
             var systemsGo = new GameObject("GameSystems");

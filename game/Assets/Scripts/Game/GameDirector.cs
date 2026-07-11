@@ -91,7 +91,9 @@ namespace RadiantPool.Game
                     .FirstOrDefault(t => t.EncounterId == id);
                 if (trigger != null) trigger.Consume();
             }
-            RpcNotice($"Campaign loaded ({save.SavedAtUtc:yyyy-MM-dd}).");
+            string savedDate = save.SavedAtUtc.Length >= 10
+                ? save.SavedAtUtc.Substring(0, 10) : save.SavedAtUtc;
+            RpcNotice($"Campaign loaded (saved {savedDate}).");
         }
 
         [Server]
