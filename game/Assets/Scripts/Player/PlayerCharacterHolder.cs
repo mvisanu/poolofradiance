@@ -5,46 +5,60 @@ using UnityEngine;
 
 namespace RadiantPool.Game
 {
-    /// <summary>Server-owned character sheet for a connected player. Until 3c's creation
-    /// screen, classes are dealt by join order (Fighter, Cleric, Wizard, Rogue) with the
-    /// SRD standard array, so a 2-player party always has frontline + healer.</summary>
+    /// <summary>Server-owned character sheet for a connected player. The owning client
+    /// submits its designed build (3c) on spawn; the server validates it and either
+    /// creates a sheet or hands back the roster entry with the same display name
+    /// (rejoin support). Invalid builds fall back to a class-default array.</summary>
     public class PlayerCharacterHolder : NetworkBehaviour
     {
-        private static int _joinCounter;
-
         public readonly SyncVar<int> ClassIndex = new SyncVar<int>(-1);
+        public readonly SyncVar<string> CharacterName = new SyncVar<string>("");
 
         /// <summary>Authoritative sheet — exists only on the server.</summary>
         public CharacterSheet Sheet { get; private set; }
 
-        public CharacterClass Class => (CharacterClass)ClassIndex.Value;
+        public CharacterClass Class => (CharacterClass)Mathf.Max(0, ClassIndex.Value);
 
-        public override void OnStartServer()
+        public override void OnStartClient()
         {
-            base.OnStartServer();
-            int idx = _joinCounter++ % 4;
-            ClassIndex.Value = idx;
-            Sheet = CreateSheet((CharacterClass)idx, $"pc_{OwnerId}", $"Player {OwnerId}");
+            base.OnStartClient();
+            if (!IsOwner) return;
+            var b = CharacterBuild.Local;
+            CmdSubmitBuild(SessionLauncher.LocalDisplayName, b.ClassIndex, b.RaceIndex,
+                b.Str, b.Dex, b.Con, b.Int, b.Wis, b.Cha);
         }
 
-        /// <summary>SRD standard array (15,14,13,12,10,8) arranged sensibly per class.</summary>
-        public static CharacterSheet CreateSheet(CharacterClass cls, string id, string name)
+        [ServerRpc]
+        private void CmdSubmitBuild(string name, int classIndex, int raceIndex,
+            int str, int dex, int con, int intl, int wis, int cha)
         {
-            AbilityScores scores = cls switch
+            if (Sheet != null) return;   // one submission per spawn
+
+            name = (name ?? "").Trim();
+            if (name.Length == 0) name = $"Adventurer {OwnerId}";
+            if (name.Length > 20) name = name.Substring(0, 20);
+
+            var build = new CharacterBuild
             {
-                CharacterClass.Fighter => new AbilityScores(15, 13, 14, 8, 12, 10),
-                CharacterClass.Cleric  => new AbilityScores(14, 8, 13, 10, 15, 12),
-                CharacterClass.Wizard  => new AbilityScores(8, 14, 13, 15, 12, 10),
-                _                      => new AbilityScores(10, 15, 13, 14, 12, 8), // Rogue
+                ClassIndex = classIndex, RaceIndex = raceIndex,
+                Str = str, Dex = dex, Con = con, Int = intl, Wis = wis, Cha = cha
             };
-            var race = cls switch
-            {
-                CharacterClass.Fighter => Race.Human,
-                CharacterClass.Cleric => Race.Dwarf,
-                CharacterClass.Wizard => Race.Elf,
-                _ => Race.Halfling,
-            };
-            var sheet = new CharacterSheet(id, name, race, cls, scores);
+            if (!build.Validate(out _))
+                build = CharacterBuild.Default(Mathf.Clamp(classIndex, 0, 3));
+
+            Sheet = GameDirector.Instance != null
+                ? GameDirector.Instance.ServerGetOrCreateSheet(name, build)
+                : CreateSheetFromBuild(name, build);
+            ClassIndex.Value = (int)Sheet.Class;
+            CharacterName.Value = Sheet.Name;
+        }
+
+        public static CharacterSheet CreateSheetFromBuild(string name, CharacterBuild b)
+        {
+            var cls = (CharacterClass)b.ClassIndex;
+            var sheet = new CharacterSheet(
+                $"pc_{name.ToLowerInvariant().Replace(' ', '_')}", name, (Race)b.RaceIndex,
+                cls, new AbilityScores(b.Str, b.Dex, b.Con, b.Int, b.Wis, b.Cha));
             switch (cls)
             {
                 case CharacterClass.Fighter:
@@ -68,28 +82,23 @@ namespace RadiantPool.Game
             return sheet;
         }
 
-        /// <summary>The weapon used for the basic Attack action, per class (v1 loadout;
-        /// inventory arrives at 3e).</summary>
+        /// <summary>The weapon used for the basic Attack action (inventory arrives at 3e-full).</summary>
         public AttackDefinition BasicAttack()
         {
             var sheet = Sheet;
+            int str = sheet.ProficiencyBonus + sheet.Abilities.Modifier(Ability.Str);
+            int dex = sheet.ProficiencyBonus + sheet.Abilities.Modifier(Ability.Dex);
             return Class switch
             {
-                CharacterClass.Fighter => new AttackDefinition("Longsword",
-                    sheet.ProficiencyBonus + sheet.Abilities.Modifier(Ability.Str),
+                CharacterClass.Fighter => new AttackDefinition("Longsword", str,
                     $"1d8+{sheet.Abilities.Modifier(Ability.Str)}", DamageType.Slashing, 5),
-                CharacterClass.Cleric => new AttackDefinition("Mace",
-                    sheet.ProficiencyBonus + sheet.Abilities.Modifier(Ability.Str),
+                CharacterClass.Cleric => new AttackDefinition("Mace", str,
                     $"1d6+{sheet.Abilities.Modifier(Ability.Str)}", DamageType.Bludgeoning, 5),
-                CharacterClass.Wizard => new AttackDefinition("Quarterstaff",
-                    sheet.ProficiencyBonus + sheet.Abilities.Modifier(Ability.Str),
+                CharacterClass.Wizard => new AttackDefinition("Quarterstaff", str,
                     $"1d6+{sheet.Abilities.Modifier(Ability.Str)}", DamageType.Bludgeoning, 5),
-                _ => new AttackDefinition("Shortsword",
-                    sheet.ProficiencyBonus + sheet.Abilities.Modifier(Ability.Dex),
+                _ => new AttackDefinition("Shortsword", dex,
                     $"1d6+{sheet.Abilities.Modifier(Ability.Dex)}", DamageType.Piercing, 5),
             };
         }
-
-        public static void ResetJoinCounter() => _joinCounter = 0;
     }
 }

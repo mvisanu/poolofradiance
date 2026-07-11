@@ -52,11 +52,88 @@ namespace RadiantPool.Game
 
         // ---------------- server ----------------
 
+        // Roster survives disconnects: a rejoining display name reclaims its character.
+        private readonly System.Collections.Generic.Dictionary<string, RadiantPool.Rules.CharacterSheet>
+            _roster = new System.Collections.Generic.Dictionary<string, RadiantPool.Rules.CharacterSheet>();
+        private readonly System.Collections.Generic.Dictionary<string, CharacterBuild>
+            _builds = new System.Collections.Generic.Dictionary<string, CharacterBuild>();
+        private readonly System.Collections.Generic.List<string>
+            _consumedEncounters = new System.Collections.Generic.List<string>();
+
+        public override void OnStartServer()
+        {
+            base.OnStartServer();
+            if (!SaveSystem.Exists) return;
+            var save = SaveSystem.Read();
+            if (save == null) return;
+
+            MusterState.Value = save.MusterState;
+            ClearQuestState.Value = save.ClearQuestState;
+            EncountersCleared.Value = save.EncountersCleared;
+            PartyGold.Value = save.PartyGold;
+            ZonePacified.Value = save.ZonePacified;
+            Stash.Clear();
+            foreach (var s in save.Stash) Stash.Add(s);
+            foreach (var saved in save.Roster)
+            {
+                _roster[saved.Name.ToLowerInvariant()] = SaveSystem.Restore(saved);
+                _builds[saved.Name.ToLowerInvariant()] = new CharacterBuild
+                {
+                    ClassIndex = saved.ClassIndex, RaceIndex = saved.RaceIndex,
+                    Str = saved.Str, Dex = saved.Dex, Con = saved.Con,
+                    Int = saved.Int, Wis = saved.Wis, Cha = saved.Cha
+                };
+            }
+            foreach (var id in save.ConsumedEncounters)
+            {
+                _consumedEncounters.Add(id);
+                var trigger = FindObjectsByType<EncounterTrigger>(FindObjectsSortMode.None)
+                    .FirstOrDefault(t => t.EncounterId == id);
+                if (trigger != null) trigger.Consume();
+            }
+            RpcNotice($"Campaign loaded ({save.SavedAtUtc:yyyy-MM-dd}).");
+        }
+
+        [Server]
+        public RadiantPool.Rules.CharacterSheet ServerGetOrCreateSheet(string name, CharacterBuild build)
+        {
+            string key = name.ToLowerInvariant();
+            if (_roster.TryGetValue(key, out var existing))
+            {
+                RpcNotice($"{existing.Name} rejoins the party.");
+                return existing;
+            }
+            var sheet = PlayerCharacterHolder.CreateSheetFromBuild(name, build);
+            _roster[key] = sheet;
+            _builds[key] = build;
+            return sheet;
+        }
+
+        [Server]
+        public void ServerSaveCampaign()
+        {
+            var save = new CampaignSave
+            {
+                MusterState = MusterState.Value,
+                ClearQuestState = ClearQuestState.Value,
+                EncountersCleared = EncountersCleared.Value,
+                PartyGold = PartyGold.Value,
+                ZonePacified = ZonePacified.Value,
+                Stash = Stash.ToList(),
+                ConsumedEncounters = _consumedEncounters.ToList(),
+                Roster = _roster.Select(kv =>
+                    SaveSystem.Capture(kv.Value, _builds[kv.Key])).ToList()
+            };
+            SaveSystem.Write(save);
+        }
+
         [Server]
         public void ServerEncounterCleared(EncounterTrigger trigger)
         {
             if (trigger == null || trigger.ZoneId != ZoneId) return;
             trigger.Consume();
+            _consumedEncounters.Add(trigger.EncounterId);
+            ServerSaveCampaign();   // autosave at every cleared block
             if (!trigger.RequiredForClear) return;
 
             EncountersCleared.Value++;
@@ -91,6 +168,7 @@ namespace RadiantPool.Game
                     ZonePacified.Value = true;
                     PartyGold.Value += QuestGold;
                     AwardXpToAll(QuestXpEach);
+                    ServerSaveCampaign();
                     RpcNotice($"Quest complete! +{QuestXpEach} XP each, +{QuestGold} gold. " +
                               "The Old Docks are safe forever.");
                     break;
@@ -186,6 +264,11 @@ namespace RadiantPool.Game
         private void Update()
         {
             if (Input.GetKeyDown(KeyCode.J)) _journalOpen = !_journalOpen;
+            if (Input.GetKeyDown(KeyCode.F5) && IsServerStarted)
+            {
+                ServerSaveCampaign();
+                RpcNotice("Campaign saved.");
+            }
         }
 
         private void OnGUI()
