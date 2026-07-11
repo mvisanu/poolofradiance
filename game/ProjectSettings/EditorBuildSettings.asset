@@ -4,6 +4,9 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/Zone_OldDocks_Graybox.unity
+    guid: 5e4e717d96e82734aba35c0cdc9a0968
   m_configObjects: {}
   m_UseUCBPForAssetBundles: 0
