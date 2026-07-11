@@ -304,12 +304,61 @@ namespace RadiantPool.Game
                   (r.TargetDied ? $" {target.Name} is slain!" :
                    r.TargetDowned ? $" {target.Name} goes down!" : "");
             ServerLog(line);
-            RpcSfx(!r.Hit ? "miss" : r.Critical ? "crit" : "hit");
+            RpcAttackFx(attacker.Id, target.Id, r.Hit, r.Critical, r.DamageDealt);
             if (r.TargetDied || r.TargetDowned) RpcSfx("down");
         }
 
         [ObserversRpc]
         private void RpcSfx(string id) => GameAudio.Play(id);
+
+        [ObserversRpc]
+        private void RpcAttackFx(string attackerId, string targetId, bool hit, bool crit, int damage)
+        {
+            var attacker = ClientUnits.FirstOrDefault(u => u.Id == attackerId);
+            var target = ClientUnits.FirstOrDefault(u => u.Id == targetId);
+            var fx = CombatFx.Instance;
+            GameAudio.Play(!hit ? "miss" : crit ? "crit" : "hit");
+            if (fx == null || target?.Visual == null) return;
+            if (attacker?.Visual != null)
+                fx.Lunge(attacker.Visual, target.Visual.position);
+            if (hit)
+            {
+                fx.Flash(target.Visual, new Color(1f, 0.35f, 0.3f));
+                fx.Popup(target.Visual.position, crit ? $"{damage}!" : damage.ToString(),
+                    crit ? new Color(1f, 0.6f, 0.15f) : Color.white, crit ? 1.4f : 1f);
+            }
+            else
+            {
+                fx.Popup(target.Visual.position, "miss", new Color(0.8f, 0.8f, 0.85f), 0.8f);
+            }
+        }
+
+        [ObserversRpc]
+        private void RpcSpellFx(string casterId, string targetId, int amount, bool isHeal, int colorIdx)
+        {
+            var caster = ClientUnits.FirstOrDefault(u => u.Id == casterId);
+            var target = ClientUnits.FirstOrDefault(u => u.Id == targetId);
+            var fx = CombatFx.Instance;
+            GameAudio.Play(isHeal ? "heal" : "spell");
+            if (fx == null || target?.Visual == null) return;
+            Color[] palette =
+            {
+                new Color(1f, 0.55f, 0.15f),   // fire
+                new Color(1f, 0.9f, 0.5f),     // radiant
+                new Color(0.7f, 0.5f, 1f),     // force/arcane
+                new Color(0.45f, 1f, 0.55f)    // heal green
+            };
+            var color = palette[Mathf.Clamp(colorIdx, 0, palette.Length - 1)];
+            if (caster?.Visual != null && caster != target)
+                fx.Bolt(caster.Visual.position, target.Visual.position, color);
+            if (isHeal)
+                fx.Popup(target.Visual.position, $"+{amount}", palette[3]);
+            else if (amount > 0)
+            {
+                fx.Flash(target.Visual, color);
+                fx.Popup(target.Visual.position, amount.ToString(), color);
+            }
+        }
 
         [Server]
         private void SyncHp(string unitId)
@@ -492,12 +541,14 @@ namespace RadiantPool.Game
                         ServerLog($"{spell.Name} deals {d.Damage} {d.DamageType} to {targetName}." +
                                   (d.TargetDied ? $" {targetName} is destroyed!" :
                                    d.TargetDowned ? $" {targetName} goes down!" : ""));
-                        RpcSfx("spell");
+                        RpcSpellFx(caster.Id, d.TargetId, d.Damage, false,
+                            d.DamageType == DamageType.Fire ? 0 :
+                            d.DamageType == DamageType.Radiant ? 1 : 2);
                         if (d.TargetDied || d.TargetDowned) RpcSfx("down");
                         break;
                     case SpellHealEvent h:
                         ServerLog($"{spell.Name} restores {h.Healed} HP to {targetName}.");
-                        RpcSfx("heal");
+                        RpcSpellFx(caster.Id, h.TargetId, h.Healed, true, 3);
                         break;
                     case SpellConditionEvent c:
                         ServerLog($"{targetName} is {c.Condition} ({spell.Name}).");
@@ -601,6 +652,8 @@ namespace RadiantPool.Game
             ActionLeft = action;
             BonusLeft = bonus;
             LastRejection = "";
+            var view = ClientUnits.FirstOrDefault(u => u.Id == unitId);
+            CombatFx.Instance?.SetTurnMarker(view?.Visual, view?.IsPc ?? false);
         }
 
         [ObserversRpc]
@@ -656,6 +709,7 @@ namespace RadiantPool.Game
         private void RpcCombatEnded(bool victory, int xpEach)
         {
             ActiveUnitId = "";
+            CombatFx.Instance?.ClearTurnMarker();
             foreach (var u in ClientUnits.Where(u => !u.IsPc && u.Visual != null))
                 Destroy(u.Visual.gameObject);
             foreach (var u in ClientUnits.Where(u => u.IsPc && u.Visual != null))

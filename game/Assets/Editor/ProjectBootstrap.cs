@@ -32,6 +32,7 @@ namespace RadiantPool.EditorTools
             EnsureFolders();
             SetupPlayerSettings();
             SetupUrp();
+            KenneyArt.SetupMaterials();
             var playerPrefab = CreatePlayerPrefab();
             CreateGrayboxScene(playerPrefab);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
@@ -255,8 +256,12 @@ namespace RadiantPool.EditorTools
             gateMarket.name = "Gate_DrownedMarket";
             gateMarket.transform.position = new Vector3(0, 1.5f, 25);
             gateMarket.transform.localScale = new Vector3(6, 3, 1.2f);
-            gateMarket.GetComponent<Renderer>().sharedMaterial = gateMat;
+            gateMarket.GetComponent<Renderer>().enabled = false;   // collider only
             gateMarket.AddComponent<ZoneGate>().ZoneIndex = 1;
+            var gateMarketVisual = KenneyArt.Place("Pirate", "castle-gate",
+                new Vector3(0, 0, 25), 0, 7f);
+            if (gateMarketVisual != null)
+                gateMarketVisual.transform.SetParent(gateMarket.transform, true);
 
             // Temple divider (x=35, south of the market wall) with a 6 m gate gap at z=0.
             Box("TempleWall_S", new Vector3(35, 1.5f, -31.5f), new Vector3(1, 3, 57), wall);
@@ -265,8 +270,12 @@ namespace RadiantPool.EditorTools
             gateTemple.name = "Gate_GlasslitTemple";
             gateTemple.transform.position = new Vector3(35, 1.5f, 0);
             gateTemple.transform.localScale = new Vector3(1.2f, 3, 6);
-            gateTemple.GetComponent<Renderer>().sharedMaterial = gateMat;
+            gateTemple.GetComponent<Renderer>().enabled = false;   // collider only
             gateTemple.AddComponent<ZoneGate>().ZoneIndex = 2;
+            var gateTempleVisual = KenneyArt.Place("Pirate", "castle-gate",
+                new Vector3(35, 0, 0), 90f, 7f);
+            if (gateTempleVisual != null)
+                gateTempleVisual.transform.SetParent(gateTemple.transform, true);
 
             // Zone dressing — Albion-style district color zoning: each quarter has its
             // own saturated palette so you always know where you are at a glance.
@@ -287,15 +296,69 @@ namespace RadiantPool.EditorTools
 
             Roofed("Docks_Warehouse_A", new Vector3(-40, 3, 8), new Vector3(14, 6, 10), docksWood, docksRoof);
             Roofed("Docks_Warehouse_B", new Vector3(-25, 2.5f, -25), new Vector3(10, 5, 12), docksWood, docksRoof);
-            Box("Docks_Crates_1", new Vector3(-32, 0.75f, -6), new Vector3(1.5f, 1.5f, 1.5f), crate);
-            Box("Docks_Crates_2", new Vector3(-30.5f, 0.75f, -4.5f), new Vector3(1.5f, 1.5f, 1.5f), crate);
-            Roofed("Market_Stalls_1", new Vector3(-12, 1f, 40), new Vector3(6, 2, 3), marketWood, marketCloth);
-            Roofed("Market_Stalls_2", new Vector3(10, 1f, 48), new Vector3(6, 2, 3), marketWood, marketCloth);
-            Box("Market_Fountain", new Vector3(0, 0.6f, 45), new Vector3(4, 1.2f, 4), templeStone);
-            Box("Temple_Pillar_1", new Vector3(42, 2.5f, -6), new Vector3(1.5f, 5, 1.5f), templeStone);
-            Box("Temple_Pillar_2", new Vector3(42, 2.5f, 6), new Vector3(1.5f, 5, 1.5f), templeStone);
+
+            // --- CC0 Kenney set dressing (see Assets/Art/Kenney; CREDITS in README) ---
+            void Lantern(Vector3 pos)
+            {
+                var post = KenneyArt.Place("FantasyTown", "lantern", pos,
+                    targetSize: 2.6f, byHeight: true);
+                if (post == null) return;
+                var glow = new GameObject("GlowLight").AddComponent<Light>();
+                glow.transform.SetParent(post.transform, false);
+                glow.transform.position = pos + Vector3.up * 2.3f;
+                glow.type = LightType.Point;
+                glow.color = new Color(1f, 0.82f, 0.5f);
+                glow.intensity = 1.6f;
+                glow.range = 9f;
+            }
+
+            // Hub plaza: fountain, lanterns, banners, trees.
+            KenneyArt.Place("FantasyTown", "fountain-round-detail", new Vector3(0, 0, -2), 0, 5f);
+            Lantern(new Vector3(-5, 0, -10));
+            Lantern(new Vector3(5, 0, -10));
+            Lantern(new Vector3(-5, 0, 2));
+            Lantern(new Vector3(5, 0, 2));
+            KenneyArt.Place("FantasyTown", "banner-red", new Vector3(-3.5f, 0.3f, -15), 0, 2.6f, true);
+            KenneyArt.Place("FantasyTown", "banner-green", new Vector3(3.5f, 0.3f, -15), 0, 2.6f, true);
+            KenneyArt.Place("FantasyTown", "cart-high", new Vector3(8, 0, -18), 35f, 3f);
+            KenneyArt.Place("FantasyTown", "tree-high", new Vector3(-10, 0, -20), 0, 5.5f, true);
+            KenneyArt.Place("FantasyTown", "tree", new Vector3(12, 0, -22), 70f, 4f, true);
+
+            // Docks: crates, barrels, boats on the water, mooring props.
+            KenneyArt.Place("Pirate", "crate", new Vector3(-32, 0, -6), 15f, 1.4f);
+            KenneyArt.Place("Pirate", "crate-bottles", new Vector3(-30.5f, 0, -4.5f), 40f, 1.3f);
+            KenneyArt.Place("Pirate", "barrel", new Vector3(-33.5f, 0, -4f), 0, 1.1f);
+            KenneyArt.Place("Pirate", "barrel", new Vector3(-44, 0, 10), 0, 1.1f);
+            KenneyArt.Place("Pirate", "chest", new Vector3(-23, 0, -30), 200f, 1.3f);
+            KenneyArt.Place("Pirate", "boat-row-large", new Vector3(-54, 0.15f, -8), 100f, 6f);
+            KenneyArt.Place("Pirate", "boat-row-small", new Vector3(-53, 0.15f, 16), 80f, 4f);
+            KenneyArt.Place("Pirate", "flag-high", new Vector3(-36, 0, 18), 0, 4.5f, true);
+            Lantern(new Vector3(-28, 0, 4));
+
+            // Market: real stalls, fountain, carts, hedges.
+            KenneyArt.Place("FantasyTown", "stall-green", new Vector3(-12, 0, 40), 160f, 4f);
+            KenneyArt.Place("FantasyTown", "stall-red", new Vector3(10, 0, 48), 20f, 4f);
+            KenneyArt.Place("FantasyTown", "stall-bench", new Vector3(-8, 0, 44), 90f, 3f);
+            KenneyArt.Place("FantasyTown", "fountain-round", new Vector3(0, 0, 45), 0, 5f);
+            KenneyArt.Place("FantasyTown", "cart", new Vector3(16, 0, 38), 120f, 2.8f);
+            KenneyArt.Place("FantasyTown", "hedge-large", new Vector3(-24, 0, 46), 0, 4f);
+            Lantern(new Vector3(-6, 0, 36));
+            Lantern(new Vector3(8, 0, 52));
+
+            // Temple: stone pillars, ruined walls, ember lanterns, the cult's banners.
+            KenneyArt.Place("FantasyTown", "pillar-stone", new Vector3(42, 0, -6), 0, 5f, true);
+            KenneyArt.Place("FantasyTown", "pillar-stone", new Vector3(42, 0, 6), 0, 5f, true);
+            KenneyArt.Place("FantasyTown", "wall-broken", new Vector3(48, 0, -22), 30f, 4f);
+            KenneyArt.Place("FantasyTown", "wall-broken", new Vector3(55, 0, 8), 290f, 4f);
+            KenneyArt.Place("Pirate", "flag-pirate-high", new Vector3(45, 0, 15), 0, 5f, true);
             Box("Temple_Brazier_1", new Vector3(46, 1f, -18), new Vector3(1, 2, 1), templeEmber);
             Box("Temple_Brazier_2", new Vector3(54, 1f, 4), new Vector3(1, 2, 1), templeEmber);
+
+            // Scattered greens and rocks to break up the plain.
+            KenneyArt.Place("FantasyTown", "tree-high-round", new Vector3(-14, 0, 14), 0, 6f, true);
+            KenneyArt.Place("FantasyTown", "tree-crooked", new Vector3(20, 0, -30), 45f, 4.5f, true);
+            KenneyArt.Place("FantasyTown", "rock-large", new Vector3(24, 0, 12), 15f, 2.5f);
+            KenneyArt.Place("FantasyTown", "rock-wide", new Vector3(-8, 0, 20), 80f, 3f);
             var lightwell = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             lightwell.name = "The Lightwell";
             lightwell.transform.position = new Vector3(52, 0.3f, 20);
@@ -440,6 +503,7 @@ namespace RadiantPool.EditorTools
             var systemsGo = new GameObject("GameSystems");
             systemsGo.AddComponent<NetworkObject>();
             systemsGo.AddComponent<GameAudio>();
+            systemsGo.AddComponent<CombatFx>();
             systemsGo.AddComponent<CombatManager>();
             var director = systemsGo.AddComponent<GameDirector>();
             director.Zones = new[]

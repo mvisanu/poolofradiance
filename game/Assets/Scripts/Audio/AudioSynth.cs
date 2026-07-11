@@ -48,16 +48,31 @@ namespace RadiantPool.Game
 
         // ---------- one-shots ----------
 
+        /// <summary>Weapon impact: short swing transient, noise crack, metallic ring
+        /// partials, and a pitched body thump. Crits get a sub-drop and longer ring.</summary>
         private static float[] Hit(float dur, float thumpHz, float gain)
         {
+            bool crit = gain > 1.2f;
             var s = New(dur);
+            float[] ringHz = { 1870f, 2745f, 3390f, 4210f };
             for (int i = 0; i < s.Length; i++)
             {
                 float t = (float)i / Rate;
-                float env = Mathf.Exp(-t * 18f);
-                float noise = ((float)Rand.NextDouble() * 2f - 1f) * Mathf.Exp(-t * 40f);
-                float thump = Mathf.Sin(2f * Mathf.PI * thumpHz * t * (1f - t * 0.8f));
-                s[i] = (0.5f * noise + 0.6f * thump * env) * gain * 0.6f;
+                // Crack: bright noise, very fast decay.
+                float crack = ((float)Rand.NextDouble() * 2f - 1f) * Mathf.Exp(-t * 90f) * 0.9f;
+                // Metallic ring: detuned high partials, medium decay.
+                float ring = 0f;
+                for (int p = 0; p < ringHz.Length; p++)
+                    ring += Mathf.Sin(2f * Mathf.PI * ringHz[p] * t)
+                            * Mathf.Exp(-t * (crit ? 14f : 22f)) / (p + 1.5f);
+                // Body: pitched thump falling in frequency.
+                float thump = Mathf.Sin(2f * Mathf.PI * thumpHz * t * (1f - t * 1.2f))
+                              * Mathf.Exp(-t * 16f);
+                // Crit sub-drop.
+                float sub = crit
+                    ? Mathf.Sin(2f * Mathf.PI * (62f - 25f * t) * t) * Mathf.Exp(-t * 7f) * 0.7f
+                    : 0f;
+                s[i] = (crack * 0.45f + ring * 0.35f + thump * 0.55f + sub) * gain * 0.55f;
             }
             return s;
         }
@@ -77,16 +92,24 @@ namespace RadiantPool.Game
             return s;
         }
 
+        /// <summary>Spell bolt: FM synthesis (falling carrier, decaying modulation index)
+        /// with a sparkle tail — rounder and more magical than a raw saw.</summary>
         private static float[] Zap(float dur)
         {
             var s = New(dur);
+            float phase = 0f;
             for (int i = 0; i < s.Length; i++)
             {
                 float t = (float)i / Rate;
-                float env = Mathf.Exp(-t * 9f);
-                float freq = 880f - 620f * (t / dur);            // falling pitch
-                float saw = 2f * (t * freq - Mathf.Floor(t * freq + 0.5f));
-                s[i] = saw * env * 0.35f;
+                float env = Mathf.Exp(-t * 8f);
+                float carrier = 620f - 380f * (t / dur);
+                float modIndex = 5.5f * Mathf.Exp(-t * 10f);
+                float mod = Mathf.Sin(2f * Mathf.PI * carrier * 2.7f * t) * modIndex;
+                phase += 2f * Mathf.PI * carrier / Rate;
+                float fm = Mathf.Sin(phase + mod);
+                float sparkle = ((float)Rand.NextDouble() * 2f - 1f)
+                                * Mathf.Exp(-t * 12f) * 0.12f;
+                s[i] = (fm * env + sparkle) * 0.38f;
             }
             return s;
         }

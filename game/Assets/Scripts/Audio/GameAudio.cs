@@ -10,7 +10,8 @@ namespace RadiantPool.Game
     {
         public static GameAudio Instance { get; private set; }
 
-        private AudioSource _sfx;
+        private AudioSource[] _sfx;
+        private int _nextSfx;
         private AudioSource _exploreMusic;
         private AudioSource _combatMusic;
         private const float MusicVolume = 0.55f;
@@ -19,8 +20,13 @@ namespace RadiantPool.Game
         private void Awake()
         {
             Instance = this;
-            _sfx = gameObject.AddComponent<AudioSource>();
-            _sfx.playOnAwake = false;
+            // Round-robin voices so overlapping hits can each carry a random pitch.
+            _sfx = new AudioSource[4];
+            for (int i = 0; i < _sfx.Length; i++)
+            {
+                _sfx[i] = gameObject.AddComponent<AudioSource>();
+                _sfx[i].playOnAwake = false;
+            }
 
             _exploreMusic = gameObject.AddComponent<AudioSource>();
             _exploreMusic.clip = AudioSynth.Get("explore_music");
@@ -50,7 +56,12 @@ namespace RadiantPool.Game
         public static void Play(string id, float volume = 1f)
         {
             if (Instance == null) return;
-            Instance._sfx.PlayOneShot(AudioSynth.Get(id), volume);
+            var voice = Instance._sfx[Instance._nextSfx];
+            Instance._nextSfx = (Instance._nextSfx + 1) % Instance._sfx.Length;
+            // Small random pitch spread keeps repeated impacts from sounding cloned.
+            voice.pitch = id is "hit" or "crit" or "miss" or "spell"
+                ? Random.Range(0.92f, 1.08f) : 1f;
+            voice.PlayOneShot(AudioSynth.Get(id), volume);
         }
     }
 }

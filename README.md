@@ -28,6 +28,10 @@ WoW-style camera.
 dotnet test rules/RadiantPool.Rules.sln
 ```
 
+## Art credits
+Environment models from the CC0 **Kenney** asset kits ([kenney.nl](https://kenney.nl)):
+Fantasy Town Kit 2.0 and Pirate Kit — Creative Commons Zero, thank you Kenney!
+
 ## License / attribution
 This work includes material taken from the System Reference Document 5.1 ("SRD 5.1") by
 Wizards of the Coast LLC and available at
