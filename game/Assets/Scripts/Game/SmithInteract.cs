@@ -12,6 +12,7 @@ namespace RadiantPool.Game
         public float InteractRange = 3.5f;
 
         private bool _open;
+        private Vector2 _scroll;
 
         private Transform LocalPlayer()
         {
@@ -50,13 +51,15 @@ namespace RadiantPool.Game
             }
             if (!_open) return;
 
-            GUILayout.BeginArea(new Rect(Ui.W / 2f - 210, Ui.H / 2f - 180, 420, 360),
+            float ph = Mathf.Min(Ui.H - 60f, 420f);
+            GUILayout.BeginArea(new Rect(Ui.W / 2f - 210, (Ui.H - ph) / 2f, 420, ph),
                 Theme.PanelStyle);
             GUILayout.Label($"{VendorName} — arms & armor", Theme.Header);
             GUILayout.Label($"<color=#f2ca50><b>{director.PartyGold.Value}</b> gold</color>" +
                 "   <color=#d0c5af>(bought gear goes to the stash — equip with I)</color>",
                 Theme.Body);
 
+            _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.ExpandHeight(true));
             bool wroteArmorHeader = false;
             GUILayout.Label("WEAPONS", Theme.Caps);
             foreach (var (id, price) in GameDirector.SmithStock)
@@ -76,6 +79,7 @@ namespace RadiantPool.Game
                     director.CmdBuyItem(id);
             }
             GUI.enabled = true;
+            GUILayout.EndScrollView();
             if (GUILayout.Button("Leave")) _open = false;
             GUILayout.EndArea();
         }

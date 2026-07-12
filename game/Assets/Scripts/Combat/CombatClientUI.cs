@@ -138,11 +138,11 @@ namespace RadiantPool.Game
         {
             var m = new Vector2(Input.mousePosition.x / Ui.Scale,
                 (Screen.height - Input.mousePosition.y) / Ui.Scale);
-            if (new Rect(Ui.W - 262, 12, 250, 354).Contains(m)) return true;      // initiative
+            if (InitiativeRect(combat).Contains(m)) return true;
             if (new Rect(12, Ui.H - 208, 520, 196).Contains(m)) return true;      // log
             if (new Rect(12, Ui.H - 318, 264, 102).Contains(m)) return true;      // player card
             if (combat.IsMyTurn
-                && new Rect(Ui.W / 2f - 220, Ui.H - 330, 440, 128).Contains(m))    // actions
+                && new Rect(Ui.W / 2f - 280, Ui.H - 336, 560, 134).Contains(m))    // actions
                 return true;
             return false;
         }
@@ -253,9 +253,12 @@ namespace RadiantPool.Game
             GUI.color = prevColor;
         }
 
+        private Rect InitiativeRect(CombatManager combat) => new Rect(Ui.W - 262, 12, 250,
+            Mathf.Min(52f + combat.ClientUnits.Count * 36f, Ui.H - 24f));
+
         private void DrawInitiative(CombatManager combat)
         {
-            GUILayout.BeginArea(new Rect(Ui.W - 262, 12, 250, 354), Theme.PanelStyle);
+            GUILayout.BeginArea(InitiativeRect(combat), Theme.PanelStyle);
             GUILayout.Label($"Round {combat.Round}", Theme.Header);
             foreach (var u in combat.ClientUnits)
             {
@@ -313,7 +316,7 @@ namespace RadiantPool.Game
 
         private void DrawActions(CombatManager combat)
         {
-            GUILayout.BeginArea(new Rect(Ui.W / 2f - 220, Ui.H - 330, 440, 128),
+            GUILayout.BeginArea(new Rect(Ui.W / 2f - 280, Ui.H - 336, 560, 134),
                 Theme.PanelStyle);
             GUILayout.BeginHorizontal();
             GUILayout.Label("Your Turn", Theme.Header, GUILayout.Width(104));
@@ -370,16 +373,19 @@ namespace RadiantPool.Game
             var known = holder.Class == CharacterClass.Wizard
                 ? new[] { "fire_bolt", "magic_missile", "burning_hands", "sleep" }
                 : new[] { "sacred_flame", "guiding_bolt", "cure_wounds", "healing_word", "bless" };
+            int col = 0;
             GUILayout.BeginHorizontal();
             foreach (var id in known)
             {
+                if (col == 3) { GUILayout.EndHorizontal(); GUILayout.BeginHorizontal(); col = 0; }
+                col++;
                 var spell = SpellLibrary.Get(id);
                 bool usable = spell.Level == 0
                     ? combat.ActionLeft
                     : (spell.IsBonusAction ? combat.BonusLeft : combat.ActionLeft)
                       && combat.MySlots[0] + combat.MySlots[1] + combat.MySlots[2] > 0;
                 GUI.enabled = usable;
-                if (GUILayout.Button(WithIcon(id, spell.Name), GUILayout.Height(34)))
+                if (GUILayout.Button(WithIcon(id, spell.Name), GUILayout.Height(32)))
                 {
                     _pendingSpell = id;
                     _mode = Mode.PickSpellTarget;
@@ -393,10 +399,13 @@ namespace RadiantPool.Game
         private void DrawTargets(CombatManager combat, bool enemiesOnly,
             System.Action<string> onPick)
         {
+            int col = 0;
             GUILayout.BeginHorizontal();
             foreach (var u in combat.ClientUnits.Where(u => !u.Dead
                 && (enemiesOnly ? !u.IsPc : u.IsPc)))
             {
+                if (col == 3) { GUILayout.EndHorizontal(); GUILayout.BeginHorizontal(); col = 0; }
+                col++;
                 if (GUILayout.Button($"{u.Name} ({u.Hp})")) onPick(u.Id);
             }
             if (GUILayout.Button("Back")) _mode = Mode.Root;

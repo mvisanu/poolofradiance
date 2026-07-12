@@ -407,6 +407,7 @@ namespace RadiantPool.Game
         }
 
         private bool _journalOpen;
+        private Vector2 _journalScroll;
 
         private void Update()
         {
@@ -425,13 +426,16 @@ namespace RadiantPool.Game
                 GUI.Box(new Rect(Ui.W / 2f - 260, 16, 520, 38), LocalNotice, Theme.Toast);
 
             if (!_journalOpen) return;
-            GUILayout.BeginArea(new Rect(Ui.W / 2f - 215, 64, 430, 356), Theme.PanelStyle);
+            float jh = Mathf.Min(Ui.H - 110f, 480f);
+            GUILayout.BeginArea(new Rect(Ui.W / 2f - 215, 94, 430, jh), Theme.PanelStyle);
             GUILayout.BeginHorizontal();
             GUILayout.Label("Journal", Theme.Header);
             GUILayout.FlexibleSpace();
             GUILayout.Label("<color=#d0c5af>J to close</color>", Theme.Body);
             GUILayout.EndHorizontal();
 
+            _journalScroll = GUILayout.BeginScrollView(_journalScroll,
+                GUILayout.ExpandHeight(true));
             GUILayout.BeginVertical(Theme.ParchmentStyle);
             DrawQuest("Report to the Council", (QuestState)MusterState.Value,
                 "Speak with Councilor Veresk at the Council Hall.", -1f);
@@ -449,6 +453,7 @@ namespace RadiantPool.Game
                 GUILayout.Label("<color=#b8860b>★ Aldenmere stands free. The campaign is " +
                     "complete!</color>", Theme.BodyInk);
             GUILayout.EndVertical();
+            GUILayout.EndScrollView();
 
             GUILayout.Space(6);
             int potions = Stash.Count(s => s == "potion_healing");

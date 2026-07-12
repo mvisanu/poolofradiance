@@ -101,9 +101,9 @@ namespace RadiantPool.Game
                 mat.SetColor("_EmissionColor", new Color(1.4f, 1.1f, 0.35f));
             }
             _beacon.SetActive(true);
-            _beacon.transform.position = new Vector3(TargetPosition.x, 9f, TargetPosition.z);
-            float pulse = 0.55f + 0.12f * Mathf.Sin(Time.time * 2.4f);
-            _beacon.transform.localScale = new Vector3(pulse, 9f, pulse);
+            _beacon.transform.position = new Vector3(TargetPosition.x, 14f, TargetPosition.z);
+            float pulse = 0.8f + 0.18f * Mathf.Sin(Time.time * 2.4f);
+            _beacon.transform.localScale = new Vector3(pulse, 14f, pulse);
         }
 
         private void OnGUI()
@@ -121,10 +121,48 @@ namespace RadiantPool.Game
             float bearing = Mathf.Atan2(delta.x, delta.z) * Mathf.Rad2Deg - camYaw;
             string arrow = BearingArrow(bearing);
 
-            var style = new GUIStyle(GUI.skin.box)
-                { alignment = TextAnchor.MiddleCenter, fontSize = 16, richText = true };
-            GUI.Box(new Rect(Ui.W / 2f - 190, 56, 380, 30),
-                $"<color=#ffd75e>{arrow}</color>  {TargetLabel}  —  {dist:0} m", style);
+            GUI.Box(new Rect(Ui.W / 2f - 210, 52, 420, 34),
+                $"{arrow}  NEXT: {TargetLabel}  <color=#d0c5af>— {dist:0} m</color>",
+                Theme.Toast);
+
+            DrawWorldMarker(dist);
+        }
+
+        /// <summary>Gold chevron floating over the objective in the world; when the
+        /// objective is off-screen the marker clamps to the screen edge and shows the
+        /// bearing arrow instead, so there is always something to walk toward.</summary>
+        private void DrawWorldMarker(float dist)
+        {
+            var cam = Camera.main;
+            if (cam == null) return;
+            Vector3 sp = cam.WorldToScreenPoint(TargetPosition + Vector3.up * 3.2f);
+            bool behind = sp.z < 0f;
+            if (behind) { sp.x = Screen.width - sp.x; sp.y = Screen.height - sp.y; }
+            var gui = new Vector2(sp.x / Ui.Scale, (Screen.height - sp.y) / Ui.Scale);
+            bool offscreen = behind || gui.x < 24 || gui.x > Ui.W - 24
+                                    || gui.y < 96 || gui.y > Ui.H - 60;
+            gui.x = Mathf.Clamp(gui.x, 40, Ui.W - 40);
+            gui.y = Mathf.Clamp(gui.y, 100, Ui.H - 70);
+
+            var mark = new GUIStyle(Theme.Header)
+                { alignment = TextAnchor.MiddleCenter, fontSize = 24, wordWrap = false };
+            float bob = offscreen ? 0f : Mathf.Sin(Time.time * 3f) * 4f;
+            if (offscreen)
+            {
+                Vector3 d = TargetPosition - LocalPlayer().position;
+                float camYaw = cam.transform.eulerAngles.y;
+                string a = BearingArrow(Mathf.Atan2(d.x, d.z) * Mathf.Rad2Deg - camYaw);
+                GUI.Label(new Rect(gui.x - 60, gui.y - 16, 120, 30),
+                    $"{a} {dist:0}m", mark);
+            }
+            else
+            {
+                GUI.Label(new Rect(gui.x - 60, gui.y - 18 + bob, 120, 26), "▼", mark);
+                var caption = new GUIStyle(Theme.Caps)
+                    { alignment = TextAnchor.MiddleCenter, wordWrap = false };
+                GUI.Label(new Rect(gui.x - 110, gui.y + 8 + bob, 220, 16),
+                    TargetLabel, caption);
+            }
         }
 
         private static string BearingArrow(float degrees)
