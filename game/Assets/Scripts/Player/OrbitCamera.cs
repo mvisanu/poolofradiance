@@ -11,8 +11,9 @@ namespace RadiantPool.Game
     ///
     /// The view can also be panned off the player — middle-mouse drag any time, and in
     /// combat WASD/arrows too (the grid owns movement then, so those keys are free), which
-    /// is how you scout the far side of a fight. F or double-middle-click recenters, and
-    /// the pan clears when combat ends. Purely local — never networked.</summary>
+    /// is how you scout the far side of a fight. Wherever you leave the camera, it stays:
+    /// nothing drags it back mid-fight. F recentres on demand, and it returns to the party
+    /// when the fight ends. Purely local — never networked.</summary>
     public class OrbitCamera : MonoBehaviour
     {
         [SerializeField] private float distance = 8f;
@@ -28,7 +29,9 @@ namespace RadiantPool.Game
         private Transform _target;
         private float _yaw;
         private float _pitch = 25f;
-        private Vector3 _pan;      // world-space XZ offset of the focus point
+        private Vector3 _pan;         // world-space XZ offset of the focus point
+        private bool _tacticalEase;   // one-shot board-view nudge at the start of a fight
+        private bool _wasInCombat;
 
         public float Yaw => _yaw;
 
@@ -43,6 +46,29 @@ namespace RadiantPool.Game
         {
             if (_target == null) return;
 
+            bool inCombat = CombatManager.Instance != null
+                            && CombatManager.Instance.InCombat.Value;
+
+            // The tactical assist is a ONE-TIME nudge when a fight starts, not a spring.
+            // It used to run every frame combat was active, so the moment you let go of
+            // the mouse it hauled the pitch back to 55° and the zoom back to 11 m — the
+            // camera would never stay where you put it. Any camera input at all now ends
+            // the assist for the rest of the fight: the view is yours.
+            if (inCombat && !_wasInCombat) _tacticalEase = true;
+            if (!inCombat)
+            {
+                _tacticalEase = false;
+                if (_wasInCombat) RecenterPan();   // fight over: put the view back on you
+            }
+            _wasInCombat = inCombat;
+
+            float scroll = Input.GetAxis("Mouse ScrollWheel");
+            bool touchingCamera = Input.GetMouseButton(1) || Input.GetMouseButton(2)
+                || Mathf.Abs(scroll) > 0.001f
+                || (inCombat && (Input.GetAxisRaw("Horizontal") != 0f
+                                 || Input.GetAxisRaw("Vertical") != 0f));
+            if (touchingCamera) _tacticalEase = false;
+
             if (Input.GetMouseButton(1))
             {
                 float sens = SettingsMenu.MouseSensitivity > 0f
@@ -51,20 +77,20 @@ namespace RadiantPool.Game
                 _pitch -= Input.GetAxis("Mouse Y") * sens;
                 _pitch = Mathf.Clamp(_pitch, pitchMin, pitchMax);
             }
-            else if (CombatManager.Instance != null && CombatManager.Instance.InCombat.Value)
+            else if (_tacticalEase)
             {
-                // Tactical assist: ease up/back for a board view. RMB still overrides.
+                // Ease once toward a board view so the grid is readable, then let go.
                 _pitch = Mathf.MoveTowards(_pitch, Mathf.Max(_pitch, 55f),
                     40f * Time.deltaTime);
                 if (distance < 11f)
                     distance = Mathf.MoveTowards(distance, 11f, 8f * Time.deltaTime);
+                if (_pitch >= 54.5f && distance >= 10.9f) _tacticalEase = false;
             }
 
-            float scroll = Input.GetAxis("Mouse ScrollWheel");
             if (Mathf.Abs(scroll) > 0.001f && !MiniMap.MouseOverMap)
                 distance = Mathf.Clamp(distance - scroll * 4f, minDistance, maxDistance);
 
-            UpdatePan();
+            UpdatePan(inCombat);
 
             Quaternion rotation = Quaternion.Euler(_pitch, _yaw, 0f);
             Vector3 focus = _target.position + targetOffset + _pan;
@@ -75,17 +101,21 @@ namespace RadiantPool.Game
         }
 
         /// <summary>Free-look panning across the ground plane. Middle-mouse drags the view
-        /// (grab-the-world), and during combat WASD/arrows push it as well. The offset is
-        /// leashed to maxPan and snaps back on F or when the fight ends, so the player is
-        /// never left staring at empty terrain with no way home.</summary>
-        private void UpdatePan()
+        /// (grab-the-world), and during combat WASD/arrows push it as well.
+        ///
+        /// A pan STAYS where you put it — in combat it is never taken back, because the
+        /// whole point is to look at the far side of the fight while you decide. Out of
+        /// combat it eases home only once you actually walk somewhere (the camera has to
+        /// follow you then); standing still and looking around holds. F recentres on
+        /// demand, and the offset is leashed to maxPan so you can't get lost.</summary>
+        private void UpdatePan(bool inCombat)
         {
-            bool inCombat = CombatManager.Instance != null
-                            && CombatManager.Instance.InCombat.Value;
-            if (!inCombat && _pan != Vector3.zero && !Input.GetMouseButton(2))
-                _pan = Vector3.MoveTowards(_pan, Vector3.zero, 24f * Time.deltaTime);
-
             if (Input.GetKeyDown(KeyCode.F)) { RecenterPan(); return; }
+
+            bool walking = !inCombat && (Input.GetAxisRaw("Horizontal") != 0f
+                                         || Input.GetAxisRaw("Vertical") != 0f);
+            if (walking && _pan != Vector3.zero && !Input.GetMouseButton(2))
+                _pan = Vector3.MoveTowards(_pan, Vector3.zero, 24f * Time.deltaTime);
 
             // Ground-plane basis from the current yaw: pan is always screen-relative.
             Vector3 right = Quaternion.Euler(0f, _yaw, 0f) * Vector3.right;
