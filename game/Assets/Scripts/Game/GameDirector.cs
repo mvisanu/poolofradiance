@@ -99,7 +99,9 @@ namespace RadiantPool.Game
             for (int i = 0; i < Zones.Length && i < save.ZoneStates.Count; i++)
             {
                 ZoneStates[i] = save.ZoneStates[i];
-                ZoneClearedCounts[i] = save.ZoneClearedCounts[i];
+                // Older/shorter saves must not throw; the recount below fixes the counts anyway.
+                if (i < save.ZoneClearedCounts.Count)
+                    ZoneClearedCounts[i] = save.ZoneClearedCounts[i];
             }
             CampaignComplete.Value = save.CampaignComplete;
             PartyGold.Value = save.PartyGold;
@@ -125,9 +127,14 @@ namespace RadiantPool.Game
             string savedDate = save.SavedAtUtc.Length >= 10
                 ? save.SavedAtUtc.Substring(0, 10) : save.SavedAtUtc;
             RpcNotice($"Campaign loaded (saved {savedDate}).");
-            // Self-heal saves from before the pre-accept-clear fix: a zone whose
-            // encounters were all cleared while the quest wasn't Active yet.
+            // Self-heal, in this order:
+            //   1. Recount every zone from the consumed list. Saves written before the
+            //      count/save ordering fix persisted counts that lagged the consumed
+            //      encounters, which left zones demanding fights that were already gone.
+            //   2. Recheck, which also covers zones cleared before the quest went Active.
+            for (int i = 0; i < Zones.Length; i++) ServerRecountZone(i);
             for (int i = 0; i < Zones.Length; i++) ServerRecheckZone(i);
+            ServerSaveCampaign();   // persist the repair so it happens once
         }
 
         [Server]
@@ -170,17 +177,37 @@ namespace RadiantPool.Game
             int zone = System.Array.FindIndex(Zones, z => z.ZoneId == trigger.ZoneId);
             trigger.Consume();
             ConsumedEncounterIds.Add(trigger.EncounterId);
-            ServerSaveCampaign();   // autosave at every cleared block
-            if (zone < 0 || !trigger.RequiredForClear) return;
 
-            ZoneClearedCounts[zone]++;
-            var cfg = Zones[zone];
-            ServerRecheckZone(zone);
-            if (GetZoneState(zone) != QuestState.ObjectivesMet)
+            // Recount, THEN recheck, THEN save. The old order saved before crediting the
+            // clear, so every autosave persisted a count one behind the consumed list;
+            // reloading restored the stale count while the fight stayed consumed, and the
+            // credit was gone for good — a zone could end up demanding fights that no
+            // longer existed.
+            if (zone >= 0 && trigger.RequiredForClear)
             {
-                RpcNotice($"Encounter cleared ({Mathf.Min(ZoneClearedCounts[zone], cfg.RequiredEncounters)}" +
-                          $"/{cfg.RequiredEncounters} in {cfg.DisplayName}).");
+                ServerRecountZone(zone);
+                var cfg = Zones[zone];
+                ServerRecheckZone(zone);
+                if (GetZoneState(zone) != QuestState.ObjectivesMet)
+                    RpcNotice($"Encounter cleared ({ZoneClearedCounts[zone]}" +
+                              $"/{cfg.RequiredEncounters} in {cfg.DisplayName}).");
             }
+            ServerSaveCampaign();   // autosave at every cleared block
+        }
+
+        /// <summary>Cleared-count is DERIVED, never accumulated: it is simply how many of
+        /// the zone's required encounters are in ConsumedEncounterIds. The consumed list is
+        /// the one thing that is always true (the trigger is physically gone), so counting
+        /// from it cannot drift, and recounting on load repairs any save that already has.</summary>
+        [Server]
+        private void ServerRecountZone(int zone)
+        {
+            if (zone < 0 || zone >= Zones.Length || zone >= ZoneClearedCounts.Count) return;
+            string zoneId = Zones[zone].ZoneId;
+            int cleared = FindObjectsByType<EncounterTrigger>(FindObjectsSortMode.None)
+                .Count(t => t.ZoneId == zoneId && t.RequiredForClear
+                            && ConsumedEncounterIds.Contains(t.EncounterId));
+            if (ZoneClearedCounts[zone] != cleared) ZoneClearedCounts[zone] = cleared;
         }
 
         /// <summary>Flips an Active zone to ObjectivesMet once enough encounters are

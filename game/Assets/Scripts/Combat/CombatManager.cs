@@ -609,7 +609,12 @@ namespace RadiantPool.Game
         {
             if (!_server.TryGetValue(unitId, out var u)) return;
             RpcHpSync(unitId, u.Creature.CurrentHp, u.Creature.IsDown, u.Creature.IsDead);
-            if (u.Player != null && u.Creature is CharacterSheet sheet)
+            // Companions are server-owned AI with no connection: firing a TargetRpc at
+            // them logged "Target is not an observer" on every HP sync (hundreds of lines
+            // a fight). Only real clients get their slot counts.
+            if (u.Player != null && !u.Player.IsCompanion
+                && u.Player.Owner != null && u.Player.Owner.IsValid
+                && u.Creature is CharacterSheet sheet)
             {
                 var slots = sheet.SlotsRemaining;
                 TargetSlots(u.Player.Owner, slots[0], slots[1], slots[2]);
