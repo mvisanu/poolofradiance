@@ -198,12 +198,10 @@ namespace RadiantPool.Game
             var m = new Vector2(Input.mousePosition.x / Ui.Scale,
                 (Screen.height - Input.mousePosition.y) / Ui.Scale);
             if (InitiativeRect(combat).Contains(m)) return true;
-            if (new Rect(12, Ui.H - 208, 520, 196).Contains(m)) return true;      // log
-            if (new Rect(12, Ui.H - 318, 264, 102).Contains(m)) return true;      // player card
+            if (new Rect(12, Ui.H - 174, 384, 162).Contains(m)) return true;      // log
+            if (new Rect(12, Ui.H - 282, 264, 100).Contains(m)) return true;      // player card
             if (HotBar.BarRect.Contains(m)) return true;                          // hotbar
-            if (combat.IsMyTurn
-                && new Rect(Ui.W / 2f - 280, Ui.H - 336, 560, 134).Contains(m))    // actions
-                return true;
+            if (combat.IsMyTurn && _actionsRect.Contains(m)) return true;         // status strip
             return false;
         }
 
@@ -258,7 +256,7 @@ namespace RadiantPool.Game
         {
             var mine = combat.MyUnit;
             if (mine == null) return;
-            GUILayout.BeginArea(new Rect(12, Ui.H - 318, 264, 102), Theme.PanelStyle);
+            GUILayout.BeginArea(new Rect(12, Ui.H - 282, 264, 100), Theme.PanelStyle);
             GUILayout.Label(mine.Name +
                 (combat.IsMyTurn ? "   <size=11><color=#d0c5af>— your turn</color></size>" : ""),
                 Theme.Header);
@@ -361,7 +359,7 @@ namespace RadiantPool.Game
 
         private void DrawLog(CombatManager combat)
         {
-            GUILayout.BeginArea(new Rect(12, Ui.H - 208, 520, 196), Theme.PanelStyle);
+            GUILayout.BeginArea(new Rect(12, Ui.H - 174, 384, 162), Theme.PanelStyle);
             GUILayout.Label("Combat", Theme.Header);
             _logScroll = GUILayout.BeginScrollView(_logScroll);
             GUILayout.BeginVertical(Theme.ParchmentStyle);
@@ -374,29 +372,30 @@ namespace RadiantPool.Game
                 _logScroll.y = float.MaxValue;
         }
 
+        private Rect _actionsRect;
+
+        /// <summary>Slim status strip docked directly above the hotbar — the center of
+        /// the screen stays clear so the movement grid is always clickable. Expands
+        /// only while a target picker is open.</summary>
         private void DrawActions(CombatManager combat)
         {
-            GUILayout.BeginArea(new Rect(Ui.W / 2f - 280, Ui.H - 336, 560, 134),
-                Theme.PanelStyle);
+            float h = _mode == Mode.Root ? 50f : 100f;
+            _actionsRect = new Rect(Ui.W / 2f - 370f, Ui.H - 94f - h, 740f, h);
+            GUILayout.BeginArea(_actionsRect, Theme.PanelStyle);
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Your Turn", Theme.Header, GUILayout.Width(104));
-            GUILayout.Label($"<color=#d0c5af>move <b>{combat.MoveLeft} ft</b> — click a square" +
-                " · click an enemy to attack · Space ends turn" +
-                $"   action {(combat.ActionLeft ? "<color=#2e7d32>✔</color>" : "<color=#c62828>✘</color>")}" +
-                $"   bonus {(combat.BonusLeft ? "<color=#2e7d32>✔</color>" : "<color=#c62828>✘</color>")}" +
-                (combat.MySlots.Any(s => s > 0)
-                    ? $"   slots <b>{string.Join("/", combat.MySlots)}</b>" : "") + "</color>",
-                Theme.Body);
+            GUILayout.Label("Your Turn", Theme.Header, GUILayout.Width(96));
+            string info = combat.LastRejection.Length > 0
+                ? $"<color=#f2ca50>{combat.LastRejection}</color>"
+                : $"<color=#d0c5af>move <b>{combat.MoveLeft} ft</b> · click square = walk · " +
+                  "enemy = attack · Space = end turn" +
+                  $" · action {(combat.ActionLeft ? "<color=#2e7d32>✔</color>" : "<color=#c62828>✘</color>")}" +
+                  $" bonus {(combat.BonusLeft ? "<color=#2e7d32>✔</color>" : "<color=#c62828>✘</color>")}" +
+                  "</color>";
+            GUILayout.Label(info, Theme.Body);
             GUILayout.EndHorizontal();
-            if (combat.LastRejection.Length > 0)
-                GUILayout.Label($"<color=#f2ca50>{combat.LastRejection}</color>", Theme.Body);
 
             switch (_mode)
             {
-                case Mode.Root:
-                    GUILayout.Label("<color=#d0c5af>Pick an action from the bar below, " +
-                        "or click the battlefield.</color>", Theme.Body);
-                    break;
                 case Mode.PickAttackTarget: DrawTargets(combat, enemiesOnly: true,
                     id => { combat.CmdAttack(id); _mode = Mode.Root; }); break;
                 case Mode.PickSpell: DrawSpells(combat); break;
