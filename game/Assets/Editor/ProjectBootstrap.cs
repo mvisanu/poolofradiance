@@ -35,6 +35,7 @@ namespace RadiantPool.EditorTools
             KenneyArt.SetupMaterials();
             KayKitArt.Setup();
             QuaterniusArt.Setup();
+            GeneratedArt.Setup();   // bear + rat: the CC0 packs have neither
             var playerPrefab = CreatePlayerPrefab();
             CreateGrayboxScene(playerPrefab);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };

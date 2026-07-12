@@ -388,7 +388,7 @@ namespace RadiantPool.Game
             string info = combat.LastRejection.Length > 0
                 ? $"<color=#f2ca50>{combat.LastRejection}</color>"
                 : $"<color=#d0c5af>move <b>{combat.MoveLeft} ft</b> · click square = walk · " +
-                  "enemy = attack · Space = end turn" +
+                  "enemy = attack · Space = end turn · WASD/middle-drag = pan, F = recenter" +
                   $" · action {(combat.ActionLeft ? "<color=#2e7d32>✔</color>" : "<color=#c62828>✘</color>")}" +
                   $" bonus {(combat.BonusLeft ? "<color=#2e7d32>✔</color>" : "<color=#c62828>✘</color>")}" +
                   "</color>";

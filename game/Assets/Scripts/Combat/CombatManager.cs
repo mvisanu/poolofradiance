@@ -957,7 +957,10 @@ namespace RadiantPool.Game
             MonsterModels = new Dictionary<string, (string, Color, float)>
         {
             { "marsh_skulker", ("Ranger", new Color(0.75f, 0.8f, 0.6f), 1f) },
-            { "dock_rat", ("Rogue", new Color(0.6f, 0.5f, 0.4f), 0.8f) },
+            // Bear and Rat are our own generated meshes (scripts/make_beasts.py): true
+            // quadrupeds, already brown/grey and already at life scale, so no tint and
+            // no resize. Before they existed both fell through to the capsule.
+            { "dock_rat", ("Rat|Rogue", Color.white, 1.1f) },
             { "risen_drowned", ("Skeleton_Minion", new Color(0.6f, 0.85f, 0.7f), 1f) },
             { "bonewalker", ("Skeleton_Warrior", Color.white, 1f) },
             { "kindled_zealot", ("Rogue_Hooded", new Color(1f, 0.55f, 0.45f), 1f) },
@@ -966,8 +969,10 @@ namespace RadiantPool.Game
             { "orc", ("Orc|Barbarian", Color.white, 1.05f) },
             { "orc_warchief", ("Orc_Skull|Orc|Barbarian", new Color(1f, 0.88f, 0.85f), 1.35f) },
             { "giant_spider", ("Spider", new Color(0.3f, 0.22f, 0.35f), 1.1f) },
-            { "brown_bear", ("Bear", new Color(0.5f, 0.35f, 0.2f), 1.3f) },
-            { "goblin", ("Goblin|Rogue", new Color(0.5f, 0.8f, 0.35f), 0.85f) },
+            { "brown_bear", ("Bear", Color.white, 1f) },
+            // A goblin is a small brutish humanoid: the orc model shrunk reads far better
+            // than a green-tinted human rogue did.
+            { "goblin", ("Goblin|Orc|Barbarian", new Color(0.85f, 1f, 0.75f), 0.72f) },
         };
 
         private Transform ResolveVisual(UnitView view)
@@ -1004,6 +1009,11 @@ namespace RadiantPool.Game
                 Destroy(root);
             }
 
+            // Capsule fallback. This used to happen silently, which is how the bear
+            // shipped as a pill for so long — say so loudly in the log instead.
+            Debug.LogWarning($"[RadiantPool] no model for monster '{monsterId}' " +
+                             "— falling back to a capsule. Add a prefab under " +
+                             "Resources/Characters and map it in CombatManager.MonsterModels.");
             var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             go.name = $"Monster_{view.Id}";
             bool boss = view.MaxHp >= 30;   // bosses loom larger and darker

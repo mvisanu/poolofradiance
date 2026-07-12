@@ -21,6 +21,45 @@ namespace RadiantPool.Game
         // Armor
         public ArmorDefinition Armor;
 
+        /// <summary>Shield bonus is flat +2 AC in SRD 5.1.</summary>
+        public const int ShieldAcBonus = 2;
+
+        /// <summary>What this item does, in the terms a player cares about: weapon damage
+        /// and reach, armour protection and its Dex cap, shield bonus, potion healing.</summary>
+        public string StatLine() => Slot switch
+        {
+            ItemSlot.Weapon =>
+                $"{Damage} {DamageType.ToString().ToLowerInvariant()} · "
+                + (RangeFeet > 5 ? $"ranged {RangeFeet} ft" : "melee")
+                + (Finesse ? " · finesse" : ""),
+            ItemSlot.Armor when Armor != null =>
+                $"AC {Armor.BaseAc}"
+                + (Armor.MaxDexBonus == 0 ? " · no Dex bonus"
+                    : Armor.MaxDexBonus == int.MaxValue ? " + Dex"
+                    : $" + Dex (max +{Armor.MaxDexBonus})")
+                + $" · {Armor.Kind.ToString().ToLowerInvariant()}",
+            ItemSlot.Shield => $"+{ShieldAcBonus} AC · off hand",
+            _ => Id == "potion_healing" ? "restores 2d4+2 HP" : "",
+        };
+
+        /// <summary>The AC this armour/shield would give with the character's Dex.</summary>
+        public int AcWith(int dexMod, bool withShield) => Slot switch
+        {
+            ItemSlot.Armor when Armor != null =>
+                Armor.BaseAc + System.Math.Min(dexMod, Armor.MaxDexBonus)
+                + (withShield ? ShieldAcBonus : 0),
+            _ => 0
+        };
+
+        /// <summary>Average damage per hit including the ability modifier the character
+        /// would actually add (finesse/ranged take the better of Str and Dex).</summary>
+        public float AverageDamage(int strMod, int dexMod)
+        {
+            if (Slot != ItemSlot.Weapon || string.IsNullOrEmpty(Damage)) return 0f;
+            int mod = Finesse || RangeFeet > 5 ? System.Math.Max(strMod, dexMod) : strMod;
+            return DiceExpression.Parse(Damage).Average + mod;
+        }
+
         public bool UsableBy(CharacterClass c) => Slot switch
         {
             ItemSlot.Weapon => c switch

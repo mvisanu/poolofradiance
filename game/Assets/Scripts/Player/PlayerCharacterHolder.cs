@@ -18,6 +18,32 @@ namespace RadiantPool.Game
         public readonly SyncVar<string> ArmorId = new SyncVar<string>("");
         public readonly SyncVar<bool> ShieldEquipped = new SyncVar<bool>(false);
 
+        // Derived sheet stats mirrored to clients: the sheet itself is server-only, but
+        // the inventory/equipment screen must show AC, HP and to-hit on every client.
+        public readonly SyncVar<int> LevelSynced = new SyncVar<int>(1);
+        public readonly SyncVar<int> MaxHpSynced = new SyncVar<int>(0);
+        public readonly SyncVar<int> ArmorClassSynced = new SyncVar<int>(10);
+        public readonly SyncVar<int> ProficiencySynced = new SyncVar<int>(2);
+        public readonly SyncVar<int> StrModSynced = new SyncVar<int>(0);
+        public readonly SyncVar<int> DexModSynced = new SyncVar<int>(0);
+
+        private float _nextStatSync;
+
+        /// <summary>Server: push the sheet's derived stats out to clients. Cheap — FishNet
+        /// only sends SyncVars that actually changed — so a slow poll covers every source
+        /// of change (equip, level-up, rest) without wiring each one up by hand.</summary>
+        private void Update()
+        {
+            if (!IsServerStarted || Sheet == null || Time.time < _nextStatSync) return;
+            _nextStatSync = Time.time + 0.5f;
+            LevelSynced.Value = Sheet.Level;
+            MaxHpSynced.Value = Sheet.MaxHp;
+            ArmorClassSynced.Value = Sheet.ArmorClass;
+            ProficiencySynced.Value = Sheet.ProficiencyBonus;
+            StrModSynced.Value = Sheet.Abilities.Modifier(Ability.Str);
+            DexModSynced.Value = Sheet.Abilities.Modifier(Ability.Dex);
+        }
+
         /// <summary>Hired AI party member (server-driven, no owning connection).</summary>
         public bool IsCompanion => IsCompanionSynced.Value;
 
