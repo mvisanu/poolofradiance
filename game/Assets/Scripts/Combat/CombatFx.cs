@@ -66,12 +66,23 @@ namespace RadiantPool.Game
         {
             if (unit == null) return;
             if (_glides.TryGetValue(unit, out var running) && running != null)
+            {
                 StopCoroutine(running);
+                // The canceled routine never reached its restore step — un-park the
+                // controller so the new glide sees (and restores) the true state.
+                var cc = unit.GetComponent<CharacterController>();
+                if (cc != null) cc.enabled = true;
+            }
             _glides[unit] = StartCoroutine(GlideRoutine(unit, dest));
         }
 
         private IEnumerator GlideRoutine(Transform unit, Vector3 dest)
         {
+            // A CharacterController (the local player's body) fights direct transform
+            // writes — park it for the duration of the walk.
+            var cc = unit.GetComponent<CharacterController>();
+            bool hadCc = cc != null && cc.enabled;
+            if (hadCc) cc.enabled = false;
             Face(unit, dest);
             while (unit != null && (unit.position - dest).sqrMagnitude > 0.0004f)
             {
@@ -79,7 +90,11 @@ namespace RadiantPool.Game
                     unit.position, dest, GlideSpeed * Time.deltaTime);
                 yield return null;
             }
-            if (unit != null) unit.position = dest;
+            if (unit != null)
+            {
+                unit.position = dest;
+                if (hadCc && cc != null) cc.enabled = true;
+            }
             _glides.Remove(unit);
         }
 

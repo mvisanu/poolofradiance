@@ -641,6 +641,37 @@ namespace RadiantPool.Game
             BroadcastBudget();
         }
 
+        /// <summary>Click-to-move: walk toward a destination cell, spending movement per
+        /// 5 ft step until we arrive, get blocked, or run dry. Clicking an occupied cell
+        /// (an enemy) stops adjacent to it. Same greedy stepping as the AI.</summary>
+        [ServerRpc(RequireOwnership = false)]
+        public void CmdMoveTo(int cx, int cy, NetworkConnection conn = null)
+        {
+            var unit = ValidatedActor(conn, out string err);
+            if (unit == null) { TargetReject(conn, err); return; }
+            if (Math.Abs(cx) > 8 || Math.Abs(cy) > 8)
+            { TargetReject(conn, "Edge of the battlefield."); return; }
+
+            var dest = new Vector2Int(cx, cy);
+            if (dest == unit.Cell) return;
+            bool stopAdjacent = Occupied(dest);
+            Vector2Int from = unit.Cell;
+            while (Chebyshev(dest, unit.Cell) > (stopAdjacent ? 1 : 0))
+            {
+                var step = new Vector2Int(
+                    unit.Cell.x + Math.Sign(dest.x - unit.Cell.x),
+                    unit.Cell.y + Math.Sign(dest.y - unit.Cell.y));
+                if (Occupied(step)) break;
+                try { _engine.SpendMovement(5); }
+                catch (RuleViolationException) { break; }
+                unit.Cell = step;
+            }
+            if (unit.Cell == from)
+            { TargetReject(conn, "Can't move there — blocked or out of movement."); return; }
+            RpcUnitMoved(unit.Id, unit.Cell.x, unit.Cell.y);
+            BroadcastBudget();
+        }
+
         [ServerRpc(RequireOwnership = false)]
         public void CmdAttack(string targetId, NetworkConnection conn = null)
         {
@@ -1013,25 +1044,30 @@ namespace RadiantPool.Game
         {
             var view = ClientUnits.FirstOrDefault(u => u.Id == unitId);
             if (view == null) return;
-            Vector3 oldPos = CellToWorld(view.Cell);
+            Vector2Int oldCell = view.Cell;
             view.Cell = new Vector2Int(cx, cy);
             if (view.Visual != null)
             {
-                if (!view.IsPc && CombatFx.Instance != null)
+                bool isMyBody = view.IsPc && view.OwnerId == LocalConnection.ClientId;
+                if ((!view.IsPc || isMyBody) && CombatFx.Instance != null)
                 {
-                    // Monsters walk to their cell (MotionAnimator plays the cycle from
-                    // the displacement) instead of teleporting.
+                    // Monsters and my own character walk to the cell (MotionAnimator
+                    // plays the cycle from the displacement) instead of teleporting.
+                    // Other players' bodies arrive via their own NetworkTransform.
                     bool hasModel = view.Visual.Find(CharacterVisuals.VisualName) != null;
-                    CombatFx.Instance.Glide(view.Visual,
-                        CellToWorld(view.Cell) + (hasModel ? Vector3.zero : Vector3.up));
+                    CombatFx.Instance.Glide(view.Visual, CellToWorld(view.Cell)
+                        + (!view.IsPc && !hasModel ? Vector3.up : Vector3.zero));
                 }
                 else
                 {
+                    Vector3 oldPos = CellToWorld(oldCell);
                     SnapVisual(view);
                     CombatFx.Face(view.Visual, oldPos + (CellToWorld(view.Cell) - oldPos) * 2f);
                 }
             }
-            if (unitId == ActiveUnitId && IsMyTurn) MoveLeft = Math.Max(0, MoveLeft - 5);
+            // Local guess until the authoritative RpcBudget lands right behind this.
+            if (unitId == ActiveUnitId && IsMyTurn)
+                MoveLeft = Math.Max(0, MoveLeft - 5 * Chebyshev(oldCell, view.Cell));
         }
 
         [ObserversRpc]

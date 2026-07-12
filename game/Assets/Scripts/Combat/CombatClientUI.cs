@@ -5,14 +5,80 @@ using UnityEngine;
 namespace RadiantPool.Game
 {
     /// <summary>IMGUI combat HUD for the gray-box phase: initiative order with HP,
-    /// combat log, and — on your turn — movement compass, attack/spell target pickers,
-    /// Dodge and End Turn. Replaced by the themed UI at 3f.</summary>
+    /// combat log, and — on your turn — click-to-move on the grid, attack/spell target
+    /// pickers, Dodge and End Turn. Replaced by the themed UI at 3f.</summary>
     public class CombatClientUI : MonoBehaviour
     {
         private enum Mode { Root, PickAttackTarget, PickSpell, PickSpellTarget }
         private Mode _mode = Mode.Root;
         private string _pendingSpell = "";
         private Vector2 _logScroll;
+        private GameObject _hoverMarker;
+
+        /// <summary>Click-to-move: hover a grid cell to highlight it, click to walk
+        /// there (the server validates every step). Active only on your turn, outside
+        /// the target pickers, and away from the HUD boxes.</summary>
+        private void Update()
+        {
+            var combat = CombatManager.Instance;
+            var mine = combat?.MyUnit;
+            bool canMove = combat != null && combat.IsMyTurn && _mode == Mode.Root
+                           && mine is { Down: false, Dead: false }
+                           && combat.MoveLeft >= 5 && Camera.main != null;
+            if (!canMove) { ShowHover(false); return; }
+
+            var plane = new Plane(Vector3.up, Vector3.zero);
+            var ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            if (!plane.Raycast(ray, out float dist)) { ShowHover(false); return; }
+
+            Vector3 local = ray.GetPoint(dist) - combat.GridOrigin;
+            var cell = new Vector2Int(
+                Mathf.RoundToInt(local.x / CombatManager.CellSize),
+                Mathf.RoundToInt(local.z / CombatManager.CellSize));
+            if (Mathf.Abs(cell.x) > 8 || Mathf.Abs(cell.y) > 8 || IsMouseOverHud(combat))
+            { ShowHover(false); return; }
+
+            ShowHover(true);
+            _hoverMarker.transform.position = combat.GridOrigin + new Vector3(
+                cell.x * CombatManager.CellSize, 0.05f, cell.y * CombatManager.CellSize);
+
+            if (Input.GetMouseButtonDown(0) && cell != mine.Cell)
+                combat.CmdMoveTo(cell.x, cell.y);
+        }
+
+        /// <summary>The HUD rects from OnGUI, in Ui-scaled space — clicks inside them
+        /// are button presses, not move orders.</summary>
+        private bool IsMouseOverHud(CombatManager combat)
+        {
+            var m = new Vector2(Input.mousePosition.x / Ui.Scale,
+                (Screen.height - Input.mousePosition.y) / Ui.Scale);
+            if (new Rect(Ui.W - 250, 12, 238, 320).Contains(m)) return true;      // initiative
+            if (new Rect(12, Ui.H - 190, 520, 178).Contains(m)) return true;      // log
+            if (combat.IsMyTurn
+                && new Rect(Ui.W / 2f - 220, Ui.H - 330, 440, 128).Contains(m))    // actions
+                return true;
+            return false;
+        }
+
+        private void ShowHover(bool on)
+        {
+            if (_hoverMarker == null)
+            {
+                if (!on) return;
+                _hoverMarker = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                Destroy(_hoverMarker.GetComponent<Collider>());
+                _hoverMarker.name = "MoveHoverMarker";
+                _hoverMarker.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+                _hoverMarker.transform.localScale =
+                    Vector3.one * (CombatManager.CellSize * 0.9f);
+                var mat = _hoverMarker.GetComponent<Renderer>().material;
+                var color = new Color(0.45f, 0.9f, 1f);
+                mat.color = color;
+                mat.EnableKeyword("_EMISSION");
+                mat.SetColor("_EmissionColor", color * 0.9f);
+            }
+            _hoverMarker.SetActive(on);
+        }
 
         private void OnGUI()
         {
@@ -100,7 +166,7 @@ namespace RadiantPool.Game
         {
             GUILayout.BeginArea(new Rect(Ui.W / 2f - 220, Ui.H - 330, 440, 128),
                 GUI.skin.box);
-            GUILayout.Label($"YOUR TURN — move {combat.MoveLeft} ft, " +
+            GUILayout.Label($"YOUR TURN — move {combat.MoveLeft} ft (click a square), " +
                 $"action {(combat.ActionLeft ? "✔" : "✘")}, bonus {(combat.BonusLeft ? "✔" : "✘")}" +
                 (combat.MySlots.Any(s => s > 0)
                     ? $"   slots {string.Join("/", combat.MySlots)}" : ""));
@@ -123,31 +189,6 @@ namespace RadiantPool.Game
                     break;
             }
             GUILayout.EndArea();
-
-            // Movement compass, bottom center.
-            var mine = combat.MyUnit;
-            if (mine != null && !mine.Down && combat.MoveLeft >= 5)
-            {
-                GUILayout.BeginArea(new Rect(Ui.W / 2f - 220, Ui.H - 196, 200, 120),
-                    GUI.skin.box);
-                GUILayout.BeginHorizontal();
-                if (GUILayout.Button("NW")) combat.CmdMove(-1, 1);
-                if (GUILayout.Button("N")) combat.CmdMove(0, 1);
-                if (GUILayout.Button("NE")) combat.CmdMove(1, 1);
-                GUILayout.EndHorizontal();
-                GUILayout.BeginHorizontal();
-                if (GUILayout.Button("W")) combat.CmdMove(-1, 0);
-                GUILayout.Label("move", new GUIStyle(GUI.skin.label)
-                    { alignment = TextAnchor.MiddleCenter }, GUILayout.Width(60));
-                if (GUILayout.Button("E")) combat.CmdMove(1, 0);
-                GUILayout.EndHorizontal();
-                GUILayout.BeginHorizontal();
-                if (GUILayout.Button("SW")) combat.CmdMove(-1, -1);
-                if (GUILayout.Button("S")) combat.CmdMove(0, -1);
-                if (GUILayout.Button("SE")) combat.CmdMove(1, -1);
-                GUILayout.EndHorizontal();
-                GUILayout.EndArea();
-            }
         }
 
         private void DrawRoot(CombatManager combat)
