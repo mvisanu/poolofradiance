@@ -30,7 +30,7 @@ namespace RadiantPool.Game
             _mapCam.clearFlags = CameraClearFlags.SolidColor;
 
             _playerArrow = MakeArrowTexture(new Color(0.35f, 0.8f, 1f));
-            _questDot = MakeDotTexture(new Color(1f, 0.82f, 0.25f));
+            _questDot = MakeXTexture(new Color(0.95f, 0.15f, 0.1f));
         }
 
         private Transform LocalPlayer()
@@ -59,17 +59,19 @@ namespace RadiantPool.Game
                 GUIContent.none);
             GUI.DrawTexture(rect, _rt, ScaleMode.StretchToFill);
 
-            // Quest objective dot (edge-clamped).
+            // Quest objective: a pulsing red X (edge-clamped when out of view).
             var tracker = QuestTracker.Instance;
             if (tracker != null && tracker.HasTarget)
             {
                 Vector3 delta = tracker.TargetPosition - player.position;
                 var mapDelta = new Vector2(delta.x, -delta.z)
                                * (Size / 2f / ViewRadius);
-                mapDelta = Vector2.ClampMagnitude(mapDelta, Size / 2f - 8f);
+                mapDelta = Vector2.ClampMagnitude(mapDelta, Size / 2f - 12f);
                 var dotPos = new Vector2(rect.x + Size / 2f + mapDelta.x,
                     rect.y + Size / 2f + mapDelta.y);
-                GUI.DrawTexture(new Rect(dotPos.x - 7, dotPos.y - 7, 14, 14), _questDot);
+                float xs = 22f + Mathf.Sin(Time.time * 4f) * 3f;
+                GUI.DrawTexture(new Rect(dotPos.x - xs / 2f, dotPos.y - xs / 2f, xs, xs),
+                    _questDot);
             }
 
             // Player arrow, rotated to face heading (map stays north-up).
@@ -97,15 +99,21 @@ namespace RadiantPool.Game
             return tex;
         }
 
-        private static Texture2D MakeDotTexture(Color color)
+        /// <summary>Bold X with a black outline so it reads on any terrain color.</summary>
+        private static Texture2D MakeXTexture(Color color)
         {
-            const int s = 16;
+            const int s = 28;
             var tex = new Texture2D(s, s, TextureFormat.RGBA32, false);
             for (int y = 0; y < s; y++)
                 for (int x = 0; x < s; x++)
                 {
-                    float d = Vector2.Distance(new Vector2(x, y), new Vector2(s / 2f, s / 2f));
-                    tex.SetPixel(x, y, d < s / 2f - 1 ? color : Color.clear);
+                    float d1 = Mathf.Abs(x - y);              // main diagonal stroke
+                    float d2 = Mathf.Abs(x + y - (s - 1));    // anti-diagonal stroke
+                    float m = Mathf.Min(d1, d2);
+                    Color c = m < 3f ? color
+                        : m < 5f ? Color.black
+                        : Color.clear;
+                    tex.SetPixel(x, y, c);
                 }
             tex.Apply();
             return tex;
