@@ -20,7 +20,8 @@ namespace RadiantPool.Rules
         public Creature Spawn(string instanceId, IRng rng, bool averageHp = false)
         {
             var expr = DiceExpression.Parse(HpDice);
-            int hp = averageHp ? expr.Average : expr.Roll(rng).Total;
+            int hp = Difficulty.EaseMonsterHp(
+                averageHp ? expr.Average : expr.Roll(rng).Total);
             var c = new Creature(instanceId, Name, Abilities, ArmorClass, System.Math.Max(1, hp))
             {
                 Speed = Speed,

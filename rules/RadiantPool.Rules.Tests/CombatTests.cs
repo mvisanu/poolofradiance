@@ -10,6 +10,10 @@ namespace RadiantPool.Rules.Tests
             new Creature("t1", "Dummy", new AbilityScores(10, 10, 10, 10, 10, 10), ac, hp)
             { IsPlayerCharacter = pc };
 
+        // Attack-math tests use a PC attacker so the pure SRD numbers hold; the
+        // monster-side easing has its own coverage in DifficultyTests.
+        private static Creature PcAttacker() => Dummy(pc: true);
+
         private static readonly AttackDefinition Sword =
             new AttackDefinition("Sword", 5, "1d8+3", DamageType.Slashing, 5);
 
@@ -18,7 +22,7 @@ namespace RadiantPool.Rules.Tests
         {
             var target = Dummy(ac: 12, hp: 20);
             // d20=7 +5 = 12 vs AC12 → hit; damage 1d8=4 +3 = 7
-            var r = CombatMath.ResolveAttack(Dummy(), target, Sword, new FixedRng(7, 4));
+            var r = CombatMath.ResolveAttack(PcAttacker(), target, Sword, new FixedRng(7, 4));
             Assert.True(r.Hit);
             Assert.False(r.Critical);
             Assert.Equal(7, r.DamageDealt);
@@ -29,10 +33,10 @@ namespace RadiantPool.Rules.Tests
         public void Attack_MissesBelowAc_AndNat1AlwaysMisses()
         {
             var target = Dummy(ac: 12, hp: 20);
-            Assert.False(CombatMath.ResolveAttack(Dummy(), target, Sword, new FixedRng(6)).Hit);
+            Assert.False(CombatMath.ResolveAttack(PcAttacker(), target, Sword, new FixedRng(6)).Hit);
             // Nat 1 with +5 = 6... make AC 2 so total would hit numerically
             var easy = Dummy(ac: 2, hp: 20);
-            Assert.False(CombatMath.ResolveAttack(Dummy(), easy, Sword, new FixedRng(1)).Hit);
+            Assert.False(CombatMath.ResolveAttack(PcAttacker(), easy, Sword, new FixedRng(1)).Hit);
         }
 
         [Fact]
@@ -40,7 +44,7 @@ namespace RadiantPool.Rules.Tests
         {
             var target = Dummy(ac: 30, hp: 30);
             // nat 20, damage die 8, crit die 6 → 8+6+3 = 17
-            var r = CombatMath.ResolveAttack(Dummy(), target, Sword, new FixedRng(20, 8, 6));
+            var r = CombatMath.ResolveAttack(PcAttacker(), target, Sword, new FixedRng(20, 8, 6));
             Assert.True(r.Hit);
             Assert.True(r.Critical);
             Assert.Equal(17, r.DamageDealt);
@@ -52,7 +56,7 @@ namespace RadiantPool.Rules.Tests
             var target = Dummy(ac: 12, hp: 20);
             target.Conditions.Add(ConditionType.Dodging);
             // disadvantage: rolls 15, 6 → takes 6; 6+5=11 < 12 → miss
-            var r = CombatMath.ResolveAttack(Dummy(), target, Sword, new FixedRng(15, 6));
+            var r = CombatMath.ResolveAttack(PcAttacker(), target, Sword, new FixedRng(15, 6));
             Assert.False(r.Hit);
         }
 
@@ -62,7 +66,7 @@ namespace RadiantPool.Rules.Tests
             var target = Dummy(ac: 18, hp: 20);
             target.Conditions.Add(ConditionType.Guided);
             // advantage: rolls 4, 14 → 14 +5 = 19 ≥ 18 hit; damage 5+3
-            var r = CombatMath.ResolveAttack(Dummy(), target, Sword, new FixedRng(4, 14, 5));
+            var r = CombatMath.ResolveAttack(PcAttacker(), target, Sword, new FixedRng(4, 14, 5));
             Assert.True(r.Hit);
             Assert.False(target.Conditions.Has(ConditionType.Guided));
         }
@@ -188,7 +192,7 @@ namespace RadiantPool.Rules.Tests
         [Fact]
         public void Bless_AddsD4ToAttacksAndSaves()
         {
-            var attacker = Dummy();
+            var attacker = PcAttacker();
             attacker.Conditions.Add(ConditionType.Blessed, 10);
             var target = Dummy(ac: 15, hp: 20);
             // d20=9 +5 +d4(3) = 17 ≥ 15 → hit (would miss without bless); dmg die 1

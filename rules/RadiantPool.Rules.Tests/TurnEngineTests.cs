@@ -125,12 +125,13 @@ namespace RadiantPool.Rules.Tests
         public void MonsterSpawn_HpFromDice_AttacksResolve()
         {
             var def = MonsterLibrary.Get("marsh_skulker");
-            var m = def.Spawn("m1", new FixedRng(4, 5)); // 2d8+2 → 11
-            Assert.Equal(11, m.MaxHp);
+            // 2d8+2 → 11, eased to 85% (Difficulty.MonsterHpScale) → 9.
+            var m = def.Spawn("m1", new FixedRng(4, 5));
+            Assert.Equal(Difficulty.EaseMonsterHp(11), m.MaxHp);
             Assert.False(m.IsPlayerCharacter);
 
             var pc = Unit("pc", pc: true, hp: 20);
-            // Rusty Blade +3: d20=12 +3 = 15 ≥ 12 → 1d6=4 +1 = 5
+            // Rusty Blade +3: d20=12 +3 −1 easing = 14 ≥ 12 → 1d6=4 +1 = 5
             var r = CombatMath.ResolveAttack(m, pc, def.Attacks[0], new FixedRng(12, 4));
             Assert.True(r.Hit);
             Assert.Equal(15, pc.CurrentHp);

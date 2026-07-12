@@ -74,7 +74,9 @@ namespace RadiantPool.Rules
             var d20 = Dice.RollD20(rng, advantage);
             int blessBonus = attacker.Conditions.Has(ConditionType.Blessed)
                 ? rng.Next(1, 4) : 0;
-            int total = d20.Value + attack.ToHitBonus + blessBonus;
+            // Monster-side difficulty easing (see Difficulty.cs); PCs attack at full SRD.
+            int easing = attacker.IsPlayerCharacter ? 0 : Difficulty.MonsterToHitPenalty;
+            int total = d20.Value + attack.ToHitBonus + blessBonus - easing;
 
             bool hit = !d20.IsNat1 && (d20.IsNat20 || total >= target.ArmorClass);
             bool crit = hit && (d20.IsNat20 || pointBlankOnHelpless);
