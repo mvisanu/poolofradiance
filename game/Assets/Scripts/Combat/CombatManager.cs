@@ -120,6 +120,9 @@ namespace RadiantPool.Game
             _engine = new TurnEngine(_server.Values.Select(u => u.Creature), _rng);
             InCombat.Value = true;
 
+            // Companions are server-moved: put their bodies on their assigned cells.
+            foreach (var u in _server.Values) ServerRepositionCompanion(u);
+
             var ordered = _engine.InitiativeOrder.Select(c => _server[c.Id]).ToList();
             RpcCombatStarted(_origin,
                 ordered.Select(u => u.Id).ToArray(),
@@ -180,6 +183,15 @@ namespace RadiantPool.Game
                     continue;
                 }
 
+                if (unit.Player.IsCompanion)
+                {
+                    yield return new WaitForSeconds(0.9f);
+                    CompanionAct(unit);
+                    if (CheckCombatEnd()) yield break;
+                    EndActiveTurn();
+                    continue;
+                }
+
                 // Player turn: wait for intents until EndTurn or timeout.
                 _turnDone = false;
                 float deadline = Time.time + TurnSeconds;
@@ -233,6 +245,105 @@ namespace RadiantPool.Game
                 Narrate(monster.Creature, target.Creature, attack.Name, result);
                 SyncHp(target.Id);
             }
+        }
+
+        /// <summary>Server-side AI turn for a hired companion: clerics heal downed or
+        /// badly hurt allies, wizards sling fire bolts, everyone else closes and swings.</summary>
+        [Server]
+        private void CompanionAct(ServerUnit self)
+        {
+            try
+            {
+                var sheet = (CharacterSheet)self.Creature;
+                var monsters = _server.Values
+                    .Where(u => u.Player == null && !u.Creature.IsDead
+                                && !u.Creature.Conditions.Has(ConditionType.Asleep))
+                    .OrderBy(u => Chebyshev(u.Cell, self.Cell)).ToList();
+
+                // Cleric first: heal whoever needs it most.
+                if (sheet.Class == CharacterClass.Cleric && sheet.HasSlot(1))
+                {
+                    var hurt = _server.Values
+                        .Where(u => u.Player != null && !u.Creature.IsDead
+                                    && (u.Creature.IsDown
+                                        || u.Creature.CurrentHp * 2 < u.Creature.MaxHp))
+                        .OrderByDescending(u => u.Creature.IsDown)
+                        .ThenBy(u => Chebyshev(u.Cell, self.Cell))
+                        .FirstOrDefault();
+                    if (hurt != null)
+                    {
+                        MoveServerUnitToward(self, hurt.Cell, stopAdjacent: true);
+                        if (Chebyshev(self.Cell, hurt.Cell) <= 1)
+                        {
+                            var events = SpellEngine.Cast(sheet,
+                                SpellLibrary.Get("cure_wounds"),
+                                new[] { hurt.Creature }, 1, _rng);
+                            NarrateSpell(sheet, SpellLibrary.Get("cure_wounds"), events);
+                            foreach (var u in _server.Values) SyncHp(u.Id);
+                            return;
+                        }
+                        // Couldn't reach: fall through to attack from range.
+                    }
+                }
+
+                if (monsters.Count == 0) return;
+                var target = monsters[0];
+
+                if (sheet.Class == CharacterClass.Wizard || sheet.Class == CharacterClass.Cleric)
+                {
+                    string cantrip = sheet.Class == CharacterClass.Wizard
+                        ? "fire_bolt" : "sacred_flame";
+                    var events = SpellEngine.Cast(sheet, SpellLibrary.Get(cantrip),
+                        new[] { target.Creature }, 0, _rng);
+                    NarrateSpell(sheet, SpellLibrary.Get(cantrip), events);
+                    SyncHp(target.Id);
+                    return;
+                }
+
+                MoveServerUnitToward(self, target.Cell, stopAdjacent: true);
+                if (Chebyshev(self.Cell, target.Cell) <= 1)
+                {
+                    var attack = self.Player.BasicAttack();
+                    var result = CombatMath.ResolveAttack(self.Creature, target.Creature,
+                        attack, _rng);
+                    Narrate(self.Creature, target.Creature, attack.Name, result);
+                    SyncHp(target.Id);
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[Combat] Companion turn failed: {e}");
+            }
+        }
+
+        /// <summary>Grid movement for AI-driven units; also physically repositions
+        /// companion bodies (server-authoritative transform, replicated by NT).</summary>
+        [Server]
+        private void MoveServerUnitToward(ServerUnit unit, Vector2Int dest, bool stopAdjacent)
+        {
+            int steps = unit.Creature.Speed / 5;
+            while (steps-- > 0
+                   && Chebyshev(dest, unit.Cell) > (stopAdjacent ? 1 : 0))
+            {
+                var step = new Vector2Int(
+                    unit.Cell.x + Math.Sign(dest.x - unit.Cell.x),
+                    unit.Cell.y + Math.Sign(dest.y - unit.Cell.y));
+                if (Occupied(step)) break;
+                unit.Cell = step;
+            }
+            RpcUnitMoved(unit.Id, unit.Cell.x, unit.Cell.y);
+            ServerRepositionCompanion(unit);
+        }
+
+        [Server]
+        private void ServerRepositionCompanion(ServerUnit unit)
+        {
+            if (unit.Player == null || !unit.Player.IsCompanion) return;
+            var t = unit.Player.transform;
+            var cc = unit.Player.GetComponent<CharacterController>();
+            if (cc != null) cc.enabled = false;
+            t.position = CellToWorld(unit.Cell);
+            if (cc != null) cc.enabled = true;
         }
 
         [Server]
@@ -688,8 +799,13 @@ namespace RadiantPool.Game
         {
             if (view.IsPc)
             {
-                var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
-                    .FirstOrDefault(p => p.OwnerId == view.OwnerId);
+                // Companions all report owner -1; match those by replicated name.
+                var holder = view.OwnerId >= 0
+                    ? FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                        .FirstOrDefault(p => p.OwnerId == view.OwnerId)
+                    : FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                        .FirstOrDefault(p => p.IsCompanion
+                                             && p.CharacterName.Value == view.Name);
                 return holder != null ? holder.transform : null;
             }
 

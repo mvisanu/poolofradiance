@@ -27,6 +27,9 @@ namespace RadiantPool.Game
             ApplyName(_displayName.Value);
         }
 
+        /// <summary>Server-side name set for AI companions (no owner to submit one).</summary>
+        public void ServerSetName(string name) => _displayName.Value = name;
+
         [ServerRpc]
         private void SubmitNameServerRpc(string name)
         {

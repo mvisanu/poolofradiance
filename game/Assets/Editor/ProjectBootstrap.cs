@@ -130,8 +130,7 @@ namespace RadiantPool.EditorTools
         private static NetworkObject CreatePlayerPrefab()
         {
             string path = PrefabDir + "/Player.prefab";
-            var loaded = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-            if (loaded != null) return loaded.GetComponent<NetworkObject>();
+            AssetDatabase.DeleteAsset(path);   // always regenerate (components evolve)
 
             var root = new GameObject("Player");
             var cc = root.AddComponent<CharacterController>();
@@ -160,6 +159,7 @@ namespace RadiantPool.EditorTools
             root.AddComponent<PlayerMotor>();
             root.AddComponent<PlayerIdentity>();
             root.AddComponent<PlayerCharacterHolder>();
+            root.AddComponent<CompanionFollower>();   // inert unless spawned as companion
 
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, path);
             Object.DestroyImmediate(root);
@@ -551,6 +551,7 @@ namespace RadiantPool.EditorTools
                     RequiredEncounters = 5, XpEach = 3400, Gold = 600
                 }
             };
+            director.CompanionPrefab = playerPrefab;
             systemsGo.AddComponent<CombatClientUI>();
             systemsGo.AddComponent<SettingsMenu>();
             systemsGo.AddComponent<MiniMap>();

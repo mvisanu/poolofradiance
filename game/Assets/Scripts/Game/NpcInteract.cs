@@ -75,6 +75,16 @@ namespace RadiantPool.Game
                 GUI.skin.box);
             GUILayout.Label($"<b>{NpcName}</b>", new GUIStyle(GUI.skin.label) { richText = true });
 
+            // Sellswords: offered whenever the party is short of four.
+            int partySize = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .Count(p => p.ClassIndex.Value >= 0);
+            void RecruitButton()
+            {
+                if (partySize < 4 && GUILayout.Button(
+                        $"We could use sellswords. (hire {4 - partySize} companions)"))
+                { director.CmdRecruitCompanions(); _open = false; }
+            }
+
             if ((QuestState)director.MusterState.Value == QuestState.Active)
             {
                 GUILayout.Label("\"So the Exchange found us another company willing to brave the " +
@@ -82,6 +92,7 @@ namespace RadiantPool.Game
                     "Prove yourselves at the Old Docks and the Council will pay in gold and gratitude.\"");
                 if (GUILayout.Button("We'll clear the docks."))
                 { director.CmdDialogueChoice("muster_accept"); _open = false; }
+                RecruitButton();
                 GUILayout.EndArea();
                 return;
             }
@@ -95,6 +106,7 @@ namespace RadiantPool.Game
                     GUILayout.Label(i < ZoneBriefs.Length ? ZoneBriefs[i]
                         : $"\"Clear {director.Zones[i].DisplayName}, then return to me.\"");
                     if (GUILayout.Button("We're on it.")) _open = false;
+                    RecruitButton();
                     GUILayout.EndArea();
                     return;
                 }

@@ -13,9 +13,26 @@ namespace RadiantPool.Game
     {
         public readonly SyncVar<int> ClassIndex = new SyncVar<int>(-1);
         public readonly SyncVar<string> CharacterName = new SyncVar<string>("");
+        public readonly SyncVar<bool> IsCompanionSynced = new SyncVar<bool>(false);
+
+        /// <summary>Hired AI party member (server-driven, no owning connection).</summary>
+        public bool IsCompanion => IsCompanionSynced.Value;
 
         /// <summary>Authoritative sheet — exists only on the server.</summary>
         public CharacterSheet Sheet { get; private set; }
+
+        /// <summary>Server-side init for a hired companion (no client submits a build).</summary>
+        public void ServerInitCompanion(string name, int classIndex)
+        {
+            var build = CharacterBuild.Default(classIndex);
+            Sheet = GameDirector.Instance != null
+                ? GameDirector.Instance.ServerGetOrCreateSheet(name, build)
+                : CreateSheetFromBuild(name, build);
+            IsCompanionSynced.Value = true;
+            ClassIndex.Value = (int)Sheet.Class;
+            CharacterName.Value = Sheet.Name;
+            Debug.Log($"[RadiantPool] companion hired: {Sheet.Name} the {Sheet.Class}");
+        }
 
         public CharacterClass Class => (CharacterClass)Mathf.Max(0, ClassIndex.Value);
 

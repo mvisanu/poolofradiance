@@ -173,6 +173,51 @@ namespace RadiantPool.Game
             }
         }
 
+        [Header("Companions (prefab wired by bootstrap)")]
+        public FishNet.Object.NetworkObject CompanionPrefab;
+
+        private static readonly string[] CompanionNames =
+            { "Sera", "Aldric", "Wren", "Torvald", "Isolde", "Fenn" };
+
+        /// <summary>Fills the party to 4 with AI companions, picking classes the party
+        /// lacks (fighter first, then cleric, wizard, rogue).</summary>
+        [ServerRpc(RequireOwnership = false)]
+        public void CmdRecruitCompanions(NetworkConnection conn = null)
+        {
+            if (CompanionPrefab == null) { RpcNotice("No sellswords available."); return; }
+            var holders = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .Where(p => p.Sheet != null).ToList();
+            int needed = 4 - holders.Count;
+            if (needed <= 0) { RpcNotice("The party is already full."); return; }
+
+            var have = holders.Select(h => (int)h.Sheet.Class)
+                .ToHashSet();
+            var priority = new[] { 0, 1, 2, 3 };   // fighter, cleric, wizard, rogue
+            var rng = new System.Random();
+            int spawned = 0;
+            foreach (int cls in priority.Where(c => !have.Contains(c))
+                         .Concat(priority).Take(needed))
+            {
+                var anchor = holders.FirstOrDefault(h => !h.IsCompanion);
+                Vector3 pos = anchor != null
+                    ? anchor.transform.position + new Vector3(1.5f + spawned, 0.2f, -1.5f)
+                    : new Vector3(0, 0.2f, -8);
+                var nob = Instantiate(CompanionPrefab, pos, Quaternion.identity);
+                FishNet.InstanceFinder.ServerManager.Spawn(nob);   // no owner = server AI
+                var holder = nob.GetComponent<PlayerCharacterHolder>();
+                string name = CompanionNames[rng.Next(CompanionNames.Length)];
+                int suffix = 2;
+                while (holders.Any(h => h.Sheet != null && h.Sheet.Name == name))
+                    name = name + " " + suffix++;
+                holder.ServerInitCompanion(name, cls);
+                var identity = nob.GetComponent<PlayerIdentity>();
+                if (identity != null) identity.ServerSetName(name);
+                holders.Add(holder);
+                spawned++;
+            }
+            RpcNotice($"{spawned} sellsword{(spawned == 1 ? "" : "s")} joined the party!");
+        }
+
         /// <summary>Dialogue actions arrive from whichever client is talking to the NPC.</summary>
         [ServerRpc(RequireOwnership = false)]
         public void CmdDialogueChoice(string action, NetworkConnection conn = null)
