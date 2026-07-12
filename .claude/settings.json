@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\Bruce\\source\\repo\\poolofradiance\\scripts\\obsidian-sync.ps1\"",
+            "async": true,
+            "timeout": 60,
+            "statusMessage": "Syncing markdown to Obsidian vault"
+          }
+        ]
+      }
+    ]
+  }
+}
