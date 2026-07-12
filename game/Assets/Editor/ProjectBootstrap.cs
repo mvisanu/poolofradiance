@@ -553,6 +553,8 @@ namespace RadiantPool.EditorTools
             };
             systemsGo.AddComponent<CombatClientUI>();
             systemsGo.AddComponent<SettingsMenu>();
+            systemsGo.AddComponent<MiniMap>();
+            systemsGo.AddComponent<QuestTracker>();
 
             // FishNet scene NetworkObjects need SceneIds; the editor UI stamps them via
             // its own hooks, but a batchmode-generated scene must do it explicitly.

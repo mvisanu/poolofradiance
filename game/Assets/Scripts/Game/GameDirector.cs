@@ -66,8 +66,9 @@ namespace RadiantPool.Game
             _roster = new System.Collections.Generic.Dictionary<string, RadiantPool.Rules.CharacterSheet>();
         private readonly System.Collections.Generic.Dictionary<string, CharacterBuild>
             _builds = new System.Collections.Generic.Dictionary<string, CharacterBuild>();
-        private readonly System.Collections.Generic.List<string>
-            _consumedEncounters = new System.Collections.Generic.List<string>();
+        /// <summary>Cleared encounter ids, replicated so clients can point quest markers
+        /// at the nearest block that still needs fighting.</summary>
+        public readonly SyncList<string> ConsumedEncounterIds = new SyncList<string>();
 
         public override void OnStartServer()
         {
@@ -104,7 +105,7 @@ namespace RadiantPool.Game
             }
             foreach (var id in save.ConsumedEncounters)
             {
-                _consumedEncounters.Add(id);
+                ConsumedEncounterIds.Add(id);
                 var trigger = FindObjectsByType<EncounterTrigger>(FindObjectsSortMode.None)
                     .FirstOrDefault(t => t.EncounterId == id);
                 if (trigger != null) trigger.Consume();
@@ -140,7 +141,7 @@ namespace RadiantPool.Game
                 CampaignComplete = CampaignComplete.Value,
                 PartyGold = PartyGold.Value,
                 Stash = Stash.ToList(),
-                ConsumedEncounters = _consumedEncounters.ToList(),
+                ConsumedEncounters = ConsumedEncounterIds.ToList(),
                 Roster = _roster.Select(kv =>
                     SaveSystem.Capture(kv.Value, _builds[kv.Key])).ToList()
             };
@@ -153,7 +154,7 @@ namespace RadiantPool.Game
             if (trigger == null) return;
             int zone = System.Array.FindIndex(Zones, z => z.ZoneId == trigger.ZoneId);
             trigger.Consume();
-            _consumedEncounters.Add(trigger.EncounterId);
+            ConsumedEncounterIds.Add(trigger.EncounterId);
             ServerSaveCampaign();   // autosave at every cleared block
             if (zone < 0 || !trigger.RequiredForClear) return;
 
