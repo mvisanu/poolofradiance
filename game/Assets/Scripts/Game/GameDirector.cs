@@ -50,6 +50,16 @@ namespace RadiantPool.Game
         };
         public const int PotionBuyPrice = 50;
 
+        /// <summary>Smith stock: SRD list price in gold (sell-back via the Exchange is
+        /// half). Order here is the order shown in the smith UI.</summary>
+        public static readonly System.Collections.Generic.List<(string id, int price)> SmithStock =
+            new System.Collections.Generic.List<(string, int)>
+        {
+            ("dagger", 2), ("mace", 5), ("shortsword", 10), ("longsword", 15),
+            ("shortbow", 25), ("light_crossbow", 25),
+            ("leather_armor", 10), ("scale_mail", 50), ("chain_mail", 75), ("shield", 10)
+        };
+
         public string LocalNotice { get; private set; } = "";
         private float _noticeUntil;
 
@@ -113,6 +123,9 @@ namespace RadiantPool.Game
             string savedDate = save.SavedAtUtc.Length >= 10
                 ? save.SavedAtUtc.Substring(0, 10) : save.SavedAtUtc;
             RpcNotice($"Campaign loaded (saved {savedDate}).");
+            // Self-heal saves from before the pre-accept-clear fix: a zone whose
+            // encounters were all cleared while the quest wasn't Active yet.
+            for (int i = 0; i < Zones.Length; i++) ServerRecheckZone(i);
         }
 
         [Server]
@@ -160,16 +173,28 @@ namespace RadiantPool.Game
 
             ZoneClearedCounts[zone]++;
             var cfg = Zones[zone];
+            ServerRecheckZone(zone);
+            if (GetZoneState(zone) != QuestState.ObjectivesMet)
+            {
+                RpcNotice($"Encounter cleared ({Mathf.Min(ZoneClearedCounts[zone], cfg.RequiredEncounters)}" +
+                          $"/{cfg.RequiredEncounters} in {cfg.DisplayName}).");
+            }
+        }
+
+        /// <summary>Flips an Active zone to ObjectivesMet once enough encounters are
+        /// cleared. Called both on encounter clears AND whenever a quest becomes Active:
+        /// encounters can be fought before the quest is accepted, and without this
+        /// recheck such a zone could never complete (no triggers left to fire it).</summary>
+        [Server]
+        private void ServerRecheckZone(int zone)
+        {
+            if (zone < 0 || zone >= Zones.Length) return;
+            var cfg = Zones[zone];
             if (GetZoneState(zone) == QuestState.Active
                 && ZoneClearedCounts[zone] >= cfg.RequiredEncounters)
             {
                 ZoneStates[zone] = (int)QuestState.ObjectivesMet;
                 RpcNotice($"{cfg.DisplayName} has been cleared! Return to Councilor Veresk.");
-            }
-            else
-            {
-                RpcNotice($"Encounter cleared ({Mathf.Min(ZoneClearedCounts[zone], cfg.RequiredEncounters)}" +
-                          $"/{cfg.RequiredEncounters} in {cfg.DisplayName}).");
             }
         }
 
@@ -228,6 +253,7 @@ namespace RadiantPool.Game
                 if (Zones.Length > 0) ZoneStates[0] = (int)QuestState.Active;
                 AwardXpToAll(50);
                 RpcNotice($"New quest: {Zones[0].QuestName} (journal: J).");
+                ServerRecheckZone(0);   // encounters may have been cleared pre-accept
                 ServerSaveCampaign();
                 return;
             }
@@ -245,6 +271,7 @@ namespace RadiantPool.Game
                     ZoneStates[zone + 1] = (int)QuestState.Active;
                     RpcNotice($"Quest complete! +{cfg.XpEach} XP each, +{cfg.Gold} gold. " +
                               $"New quest: {Zones[zone + 1].QuestName}.");
+                    ServerRecheckZone(zone + 1);   // may already be cleared from wandering
                 }
                 else
                 {
@@ -274,6 +301,21 @@ namespace RadiantPool.Game
             PartyGold.Value -= PotionBuyPrice;
             Stash.Add("potion_healing");
             RpcNotice("Bought a Potion of Healing (2d4+2).");
+        }
+
+        /// <summary>Buy a weapon/armor upgrade from the smith into the party stash;
+        /// equip it afterwards from the inventory (I).</summary>
+        [ServerRpc(RequireOwnership = false)]
+        public void CmdBuyItem(string itemId, NetworkConnection conn = null)
+        {
+            int price = SmithStock.FirstOrDefault(s => s.id == itemId).price;
+            if (price <= 0) { RpcNotice("The smith doesn't stock that."); return; }
+            if (PartyGold.Value < price)
+            { RpcNotice($"Not enough gold ({price}g needed)."); return; }
+            PartyGold.Value -= price;
+            Stash.Add(itemId);
+            var item = GameItem.Get(itemId);
+            RpcNotice($"Bought {item?.Name ?? itemId} for {price}g — equip it from the inventory (I).");
         }
 
         [ServerRpc(RequireOwnership = false)]

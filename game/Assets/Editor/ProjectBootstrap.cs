@@ -536,6 +536,26 @@ namespace RadiantPool.EditorTools
             vplate.color = new Color(0.7f, 1f, 0.8f);
             vplateGo.AddComponent<Billboard>();
 
+            // Smith NPC on the other side of the council platform: buy weapon/armor
+            // upgrades (SmithInteract reads stock from GameDirector.SmithStock).
+            var smith = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            smith.name = "The Broken Anvil";
+            smith.transform.position = new Vector3(-4, 1.3f, -13);
+            smith.GetComponent<Renderer>().sharedMaterial =
+                Mat("M_Smith", new Color(0.75f, 0.45f, 0.3f));
+            smith.AddComponent<NpcVisual>().Model = "Knight";   // armored smith
+            smith.AddComponent<SmithInteract>();
+            var splateGo = new GameObject("Nameplate");
+            splateGo.transform.SetParent(smith.transform, false);
+            splateGo.transform.localPosition = new Vector3(0f, 1.4f, 0f);
+            var splate = splateGo.AddComponent<TextMesh>();
+            splate.text = "The Broken Anvil (smith)";
+            splate.characterSize = 0.09f;
+            splate.fontSize = 40;
+            splate.anchor = TextAnchor.LowerCenter;
+            splate.color = new Color(1f, 0.8f, 0.6f);
+            splateGo.AddComponent<Billboard>();
+
             // Networking + game systems.
             var netGo = new GameObject("NetworkManager");
             netGo.AddComponent<NetworkManager>();
