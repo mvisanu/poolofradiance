@@ -161,27 +161,27 @@ namespace RadiantPool.Game
 
         /// <summary>Serif gold header — panel titles ("Journal", NPC names).</summary>
         public static GUIStyle Header =>
-            _header ??= MakeLabel(Serif, 19, Gold, FontStyle.Bold);
+            _header ??= MakeLabel(Serif, 16, Gold, FontStyle.Bold);
 
         /// <summary>Big serif display header — title screen, banners.</summary>
         public static GUIStyle HeaderBig =>
-            _headerBig ??= MakeLabel(Serif, 34, Gold, FontStyle.Bold);
+            _headerBig ??= MakeLabel(Serif, 28, Gold, FontStyle.Bold);
 
         /// <summary>Serif ink header for parchment areas.</summary>
         public static GUIStyle HeaderInk =>
-            _headerInk ??= MakeLabel(SerifSemi, 16, Ink, FontStyle.Bold);
+            _headerInk ??= MakeLabel(SerifSemi, 14, Ink, FontStyle.Bold);
 
         /// <summary>All-caps small label (category headers, stat names).</summary>
         public static GUIStyle Caps =>
-            _caps ??= MakeLabel(BodyBold, 11, OnSurfaceMuted, FontStyle.Bold);
+            _caps ??= MakeLabel(BodyBold, 10, OnSurfaceMuted, FontStyle.Bold);
 
         /// <summary>Standard body text on dark panels.</summary>
         public static GUIStyle Body =>
-            _body14 ??= MakeLabel(BodyFont, 14, OnSurface, FontStyle.Normal);
+            _body14 ??= MakeLabel(BodyFont, 12, OnSurface, FontStyle.Normal);
 
         /// <summary>Body text on parchment.</summary>
         public static GUIStyle BodyInk =>
-            _bodyInk ??= MakeLabel(BodyFont, 14, Ink, FontStyle.Normal);
+            _bodyInk ??= MakeLabel(BodyFont, 12, Ink, FontStyle.Normal);
 
         /// <summary>Mage-blue primary button with the gold press-edge.</summary>
         public static GUIStyle BtnPrimary
@@ -191,7 +191,7 @@ namespace RadiantPool.Game
                 if (_btnPrimary != null) return _btnPrimary;
                 _btnPrimary = new GUIStyle(GUI.skin.button);
                 if (BodyBold != null) _btnPrimary.font = BodyBold; else _btnPrimary.fontStyle = FontStyle.Bold;
-                _btnPrimary.fontSize = 14;
+                _btnPrimary.fontSize = 12;
                 _btnPrimary.border = new RectOffset(12, 12, 12, 12);
                 _btnPrimary.padding = new RectOffset(14, 14, 8, 10);
                 _btnPrimary.normal.background = BtnBlueTex;
@@ -264,7 +264,7 @@ namespace RadiantPool.Game
                 _toast = new GUIStyle(PanelStyle)
                 {
                     alignment = TextAnchor.MiddleCenter,
-                    fontSize = 15,
+                    fontSize = 13,
                     richText = true,
                     wordWrap = false
                 };
