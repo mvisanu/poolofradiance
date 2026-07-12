@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "brown_bear",
+  "name": "Brown Bear",
+  "srdRef": "Brown Bear (SRD 5.1)",
+  "size": "Large",
+  "ac": 11,
+  "hpDice": "4d10+12",
+  "speed": 40,
+  "abilities": { "str": 19, "dex": 10, "con": 16, "int": 2, "wis": 13, "cha": 7 },
+  "attacks": [
+    { "name": "Claws", "toHit": 6, "damage": "2d6+4", "damageType": "slashing", "rangeFeet": 5 },
+    { "name": "Bite", "toHit": 6, "damage": "1d8+4", "damageType": "piercing", "rangeFeet": 5 }
+  ],
+  "xp": 200,
+  "ai": "brute",
+  "lootTable": "lt_beast_den"
+}

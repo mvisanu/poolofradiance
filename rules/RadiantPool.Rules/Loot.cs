@@ -83,6 +83,12 @@ namespace RadiantPool.Rules
                     { (30, "potion_healing"), (30, "scale_mail"), (25, "longsword"), (15, "light_crossbow") }),
                 new LootTable("lt_sunken_vault", "10d6", 2, new (int, string?)[]
                     { (40, "potion_healing"), (30, "chain_mail"), (30, "longsword") }),
+                new LootTable("lt_beast_den", "1d6", 1, new (int, string?)[]
+                    { (80, null), (20, "potion_healing") }),
+                new LootTable("lt_goblin", "2d6", 1, new (int, string?)[]
+                    { (65, null), (20, "shortbow"), (10, "leather_armor"), (5, "potion_healing") }),
+                new LootTable("lt_warcamp", "8d6", 2, new (int, string?)[]
+                    { (35, "potion_healing"), (30, "longsword"), (20, "scale_mail"), (15, "chain_mail") }),
             };
             return tables.ToDictionary(t => t.Id);
         }

@@ -156,13 +156,16 @@ namespace RadiantPool.Rules.Tests
         [Fact]
         public void ZoneProgression_FormsCompleteChain()
         {
-            // docks → market → temple, temple completes the campaign.
+            // docks → market → warcamp → temple, temple completes the campaign.
             using var docks = Load(Path.Combine("zones", "old_docks.json"));
             Assert.Equal("drowned_market",
                 docks.RootElement.GetProperty("onCleared").GetProperty("unlocks").GetString());
             using var market = Load(Path.Combine("zones", "drowned_market.json"));
-            Assert.Equal("glasslit_temple",
+            Assert.Equal("sunken_warcamp",
                 market.RootElement.GetProperty("onCleared").GetProperty("unlocks").GetString());
+            using var warcamp = Load(Path.Combine("zones", "sunken_warcamp.json"));
+            Assert.Equal("glasslit_temple",
+                warcamp.RootElement.GetProperty("onCleared").GetProperty("unlocks").GetString());
             using var temple = Load(Path.Combine("zones", "glasslit_temple.json"));
             Assert.True(temple.RootElement.GetProperty("onCleared")
                 .GetProperty("campaignComplete").GetBoolean());

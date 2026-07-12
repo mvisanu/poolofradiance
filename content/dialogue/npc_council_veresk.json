@@ -29,9 +29,23 @@
     {
       "id": "market_turnin",
       "condition": { "questState": { "q_clear_market": "objectives_met" } },
-      "text": "You gave the drowned their rest. Now only the Temple remains — and I will not lie to you. The cult there serves something that wears our own Warden like a cloak. End it, and Aldenmere is truly free.",
+      "text": "You gave the drowned their rest. But before we dare the Temple, there is uglier work: an orc warband has dug into the sunken quarter south of the walls, and the Council will not assault the Temple with Splitjaw's raiders at its back.",
       "options": [
-        { "text": "We'll face the Hollow Flame.", "action": { "turnIn": "q_clear_market", "acceptQuest": "q_clear_temple" } }
+        { "text": "We'll break the warband.", "action": { "turnIn": "q_clear_market", "acceptQuest": "q_clear_warcamp" } }
+      ]
+    },
+    {
+      "id": "warcamp_active",
+      "condition": { "questState": { "q_clear_warcamp": "active" } },
+      "text": "Splitjaw holds the old drainage quarter with two picket bands and his war-tent. Break all three and bring me word. Mind the wilds on the road — spiders in the silk hollows, bears in the briars, goblin ambushers everywhere.",
+      "options": [ { "text": "We're on it.", "action": null } ]
+    },
+    {
+      "id": "warcamp_turnin",
+      "condition": { "questState": { "q_clear_warcamp": "objectives_met" } },
+      "text": "Splitjaw's warband is broken and the south road is ours again. Nothing stands between us and the Temple now — and I will not lie to you. The cult there serves something that wears our own Warden like a cloak. End it, and Aldenmere is truly free.",
+      "options": [
+        { "text": "We'll face the Hollow Flame.", "action": { "turnIn": "q_clear_warcamp", "acceptQuest": "q_clear_temple" } }
       ]
     },
     {

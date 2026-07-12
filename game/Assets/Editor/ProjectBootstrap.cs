@@ -517,6 +517,38 @@ namespace RadiantPool.EditorTools
                 new Vector3(50, 1.5f, 19), new Vector3(12, 3, 10), true,
                 new[] { "hollow_warden", "kindled_zealot" });
 
+            // Zone 2 — The Sunken Warcamp (south, gated): orc warband + boss fight.
+            Encounter("enc_warcamp_01", "sunken_warcamp", "the picket line",
+                new Vector3(10, 1.5f, -32), new Vector3(10, 3, 10), true,
+                new[] { "orc", "orc" });
+            Encounter("enc_warcamp_02", "sunken_warcamp", "the loot pens",
+                new Vector3(22, 1.5f, -38), new Vector3(10, 3, 10), true,
+                new[] { "orc", "orc", "orc" });
+            Encounter("enc_warcamp_03_karg", "sunken_warcamp", "the war-tent",
+                new Vector3(14, 1.5f, -46), new Vector3(12, 3, 10), true,
+                new[] { "orc_warchief", "orc", "orc" }, "lt_sunken_vault");
+
+            // Wilds — optional world fights on the roads between quarters (no quest,
+            // just XP and loot): spiders, bears, goblin ambushes.
+            Encounter("enc_wild_spiders_01", "wilds", "the webbed alley",
+                new Vector3(-12, 1.5f, 24), new Vector3(9, 3, 9), false,
+                new[] { "giant_spider", "giant_spider" });
+            Encounter("enc_wild_spiders_02", "wilds", "the silk hollow",
+                new Vector3(30, 1.5f, 26), new Vector3(9, 3, 9), false,
+                new[] { "giant_spider", "giant_spider", "giant_spider" });
+            Encounter("enc_wild_bear_01", "wilds", "a bear den",
+                new Vector3(-24, 1.5f, -28), new Vector3(9, 3, 9), false,
+                new[] { "brown_bear" });
+            Encounter("enc_wild_bears_02", "wilds", "the briar thicket",
+                new Vector3(26, 1.5f, -12), new Vector3(9, 3, 9), false,
+                new[] { "brown_bear", "brown_bear" });
+            Encounter("enc_wild_goblins_01", "wilds", "a goblin ambush",
+                new Vector3(-16, 1.5f, 8), new Vector3(9, 3, 9), false,
+                new[] { "goblin", "goblin", "goblin" });
+            Encounter("enc_wild_goblins_02", "wilds", "the toll bridge",
+                new Vector3(34, 1.5f, 4), new Vector3(9, 3, 9), false,
+                new[] { "goblin", "goblin", "goblin", "goblin" });
+
             // Vendor NPC by the council platform.
             var vendor = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             vendor.name = "The Salvage Exchange";
@@ -584,6 +616,12 @@ namespace RadiantPool.EditorTools
                     ZoneId = "drowned_market", DisplayName = "The Drowned Market",
                     QuestName = "Silence the Drowned Market",
                     RequiredEncounters = 4, XpEach = 900, Gold = 250
+                },
+                new GameDirector.ZoneConfig
+                {
+                    ZoneId = "sunken_warcamp", DisplayName = "The Sunken Warcamp",
+                    QuestName = "The Warband Below",
+                    RequiredEncounters = 3, XpEach = 1200, Gold = 400
                 },
                 new GameDirector.ZoneConfig
                 {

@@ -17,6 +17,10 @@ namespace RadiantPool.Game
             "the docks are ours again. Watch for the rats — they hunt in packs.\"",
             "\"The flooded Market is worse — the dead of the eruption never left. Lay them " +
             "to rest, all four hauntings, and mind the Toll-Keeper.\"",
+            "\"An orc warband under Karg Splitjaw has dug into the sunken quarter south of " +
+            "the walls. Break his pickets and his war-tent — the Council will not assault " +
+            "the Temple with raiders at its back. Mind the wilds on the road: spiders, " +
+            "bears, goblin ambushes.\"",
             "\"Only the Temple remains. The cult there serves something that wears our own " +
             "Warden like a cloak. Break their five circles and end it.\""
         };
@@ -26,6 +30,8 @@ namespace RadiantPool.Game
             "\"The lamps are lit on the waterfront tonight — first time in nine years. The " +
             "Council is in your debt.\"",
             "\"You gave the drowned their rest. The market bells will ring again because of you.\"",
+            "\"Splitjaw's warband is broken and the south road is ours again. Nothing stands " +
+            "between us and the Temple now.\"",
             "\"Sorrel lives — freed after nine years in that thing's grip. The Flame has fled " +
             "deep into the Lightwell, and Aldenmere is ours to the last stone.\""
         };

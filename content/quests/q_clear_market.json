@@ -11,5 +11,5 @@
     { "id": "o2", "text": "Return to Councilor Veresk", "counter": "turned_in", "target": 1 }
   ],
   "rewards": { "xpEach": 900, "gold": 250, "storyBeat": "sb_market_cleared" },
-  "unlocks": ["q_clear_temple"]
+  "unlocks": ["q_clear_warcamp"]
 }

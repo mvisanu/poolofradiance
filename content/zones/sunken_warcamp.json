@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "sunken_warcamp",
+  "name": "The Sunken Warcamp",
+  "scene": "Zone_SunkenWarcamp",
+  "levelBand": [3, 4],
+  "locked": true,
+  "encounters": [
+    { "id": "enc_warcamp_01", "trigger": "vol_warcamp_01",
+      "units": ["orc", "orc"], "requiredForClear": true },
+    { "id": "enc_warcamp_02", "trigger": "vol_warcamp_02",
+      "units": ["orc", "orc", "orc"], "requiredForClear": true },
+    { "id": "enc_warcamp_03_karg", "trigger": "vol_warcamp_03",
+      "units": ["orc_warchief", "orc", "orc"], "requiredForClear": true,
+      "bossName": "Karg Splitjaw, Warchief",
+      "bonusLootTable": "lt_sunken_vault" }
+  ],
+  "clearQuest": "q_clear_warcamp",
+  "onCleared": { "pacify": true, "unlocks": "glasslit_temple" }
+}

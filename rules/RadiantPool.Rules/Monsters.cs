@@ -100,6 +100,65 @@ namespace RadiantPool.Rules
                         new AttackDefinition("Gout of Radiance", 4, "2d6", DamageType.Fire, 30)
                     }
                 },
+                new MonsterDefinition
+                {
+                    Id = "orc", Name = "Orc Raider",
+                    ArmorClass = 13, HpDice = "2d8+6", Speed = 30,
+                    Abilities = new AbilityScores(16, 12, 16, 7, 11, 10),
+                    Xp = 100, LootTable = "lt_warcamp", SrdRef = "Orc (SRD 5.1)",
+                    Attacks =
+                    {
+                        new AttackDefinition("Greataxe", 5, "1d12+3", DamageType.Slashing, 5),
+                        new AttackDefinition("Javelin", 5, "1d6+3", DamageType.Piercing, 30)
+                    }
+                },
+                new MonsterDefinition
+                {
+                    Id = "orc_warchief", Name = "Karg Splitjaw, Warchief",
+                    ArmorClass = 16, HpDice = "6d8+18", Speed = 30,
+                    Abilities = new AbilityScores(18, 12, 16, 8, 11, 12),
+                    Xp = 450, LootTable = "lt_warcamp", SrdRef = "Orc (SRD 5.1), elite variant",
+                    Attacks =
+                    {
+                        new AttackDefinition("Great Cleaver", 6, "2d10+4", DamageType.Slashing, 5),
+                        new AttackDefinition("Hurled Axe", 6, "1d6+4", DamageType.Slashing, 30)
+                    }
+                },
+                new MonsterDefinition
+                {
+                    Id = "giant_spider", Name = "Giant Spider",
+                    ArmorClass = 14, HpDice = "4d10+4", Speed = 30,
+                    Abilities = new AbilityScores(14, 16, 12, 2, 11, 4),
+                    Xp = 200, LootTable = "lt_beast_den", SrdRef = "Giant Spider (SRD 5.1)",
+                    Attacks =
+                    {
+                        new AttackDefinition("Venomous Bite", 5, "1d8+3", DamageType.Piercing, 5)
+                    }
+                },
+                new MonsterDefinition
+                {
+                    Id = "brown_bear", Name = "Brown Bear",
+                    ArmorClass = 11, HpDice = "4d10+12", Speed = 40,
+                    Abilities = new AbilityScores(19, 10, 16, 2, 13, 7),
+                    Xp = 200, LootTable = "lt_beast_den", SrdRef = "Brown Bear (SRD 5.1)",
+                    Attacks =
+                    {
+                        new AttackDefinition("Claws", 6, "2d6+4", DamageType.Slashing, 5),
+                        new AttackDefinition("Bite", 6, "1d8+4", DamageType.Piercing, 5)
+                    }
+                },
+                new MonsterDefinition
+                {
+                    Id = "goblin", Name = "Goblin Ambusher",
+                    ArmorClass = 15, HpDice = "2d6", Speed = 30,
+                    Abilities = new AbilityScores(8, 14, 10, 10, 8, 8),
+                    Xp = 50, LootTable = "lt_goblin", SrdRef = "Goblin (SRD 5.1)",
+                    Attacks =
+                    {
+                        new AttackDefinition("Scimitar", 4, "1d6+2", DamageType.Slashing, 5),
+                        new AttackDefinition("Shortbow", 4, "1d6+2", DamageType.Piercing, 80)
+                    }
+                },
             };
 
             var dict = new Dictionary<string, MonsterDefinition>();

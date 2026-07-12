@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "orc",
+  "name": "Orc Raider",
+  "srdRef": "Orc (SRD 5.1)",
+  "size": "Medium",
+  "ac": 13,
+  "hpDice": "2d8+6",
+  "speed": 30,
+  "abilities": { "str": 16, "dex": 12, "con": 16, "int": 7, "wis": 11, "cha": 10 },
+  "attacks": [
+    { "name": "Greataxe", "toHit": 5, "damage": "1d12+3", "damageType": "slashing", "rangeFeet": 5 },
+    { "name": "Javelin", "toHit": 5, "damage": "1d6+3", "damageType": "piercing", "rangeFeet": 30 }
+  ],
+  "xp": 100,
+  "ai": "brute",
+  "lootTable": "lt_warcamp"
+}

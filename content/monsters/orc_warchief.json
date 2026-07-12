@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "orc_warchief",
+  "name": "Karg Splitjaw, Warchief",
+  "srdRef": "Orc (SRD 5.1), elite variant",
+  "size": "Medium",
+  "ac": 16,
+  "hpDice": "6d8+18",
+  "speed": 30,
+  "abilities": { "str": 18, "dex": 12, "con": 16, "int": 8, "wis": 11, "cha": 12 },
+  "attacks": [
+    { "name": "Great Cleaver", "toHit": 6, "damage": "2d10+4", "damageType": "slashing", "rangeFeet": 5 },
+    { "name": "Hurled Axe", "toHit": 6, "damage": "1d6+4", "damageType": "slashing", "rangeFeet": 30 }
+  ],
+  "xp": 450,
+  "ai": "boss",
+  "lootTable": "lt_warcamp"
+}

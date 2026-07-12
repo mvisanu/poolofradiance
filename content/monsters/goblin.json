@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "goblin",
+  "name": "Goblin Ambusher",
+  "srdRef": "Goblin (SRD 5.1)",
+  "size": "Small",
+  "ac": 15,
+  "hpDice": "2d6",
+  "speed": 30,
+  "abilities": { "str": 8, "dex": 14, "con": 10, "int": 10, "wis": 8, "cha": 8 },
+  "attacks": [
+    { "name": "Scimitar", "toHit": 4, "damage": "1d6+2", "damageType": "slashing", "rangeFeet": 5 },
+    { "name": "Shortbow", "toHit": 4, "damage": "1d6+2", "damageType": "piercing", "rangeFeet": 80 }
+  ],
+  "xp": 50,
+  "ai": "skirmisher",
+  "lootTable": "lt_goblin"
+}

@@ -12,6 +12,12 @@
     { "id": "lt_warehouse_cache", "gold": "6d6", "rolls": 2,
       "entries": [ { "weight": 30, "item": "potion_healing" }, { "weight": 30, "item": "scale_mail" }, { "weight": 25, "item": "longsword" }, { "weight": 15, "item": "light_crossbow" } ] },
     { "id": "lt_sunken_vault", "gold": "10d6", "rolls": 2,
-      "entries": [ { "weight": 40, "item": "potion_healing" }, { "weight": 30, "item": "chain_mail" }, { "weight": 30, "item": "longsword" } ] }
+      "entries": [ { "weight": 40, "item": "potion_healing" }, { "weight": 30, "item": "chain_mail" }, { "weight": 30, "item": "longsword" } ] },
+    { "id": "lt_beast_den", "gold": "1d6", "rolls": 1,
+      "entries": [ { "weight": 80, "item": null }, { "weight": 20, "item": "potion_healing" } ] },
+    { "id": "lt_goblin", "gold": "2d6", "rolls": 1,
+      "entries": [ { "weight": 65, "item": null }, { "weight": 20, "item": "shortbow" }, { "weight": 10, "item": "leather_armor" }, { "weight": 5, "item": "potion_healing" } ] },
+    { "id": "lt_warcamp", "gold": "8d6", "rolls": 2,
+      "entries": [ { "weight": 35, "item": "potion_healing" }, { "weight": 30, "item": "longsword" }, { "weight": 20, "item": "scale_mail" }, { "weight": 15, "item": "chain_mail" } ] }
   ]
 }

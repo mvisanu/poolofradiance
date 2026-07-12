@@ -20,5 +20,5 @@
       "requiredForClear": false, "bonusLootTable": "lt_sunken_vault" }
   ],
   "clearQuest": "q_clear_market",
-  "onCleared": { "pacify": true, "unlocks": "glasslit_temple" }
+  "onCleared": { "pacify": true, "unlocks": "sunken_warcamp" }
 }

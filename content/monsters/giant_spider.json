@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "giant_spider",
+  "name": "Giant Spider",
+  "srdRef": "Giant Spider (SRD 5.1)",
+  "size": "Large",
+  "ac": 14,
+  "hpDice": "4d10+4",
+  "speed": 30,
+  "abilities": { "str": 14, "dex": 16, "con": 12, "int": 2, "wis": 11, "cha": 4 },
+  "attacks": [
+    { "name": "Venomous Bite", "toHit": 5, "damage": "1d8+3", "damageType": "piercing", "rangeFeet": 5 }
+  ],
+  "xp": 200,
+  "ai": "brute",
+  "lootTable": "lt_beast_den"
+}
