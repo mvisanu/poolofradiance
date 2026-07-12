@@ -34,6 +34,9 @@ Fantasy Town Kit 2.0 and Pirate Kit — Creative Commons Zero, thank you Kenney!
 Characters from the CC0 **KayKit** packs by Kay Lousberg
 ([kaylousberg.itch.io](https://kaylousberg.itch.io)): Adventurers 2.0 and
 Skeletons 1.1 — thank you Kay!
+Spell/action icons from [game-icons.net](https://game-icons.net) by **Lorc** and
+**Delapouite**, licensed [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/)
+(`game/Assets/Resources/SpellIcons`).
 
 ## License / attribution
 This work includes material taken from the System Reference Document 5.1 ("SRD 5.1") by

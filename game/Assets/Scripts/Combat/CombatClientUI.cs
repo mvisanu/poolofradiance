@@ -15,6 +15,28 @@ namespace RadiantPool.Game
         private Vector2 _logScroll;
         private GameObject _hoverMarker;
 
+        private static readonly System.Collections.Generic.Dictionary<string, Texture2D>
+            IconCache = new System.Collections.Generic.Dictionary<string, Texture2D>();
+
+        /// <summary>Action/spell icon from Resources/SpellIcons (game-icons.net, CC BY —
+        /// see README). Swap the art by overwriting the same-named PNGs, e.g. with an
+        /// imported Asset Store icon pack. Missing icons fall back to text-only.</summary>
+        private static Texture2D Icon(string id)
+        {
+            if (!IconCache.TryGetValue(id, out var tex))
+            {
+                tex = Resources.Load<Texture2D>($"SpellIcons/{id}");
+                IconCache[id] = tex;   // caches null too
+            }
+            return tex;
+        }
+
+        private static GUIContent WithIcon(string id, string label)
+        {
+            var tex = Icon(id);
+            return tex != null ? new GUIContent(" " + label, tex) : new GUIContent(label);
+        }
+
         /// <summary>Click-to-move: hover a grid cell to highlight it, click to walk
         /// there (the server validates every step). Active only on your turn, outside
         /// the target pickers, and away from the HUD boxes.</summary>
@@ -195,16 +217,20 @@ namespace RadiantPool.Game
         {
             GUILayout.BeginHorizontal();
             GUI.enabled = combat.ActionLeft;
-            if (GUILayout.Button("Attack")) _mode = Mode.PickAttackTarget;
+            if (GUILayout.Button(WithIcon("attack", "Attack"), GUILayout.Height(34)))
+                _mode = Mode.PickAttackTarget;
             var holder = LocalHolder();
             bool caster = holder != null &&
                 (holder.Class == CharacterClass.Wizard || holder.Class == CharacterClass.Cleric);
             GUI.enabled = caster && (combat.ActionLeft || combat.BonusLeft);
-            if (GUILayout.Button("Cast")) _mode = Mode.PickSpell;
+            if (GUILayout.Button(WithIcon("cast", "Cast"), GUILayout.Height(34)))
+                _mode = Mode.PickSpell;
             GUI.enabled = combat.ActionLeft;
-            if (GUILayout.Button("Dodge")) combat.CmdDodge();
+            if (GUILayout.Button(WithIcon("dodge", "Dodge"), GUILayout.Height(34)))
+                combat.CmdDodge();
             GUI.enabled = true;
-            if (GUILayout.Button("End Turn")) combat.CmdEndTurn();
+            if (GUILayout.Button(WithIcon("end_turn", "End Turn"), GUILayout.Height(34)))
+                combat.CmdEndTurn();
             GUILayout.EndHorizontal();
         }
 
@@ -224,7 +250,7 @@ namespace RadiantPool.Game
                     : (spell.IsBonusAction ? combat.BonusLeft : combat.ActionLeft)
                       && combat.MySlots[0] + combat.MySlots[1] + combat.MySlots[2] > 0;
                 GUI.enabled = usable;
-                if (GUILayout.Button(spell.Name))
+                if (GUILayout.Button(WithIcon(id, spell.Name), GUILayout.Height(34)))
                 {
                     _pendingSpell = id;
                     _mode = Mode.PickSpellTarget;
