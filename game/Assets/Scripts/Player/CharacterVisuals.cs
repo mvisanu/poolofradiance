@@ -56,8 +56,23 @@ namespace RadiantPool.Game
         public static void SetDead(Transform unitRoot, bool dead)
         {
             var animator = AnimatorOf(unitRoot);
+            bool hasDeathState = false;
             if (animator != null && animator.runtimeAnimatorController != null)
-                animator.SetBool("Dead", dead);
+            {
+                foreach (var p in animator.parameters)
+                    if (p.name == "Dead") { hasDeathState = true; break; }
+                if (hasDeathState) animator.SetBool("Dead", dead);
+            }
+
+            // Guaranteed lay-down: if no death animation is available, tip the model
+            // onto its back so a corpse never stands.
+            if (!hasDeathState)
+            {
+                var visual = unitRoot != null ? unitRoot.Find(VisualName) : null;
+                if (visual != null)
+                    visual.localRotation = dead
+                        ? Quaternion.Euler(-90f, 0f, 0f) : Quaternion.identity;
+            }
         }
     }
 

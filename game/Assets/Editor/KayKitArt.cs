@@ -167,19 +167,25 @@ namespace RadiantPool.EditorTools
             controller.AddParameter("Hit", AnimatorControllerParameterType.Trigger);
             controller.AddParameter("Dead", AnimatorControllerParameterType.Bool);
 
+            Debug.Log("[Bootstrap] All KayKit clips: "
+                + string.Join(", ", clips.Select(c => c.name).OrderBy(n => n)));
+
             var sm = controller.layers[0].stateMachine;
             var idle = sm.AddState("Idle");
             idle.motion = FindClip(clips, "Idle");
             sm.defaultState = idle;
             var move = sm.AddState("Move");
-            move.motion = FindClip(clips, "Walking_A", "Walking", "Running");
+            move.motion = FindClip(clips, "Walking_A", "Walking", "Running") ?? idle.motion;
             var attack = sm.AddState("Attack");
+            // Free tier ships no melee clip; Interact/Jump read as an action, and the
+            // lunge+weapon carry the rest. Never leave the state empty (it freezes).
             attack.motion = FindClip(clips, "1H_Melee_Attack_Slice", "1H_Melee_Attack",
-                "Melee_Attack", "Attack");
+                "Melee_Attack", "Attack", "Throw", "Interact")
+                ?? idle.motion;
             var hit = sm.AddState("Hit");
-            hit.motion = FindClip(clips, "Hit_A", "Hit");
+            hit.motion = FindClip(clips, "Hit_A", "Hit") ?? idle.motion;
             var dead = sm.AddState("Dead");
-            dead.motion = FindClip(clips, "Death_A", "Death");
+            dead.motion = FindClip(clips, "Death_A", "Death") ?? idle.motion;
 
             var toMove = idle.AddTransition(move);
             toMove.AddCondition(AnimatorConditionMode.Greater, 0.15f, "Speed");
@@ -190,10 +196,15 @@ namespace RadiantPool.EditorTools
             toIdle.hasExitTime = false;
             toIdle.duration = 0.12f;
 
+            Debug.Log($"[Bootstrap] Animator clips — idle:{idle.motion?.name} " +
+                $"move:{move.motion?.name} attack:{attack.motion?.name} " +
+                $"hit:{hit.motion?.name} death:{dead.motion?.name}");
+
             var anyAttack = sm.AddAnyStateTransition(attack);
             anyAttack.AddCondition(AnimatorConditionMode.If, 0, "Attack");
             anyAttack.hasExitTime = false;
             anyAttack.duration = 0.05f;
+            anyAttack.canTransitionToSelf = false;
             var attackDone = attack.AddTransition(idle);
             attackDone.hasExitTime = true;
             attackDone.exitTime = 0.9f;
@@ -203,6 +214,7 @@ namespace RadiantPool.EditorTools
             anyHit.AddCondition(AnimatorConditionMode.If, 0, "Hit");
             anyHit.hasExitTime = false;
             anyHit.duration = 0.05f;
+            anyHit.canTransitionToSelf = false;
             var hitDone = hit.AddTransition(idle);
             hitDone.hasExitTime = true;
             hitDone.exitTime = 0.85f;
@@ -212,6 +224,9 @@ namespace RadiantPool.EditorTools
             anyDead.AddCondition(AnimatorConditionMode.If, 0, "Dead");
             anyDead.hasExitTime = false;
             anyDead.duration = 0.1f;
+            // Critical: without this, the any-state transition re-enters Dead every
+            // frame while the bool is true, freezing the pose at frame 0 (standing).
+            anyDead.canTransitionToSelf = false;
             var revive = dead.AddTransition(idle);
             revive.AddCondition(AnimatorConditionMode.IfNot, 0, "Dead");
             revive.hasExitTime = false;
