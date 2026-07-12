@@ -18,12 +18,54 @@ namespace RadiantPool.Game
         {
             Ui.Begin();
             var combat = CombatManager.Instance;
-            if (combat == null || combat.ClientUnits.Count == 0) return;
+            if (combat == null) return;
+
+            DrawOutcomeBanner(combat);
+            if (combat.ClientUnits.Count == 0) return;
 
             DrawInitiative(combat);
             DrawLog(combat);
             if (combat.IsMyTurn) DrawActions(combat);
             else _mode = Mode.Root;
+        }
+
+        /// <summary>Big centered VICTORY / DEFEATED card, shown for a few seconds after
+        /// the fight resolves (fades near the end).</summary>
+        private void DrawOutcomeBanner(CombatManager combat)
+        {
+            float remaining = combat.BannerUntil - Time.time;
+            if (remaining <= 0f || combat.BannerTitle.Length == 0) return;
+
+            float alpha = Mathf.Clamp01(remaining / 1.2f);   // fade out over the last bit
+            var prevColor = GUI.color;
+            GUI.color = new Color(1f, 1f, 1f, alpha);
+
+            const float w = 460f;
+            const float h = 150f;
+            var rect = new Rect(Ui.W / 2f - w / 2f, Ui.H * 0.22f, w, h);
+            GUI.Box(rect, GUIContent.none);
+
+            var titleStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 34,
+                fontStyle = FontStyle.Bold,
+                richText = true
+            };
+            string color = combat.BannerVictory ? "#ffd75e" : "#ff7a6b";
+            GUI.Label(new Rect(rect.x, rect.y + 12, rect.width, 46),
+                $"<color={color}>{(combat.BannerVictory ? "⚔  " : "")}{combat.BannerTitle}</color>",
+                titleStyle);
+
+            var detailStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.UpperCenter,
+                fontSize = 17
+            };
+            GUI.Label(new Rect(rect.x + 12, rect.y + 62, rect.width - 24, rect.height - 70),
+                combat.BannerDetail, detailStyle);
+
+            GUI.color = prevColor;
         }
 
         private void DrawInitiative(CombatManager combat)

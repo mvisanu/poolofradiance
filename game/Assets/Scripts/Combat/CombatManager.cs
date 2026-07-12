@@ -273,7 +273,11 @@ namespace RadiantPool.Game
                 GameDirector.Instance?.ServerAddLoot(gold, items);
                 GameDirector.Instance?.ServerEncounterCleared(_encounter);
                 RpcSfx("victory");
-                RpcCombatEnded(true, xpEach);
+                string lootSummary = gold > 0 || items.Count > 0
+                    ? $"{gold} gold" + (items.Count > 0
+                        ? ", " + string.Join(", ", items.Select(PrettyItem)) : "")
+                    : "";
+                RpcCombatEnded(true, xpEach, lootSummary);
             }
             else
             {
@@ -281,7 +285,7 @@ namespace RadiantPool.Game
                     pc.Player.Sheet.ReviveFull();
                 ServerLog("The party falls… and wakes back at Havenrock, bruised but alive.");
                 RpcSfx("defeat");
-                RpcCombatEnded(false, 0);
+                RpcCombatEnded(false, 0, "");
             }
             _engine = null;
             _encounter = null;
@@ -759,9 +763,25 @@ namespace RadiantPool.Game
             if (Log.Count > 60) Log.RemoveAt(0);
         }
 
+        private static string PrettyItem(string id) =>
+            id.Replace('_', ' ');
+
+        // Outcome banner state, read by CombatClientUI after the fight ends.
+        public string BannerTitle { get; private set; } = "";
+        public string BannerDetail { get; private set; } = "";
+        public bool BannerVictory { get; private set; }
+        public float BannerUntil { get; private set; }
+
         [ObserversRpc]
-        private void RpcCombatEnded(bool victory, int xpEach)
+        private void RpcCombatEnded(bool victory, int xpEach, string lootSummary)
         {
+            BannerVictory = victory;
+            BannerTitle = victory ? "VICTORY!" : "DEFEATED";
+            BannerDetail = victory
+                ? $"+{xpEach} XP each" + (lootSummary.Length > 0 ? $"\nLoot: {lootSummary}" : "")
+                : "The party is carried back to Havenrock,\nbruised but alive. The block remains hostile.";
+            BannerUntil = Time.time + 6f;
+
             ActiveUnitId = "";
             CombatFx.Instance?.ClearTurnMarker();
             foreach (var u in ClientUnits.Where(u => !u.IsPc && u.Visual != null))
