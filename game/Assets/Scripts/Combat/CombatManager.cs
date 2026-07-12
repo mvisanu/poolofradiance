@@ -162,7 +162,16 @@ namespace RadiantPool.Game
                                active.IsStable ? "stable." :
                                save.Success ? $"{active.DeathSaveSuccesses} success(es)."
                                             : $"{active.DeathSaveFailures} failure(s)."));
+                    RpcStatusPopup(active.Id,
+                        active.IsDead ? "DEAD" :
+                        !active.IsDown ? "UP!" :
+                        active.IsStable ? "stable" :
+                        save.Success ? $"save {active.DeathSaveSuccesses}/3"
+                                     : $"fail {active.DeathSaveFailures}/3",
+                        save.Success || !active.IsDown
+                            ? new Color(0.5f, 1f, 0.6f) : new Color(1f, 0.4f, 0.35f), 1.1f);
                     SyncHp(active.Id);
+                    yield return new WaitForSeconds(0.6f);
                     EndActiveTurn();
                     continue;
                 }
@@ -176,8 +185,8 @@ namespace RadiantPool.Game
 
                 if (unit.Player == null)
                 {
-                    yield return new WaitForSeconds(0.9f);
-                    MonsterAct(unit);
+                    yield return new WaitForSeconds(0.45f);
+                    yield return MonsterTurn(unit);
                     if (CheckCombatEnd()) yield break;
                     EndActiveTurn();
                     continue;
@@ -185,8 +194,8 @@ namespace RadiantPool.Game
 
                 if (unit.Player.IsCompanion)
                 {
-                    yield return new WaitForSeconds(0.9f);
-                    CompanionAct(unit);
+                    yield return new WaitForSeconds(0.45f);
+                    yield return CompanionTurn(unit);
                     if (CheckCombatEnd()) yield break;
                     EndActiveTurn();
                     continue;
@@ -218,15 +227,18 @@ namespace RadiantPool.Game
             foreach (var u in _server.Values) SyncHp(u.Id);
         }
 
+        /// <summary>Monster AI turn, paced so clients can read it: walk (clients glide
+        /// the visual at CombatFx.GlideSpeed), a beat, then the attack. Rules calls are
+        /// try/caught so a bad monster definition can never stall the TurnLoop.</summary>
         [Server]
-        private void MonsterAct(ServerUnit monster)
+        private IEnumerator MonsterTurn(ServerUnit monster)
         {
-            var targets = _server.Values
+            var target = _server.Values
                 .Where(u => u.Player != null && !u.Creature.IsDead && !u.Creature.IsDown)
-                .OrderBy(u => Chebyshev(u.Cell, monster.Cell)).ToList();
-            if (targets.Count == 0) return;
-            var target = targets[0];
+                .OrderBy(u => Chebyshev(u.Cell, monster.Cell)).FirstOrDefault();
+            if (target == null) yield break;
 
+            Vector2Int from = monster.Cell;
             int steps = monster.Creature.Speed / 5;
             while (Chebyshev(target.Cell, monster.Cell) > 1 && steps-- > 0)
             {
@@ -236,91 +248,132 @@ namespace RadiantPool.Game
                 if (Occupied(step)) break;
                 monster.Cell = step;
             }
-            RpcUnitMoved(monster.Id, monster.Cell.x, monster.Cell.y);
+            if (monster.Cell != from)
+            {
+                RpcUnitMoved(monster.Id, monster.Cell.x, monster.Cell.y);
+                yield return new WaitForSeconds(GlideSeconds(from, monster.Cell) + 0.15f);
+            }
 
             if (Chebyshev(target.Cell, monster.Cell) <= 1)
             {
-                var attack = monster.MonsterDef.Attacks[0];
-                var result = CombatMath.ResolveAttack(monster.Creature, target.Creature, attack, _rng);
-                Narrate(monster.Creature, target.Creature, attack.Name, result);
-                SyncHp(target.Id);
+                try
+                {
+                    var attack = monster.MonsterDef.Attacks[0];
+                    var result = CombatMath.ResolveAttack(
+                        monster.Creature, target.Creature, attack, _rng);
+                    Narrate(monster.Creature, target.Creature, attack.Name, result);
+                    SyncHp(target.Id);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"[Combat] Monster attack failed: {e}");
+                }
+                yield return new WaitForSeconds(0.75f);
             }
         }
 
-        /// <summary>Server-side AI turn for a hired companion: clerics heal downed or
-        /// badly hurt allies, wizards sling fire bolts, everyone else closes and swings.</summary>
+        /// <summary>How long clients take to glide a unit between these cells — the
+        /// server waits this out so the attack lands after the walk, not during it.</summary>
+        private float GlideSeconds(Vector2Int from, Vector2Int to) =>
+            Vector3.Distance(CellToWorld(from), CellToWorld(to)) / CombatFx.GlideSpeed;
+
+        /// <summary>Server-side AI turn for a hired companion, paced like MonsterTurn:
+        /// clerics walk to and heal downed or badly hurt allies, wizards sling fire
+        /// bolts, everyone else closes and swings. Decisions are plain queries; the
+        /// rules-engine calls live in try/caught helpers so the TurnLoop never stalls.</summary>
         [Server]
-        private void CompanionAct(ServerUnit self)
+        private IEnumerator CompanionTurn(ServerUnit self)
+        {
+            var sheet = self.Creature as CharacterSheet;
+            if (sheet == null) yield break;
+
+            // Cleric first: heal whoever needs it most.
+            if (sheet.Class == CharacterClass.Cleric && sheet.HasSlot(1))
+            {
+                var hurt = _server.Values
+                    .Where(u => u.Player != null && !u.Creature.IsDead
+                                && (u.Creature.IsDown
+                                    || u.Creature.CurrentHp * 2 < u.Creature.MaxHp))
+                    .OrderByDescending(u => u.Creature.IsDown)
+                    .ThenBy(u => Chebyshev(u.Cell, self.Cell))
+                    .FirstOrDefault();
+                if (hurt != null)
+                {
+                    yield return MoveCompanion(self, hurt.Cell, stopAdjacent: true);
+                    if (Chebyshev(self.Cell, hurt.Cell) <= 1)
+                    {
+                        TryCompanionCast(self, "cure_wounds", hurt, 1);
+                        yield return new WaitForSeconds(0.75f);
+                        yield break;
+                    }
+                    // Couldn't reach: fall through to attack from range.
+                }
+            }
+
+            var target = _server.Values
+                .Where(u => u.Player == null && !u.Creature.IsDead
+                            && !u.Creature.Conditions.Has(ConditionType.Asleep))
+                .OrderBy(u => Chebyshev(u.Cell, self.Cell)).FirstOrDefault();
+            if (target == null) yield break;
+
+            if (sheet.Class == CharacterClass.Wizard || sheet.Class == CharacterClass.Cleric)
+            {
+                TryCompanionCast(self, sheet.Class == CharacterClass.Wizard
+                    ? "fire_bolt" : "sacred_flame", target, 0);
+                yield return new WaitForSeconds(0.75f);
+                yield break;
+            }
+
+            yield return MoveCompanion(self, target.Cell, stopAdjacent: true);
+            if (Chebyshev(self.Cell, target.Cell) <= 1)
+            {
+                TryCompanionAttack(self, target);
+                yield return new WaitForSeconds(0.75f);
+            }
+        }
+
+        [Server]
+        private void TryCompanionCast(ServerUnit self, string spellId, ServerUnit target, int slot)
         {
             try
             {
                 var sheet = (CharacterSheet)self.Creature;
-                var monsters = _server.Values
-                    .Where(u => u.Player == null && !u.Creature.IsDead
-                                && !u.Creature.Conditions.Has(ConditionType.Asleep))
-                    .OrderBy(u => Chebyshev(u.Cell, self.Cell)).ToList();
-
-                // Cleric first: heal whoever needs it most.
-                if (sheet.Class == CharacterClass.Cleric && sheet.HasSlot(1))
-                {
-                    var hurt = _server.Values
-                        .Where(u => u.Player != null && !u.Creature.IsDead
-                                    && (u.Creature.IsDown
-                                        || u.Creature.CurrentHp * 2 < u.Creature.MaxHp))
-                        .OrderByDescending(u => u.Creature.IsDown)
-                        .ThenBy(u => Chebyshev(u.Cell, self.Cell))
-                        .FirstOrDefault();
-                    if (hurt != null)
-                    {
-                        MoveServerUnitToward(self, hurt.Cell, stopAdjacent: true);
-                        if (Chebyshev(self.Cell, hurt.Cell) <= 1)
-                        {
-                            var events = SpellEngine.Cast(sheet,
-                                SpellLibrary.Get("cure_wounds"),
-                                new[] { hurt.Creature }, 1, _rng);
-                            NarrateSpell(sheet, SpellLibrary.Get("cure_wounds"), events);
-                            foreach (var u in _server.Values) SyncHp(u.Id);
-                            return;
-                        }
-                        // Couldn't reach: fall through to attack from range.
-                    }
-                }
-
-                if (monsters.Count == 0) return;
-                var target = monsters[0];
-
-                if (sheet.Class == CharacterClass.Wizard || sheet.Class == CharacterClass.Cleric)
-                {
-                    string cantrip = sheet.Class == CharacterClass.Wizard
-                        ? "fire_bolt" : "sacred_flame";
-                    var events = SpellEngine.Cast(sheet, SpellLibrary.Get(cantrip),
-                        new[] { target.Creature }, 0, _rng);
-                    NarrateSpell(sheet, SpellLibrary.Get(cantrip), events);
-                    SyncHp(target.Id);
-                    return;
-                }
-
-                MoveServerUnitToward(self, target.Cell, stopAdjacent: true);
-                if (Chebyshev(self.Cell, target.Cell) <= 1)
-                {
-                    var attack = self.Player.BasicAttack();
-                    var result = CombatMath.ResolveAttack(self.Creature, target.Creature,
-                        attack, _rng);
-                    Narrate(self.Creature, target.Creature, attack.Name, result);
-                    SyncHp(target.Id);
-                }
+                var spell = SpellLibrary.Get(spellId);
+                var events = SpellEngine.Cast(sheet, spell, new[] { target.Creature }, slot, _rng);
+                NarrateSpell(sheet, spell, events);
+                foreach (var u in _server.Values) SyncHp(u.Id);
             }
             catch (Exception e)
             {
-                Debug.LogError($"[Combat] Companion turn failed: {e}");
+                Debug.LogError($"[Combat] Companion cast failed: {e}");
             }
         }
 
-        /// <summary>Grid movement for AI-driven units; also physically repositions
-        /// companion bodies (server-authoritative transform, replicated by NT).</summary>
         [Server]
-        private void MoveServerUnitToward(ServerUnit unit, Vector2Int dest, bool stopAdjacent)
+        private void TryCompanionAttack(ServerUnit self, ServerUnit target)
         {
+            try
+            {
+                var attack = self.Player.BasicAttack();
+                var result = CombatMath.ResolveAttack(self.Creature, target.Creature,
+                    attack, _rng);
+                Narrate(self.Creature, target.Creature, attack.Name, result);
+                SyncHp(target.Id);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[Combat] Companion attack failed: {e}");
+            }
+        }
+
+        /// <summary>Grid movement for a companion: pick the cells, replicate the new
+        /// cell, then walk the body there over time. The server owns the transform, the
+        /// NetworkTransform shows the walk on clients, and MotionAnimator plays the
+        /// cycle from the actual displacement — no extra networking.</summary>
+        [Server]
+        private IEnumerator MoveCompanion(ServerUnit unit, Vector2Int dest, bool stopAdjacent)
+        {
+            Vector2Int from = unit.Cell;
             int steps = unit.Creature.Speed / 5;
             while (steps-- > 0
                    && Chebyshev(dest, unit.Cell) > (stopAdjacent ? 1 : 0))
@@ -331,8 +384,24 @@ namespace RadiantPool.Game
                 if (Occupied(step)) break;
                 unit.Cell = step;
             }
+            if (unit.Cell == from) yield break;
             RpcUnitMoved(unit.Id, unit.Cell.x, unit.Cell.y);
-            ServerRepositionCompanion(unit);
+
+            if (unit.Player == null || !unit.Player.IsCompanion) yield break;
+            var body = unit.Player.transform;
+            var cc = unit.Player.GetComponent<CharacterController>();
+            if (cc != null) cc.enabled = false;
+            Vector3 target = CellToWorld(unit.Cell);
+            CombatFx.Face(body, target);
+            while (body != null && (body.position - target).sqrMagnitude > 0.0004f)
+            {
+                body.position = Vector3.MoveTowards(
+                    body.position, target, CombatFx.GlideSpeed * Time.deltaTime);
+                yield return null;
+            }
+            if (body == null) yield break;
+            body.position = target;
+            if (cc != null) cc.enabled = true;
         }
 
         [Server]
@@ -392,9 +461,27 @@ namespace RadiantPool.Game
             }
             else
             {
+                int slot = 0;
                 foreach (var pc in _server.Values.Where(u => u.Player != null))
+                {
                     pc.Player.Sheet.ReviveFull();
-                ServerLog("The party falls… and wakes back at Havenrock, bruised but alive.");
+                    // Everyone wakes at the Dawnmother shrine, well away from danger.
+                    Vector3 spot = RespawnPoint
+                        + new Vector3((slot % 2) * 1.6f, 0f, (slot / 2) * 1.6f);
+                    slot++;
+                    if (pc.Player.IsCompanion)
+                    {
+                        var cc = pc.Player.GetComponent<CharacterController>();
+                        if (cc != null) cc.enabled = false;
+                        pc.Player.transform.position = spot;
+                        if (cc != null) cc.enabled = true;
+                    }
+                    else if (pc.Player.Owner != null && pc.Player.Owner.IsValid)
+                    {
+                        TargetRespawn(pc.Player.Owner, spot);
+                    }
+                }
+                ServerLog("The party falls… and wakes at the Dawnmother's shrine, bruised but alive.");
                 RpcSfx("defeat");
                 RpcCombatEnded(false, 0, "");
             }
@@ -426,6 +513,16 @@ namespace RadiantPool.Game
         [ObserversRpc]
         private void RpcSfx(string id) => GameAudio.Play(id);
 
+        /// <summary>Floating status text over a unit — saves, conditions, death saves.
+        /// Everything that used to be log-only feedback goes through here.</summary>
+        [ObserversRpc]
+        private void RpcStatusPopup(string targetId, string text, Color color, float size)
+        {
+            var view = ClientUnits.FirstOrDefault(u => u.Id == targetId);
+            if (view?.Visual != null)
+                CombatFx.Instance?.Popup(view.Visual.position, text, color, size);
+        }
+
         [ObserversRpc]
         private void RpcAttackFx(string attackerId, string targetId, bool hit, bool crit, int damage)
         {
@@ -443,11 +540,16 @@ namespace RadiantPool.Game
             }
             if (hit)
             {
-                CharacterVisuals.Trigger(target.Visual, "Hit");
-                fx.Blood(target.Visual.position, crit);
-                fx.Flash(target.Visual, new Color(1f, 0.35f, 0.3f));
-                fx.Popup(target.Visual.position, crit ? $"{damage}!" : damage.ToString(),
-                    crit ? new Color(1f, 0.6f, 0.15f) : Color.white, crit ? 1.4f : 1f);
+                // Land the impact when the lunge reaches the target, not at wind-up.
+                fx.After(0.12f, () =>
+                {
+                    if (target.Visual == null) return;
+                    CharacterVisuals.Trigger(target.Visual, "Hit");
+                    fx.Blood(target.Visual.position, crit);
+                    fx.Flash(target.Visual, new Color(1f, 0.35f, 0.3f));
+                    fx.Popup(target.Visual.position, crit ? $"{damage}!" : damage.ToString(),
+                        crit ? new Color(1f, 0.6f, 0.15f) : Color.white, crit ? 1.4f : 1f);
+                });
             }
             else
             {
@@ -679,10 +781,19 @@ namespace RadiantPool.Game
                     case SpellAttackEvent a:
                         ServerLog($"{caster.Name} casts {spell.Name} at {targetName}: " +
                                   (a.Result.Hit ? $"hit ({a.Result.Total})." : $"miss ({a.Result.Total})."));
+                        if (!a.Result.Hit)
+                        {
+                            RpcStatusPopup(a.TargetId, "miss",
+                                new Color(0.8f, 0.8f, 0.85f), 0.8f);
+                            RpcSfx("miss");
+                        }
                         break;
                     case SpellSaveEvent s:
                         ServerLog($"{targetName} {(s.Result.Success ? "saves against" : "fails to resist")} " +
                                   $"{spell.Name} ({s.Result.Total} vs DC {s.Dc}).");
+                        if (s.Result.Success)
+                            RpcStatusPopup(s.TargetId, "resisted",
+                                new Color(0.7f, 0.85f, 1f), 0.9f);
                         break;
                     case SpellDamageEvent d:
                         ServerLog($"{spell.Name} deals {d.Damage} {d.DamageType} to {targetName}." +
@@ -699,6 +810,8 @@ namespace RadiantPool.Game
                         break;
                     case SpellConditionEvent c:
                         ServerLog($"{targetName} is {c.Condition} ({spell.Name}).");
+                        RpcStatusPopup(c.TargetId, c.Condition.ToString(),
+                            new Color(0.8f, 0.6f, 1f), 1f);
                         RpcSfx("chime");
                         break;
                 }
@@ -883,6 +996,7 @@ namespace RadiantPool.Game
             LastRejection = "";
             var view = ClientUnits.FirstOrDefault(u => u.Id == unitId);
             CombatFx.Instance?.SetTurnMarker(view?.Visual, view?.IsPc ?? false);
+            if (IsMyTurn) GameAudio.Play("chime", 0.7f);   // heads-up: you're up
         }
 
         [ObserversRpc]
@@ -903,8 +1017,19 @@ namespace RadiantPool.Game
             view.Cell = new Vector2Int(cx, cy);
             if (view.Visual != null)
             {
-                SnapVisual(view);
-                CombatFx.Face(view.Visual, oldPos + (CellToWorld(view.Cell) - oldPos) * 2f);
+                if (!view.IsPc && CombatFx.Instance != null)
+                {
+                    // Monsters walk to their cell (MotionAnimator plays the cycle from
+                    // the displacement) instead of teleporting.
+                    bool hasModel = view.Visual.Find(CharacterVisuals.VisualName) != null;
+                    CombatFx.Instance.Glide(view.Visual,
+                        CellToWorld(view.Cell) + (hasModel ? Vector3.zero : Vector3.up));
+                }
+                else
+                {
+                    SnapVisual(view);
+                    CombatFx.Face(view.Visual, oldPos + (CellToWorld(view.Cell) - oldPos) * 2f);
+                }
             }
             if (unitId == ActiveUnitId && IsMyTurn) MoveLeft = Math.Max(0, MoveLeft - 5);
         }
@@ -933,6 +1058,24 @@ namespace RadiantPool.Game
                 view.Visual.localRotation = down || dead
                     ? Quaternion.Euler(90f, 0f, 0f) : Quaternion.identity;
             }
+        }
+
+        /// <summary>Hub shrine where a defeated party wakes (matches the bootstrap's
+        /// Shrine of the Dawnmother).</summary>
+        public static readonly Vector3 RespawnPoint = new Vector3(-9f, 0.15f, -14f);
+
+        /// <summary>Moves the receiving player's own character (their client owns the
+        /// transform; the NetworkTransform replicates it back out).</summary>
+        [FishNet.Object.TargetRpc]
+        private void TargetRespawn(NetworkConnection conn, Vector3 position)
+        {
+            var mine = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => p.IsOwner);
+            if (mine == null) return;
+            var cc = mine.GetComponent<CharacterController>();
+            if (cc != null) cc.enabled = false;
+            mine.transform.position = position;
+            if (cc != null) cc.enabled = true;
         }
 
         [FishNet.Object.TargetRpc]
@@ -976,12 +1119,6 @@ namespace RadiantPool.Game
             foreach (var u in ClientUnits.Where(u => u.IsPc && u.Visual != null))
                 u.Visual.localRotation = Quaternion.identity;
             if (_overlay != null) Destroy(_overlay);
-            if (!victory)
-            {
-                var mine = MyUnit;
-                if (mine?.Visual != null)
-                    mine.Visual.position = new Vector3(0f, 0.1f, -4f); // hub spawn area
-            }
             ClientUnits.Clear();
         }
 

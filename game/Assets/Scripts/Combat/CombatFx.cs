@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace RadiantPool.Game
@@ -47,6 +48,52 @@ namespace RadiantPool.Game
                 yield return null;
             }
             Destroy(go);
+        }
+
+        // ---------- grid glide ----------
+
+        /// <summary>World speed for combat grid movement. The server derives its turn
+        /// pacing waits from this — keep CombatManager.GlideSeconds in sync.</summary>
+        public const float GlideSpeed = 6f;
+
+        private readonly Dictionary<Transform, Coroutine> _glides =
+            new Dictionary<Transform, Coroutine>();
+
+        /// <summary>Walks a unit's visual to a destination at GlideSpeed instead of
+        /// teleporting it. MotionAnimator picks up the displacement and plays the walk
+        /// cycle. A new glide on the same unit cancels the previous one.</summary>
+        public void Glide(Transform unit, Vector3 dest)
+        {
+            if (unit == null) return;
+            if (_glides.TryGetValue(unit, out var running) && running != null)
+                StopCoroutine(running);
+            _glides[unit] = StartCoroutine(GlideRoutine(unit, dest));
+        }
+
+        private IEnumerator GlideRoutine(Transform unit, Vector3 dest)
+        {
+            Face(unit, dest);
+            while (unit != null && (unit.position - dest).sqrMagnitude > 0.0004f)
+            {
+                unit.position = Vector3.MoveTowards(
+                    unit.position, dest, GlideSpeed * Time.deltaTime);
+                yield return null;
+            }
+            if (unit != null) unit.position = dest;
+            _glides.Remove(unit);
+        }
+
+        /// <summary>Runs an effect after a delay — used to land impact feedback at the
+        /// moment a lunge reaches its target rather than at wind-up.</summary>
+        public void After(float delay, System.Action action)
+        {
+            StartCoroutine(AfterRoutine(delay, action));
+        }
+
+        private IEnumerator AfterRoutine(float delay, System.Action action)
+        {
+            yield return new WaitForSeconds(delay);
+            action();
         }
 
         // ---------- facing ----------
