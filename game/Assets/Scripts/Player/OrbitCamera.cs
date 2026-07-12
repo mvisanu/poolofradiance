@@ -48,7 +48,7 @@ namespace RadiantPool.Game
             }
 
             float scroll = Input.GetAxis("Mouse ScrollWheel");
-            if (Mathf.Abs(scroll) > 0.001f)
+            if (Mathf.Abs(scroll) > 0.001f && !MiniMap.MouseOverMap)
                 distance = Mathf.Clamp(distance - scroll * 4f, minDistance, maxDistance);
 
             Quaternion rotation = Quaternion.Euler(_pitch, _yaw, 0f);

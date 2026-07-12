@@ -5,16 +5,34 @@ namespace RadiantPool.Game
 {
     /// <summary>Top-right minimap: an orthographic camera renders the world straight
     /// down into a RenderTexture that follows the local player. North-fixed; the player
-    /// is the arrow in the middle, the quest objective a gold dot (edge-clamped).</summary>
+    /// is the arrow in the middle, the quest objective a gold dot (edge-clamped).
+    /// Scroll wheel over the map zooms it (the orbit camera yields while hovered).</summary>
     public class MiniMap : MonoBehaviour
     {
-        private const int Size = 210;          // on-screen pixels (pre UI scale)
-        private const float ViewRadius = 42f;  // world meters shown from center to edge
+        private const int Size = 210;           // on-screen pixels (pre UI scale)
+        private const float MinRadius = 20f;    // world meters shown from center to edge
+        private const float MaxRadius = 220f;   // wide enough to bring any zone objective in view
+
+        private float _viewRadius = 42f;
 
         private Camera _mapCam;
         private RenderTexture _rt;
         private Texture2D _playerArrow;
         private Texture2D _questDot;
+
+        /// <summary>On-screen map rect in Ui-scaled space (shared with HUD hit-tests).</summary>
+        public static Rect MapRect => new Rect(Ui.W - Size - 12, 118, Size, Size);
+
+        /// <summary>True while the cursor is over the minimap — scroll belongs to it.</summary>
+        public static bool MouseOverMap
+        {
+            get
+            {
+                var m = new Vector2(Input.mousePosition.x / Ui.Scale,
+                    (Screen.height - Input.mousePosition.y) / Ui.Scale);
+                return MapRect.Contains(m);
+            }
+        }
 
         private void Start()
         {
@@ -23,7 +41,7 @@ namespace RadiantPool.Game
             go.transform.SetParent(transform, false);
             _mapCam = go.AddComponent<Camera>();
             _mapCam.orthographic = true;
-            _mapCam.orthographicSize = ViewRadius;
+            _mapCam.orthographicSize = _viewRadius;
             _mapCam.targetTexture = _rt;
             _mapCam.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
             _mapCam.backgroundColor = new Color(0.12f, 0.14f, 0.18f);
@@ -46,6 +64,13 @@ namespace RadiantPool.Game
             if (player == null) { _mapCam.enabled = false; return; }
             _mapCam.enabled = true;
             _mapCam.transform.position = player.position + Vector3.up * 90f;
+
+            float scroll = Input.GetAxis("Mouse ScrollWheel");
+            if (Mathf.Abs(scroll) > 0.001f && MouseOverMap)
+                _viewRadius = Mathf.Clamp(
+                    _viewRadius * (scroll > 0f ? 1f / 1.25f : 1.25f),
+                    MinRadius, MaxRadius);
+            _mapCam.orthographicSize = _viewRadius;
         }
 
         private void OnGUI()
@@ -54,7 +79,7 @@ namespace RadiantPool.Game
             var player = LocalPlayer();
             if (player == null || _rt == null) return;
 
-            var rect = new Rect(Ui.W - Size - 12, 118, Size, Size);
+            var rect = MapRect;
             GUI.Box(new Rect(rect.x - 3, rect.y - 3, rect.width + 6, rect.height + 6),
                 GUIContent.none);
             GUI.DrawTexture(rect, _rt, ScaleMode.StretchToFill);
@@ -65,7 +90,7 @@ namespace RadiantPool.Game
             {
                 Vector3 delta = tracker.TargetPosition - player.position;
                 var mapDelta = new Vector2(delta.x, -delta.z)
-                               * (Size / 2f / ViewRadius);
+                               * (Size / 2f / _viewRadius);
                 mapDelta = Vector2.ClampMagnitude(mapDelta, Size / 2f - 12f);
                 var dotPos = new Vector2(rect.x + Size / 2f + mapDelta.x,
                     rect.y + Size / 2f + mapDelta.y);

@@ -33,7 +33,8 @@ Environment models from the CC0 **Kenney** asset kits ([kenney.nl](https://kenne
 Fantasy Town Kit 2.0, Pirate Kit, Nature Kit, and Survival Kit — Creative Commons
 Zero, thank you Kenney!
 Creature models from the CC0 **Quaternius** packs ([quaternius.com](https://quaternius.com)):
-Ultimate Monsters — Creative Commons Zero, thank you Quaternius!
+Ultimate Monsters and Easy Animated Enemy Pack — Creative Commons Zero, thank you
+Quaternius!
 Characters from the CC0 **KayKit** packs by Kay Lousberg
 ([kaylousberg.itch.io](https://kaylousberg.itch.io)): Adventurers 2.0 and
 Skeletons 1.1 — thank you Kay!

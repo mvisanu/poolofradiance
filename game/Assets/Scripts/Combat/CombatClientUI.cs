@@ -201,6 +201,7 @@ namespace RadiantPool.Game
             if (new Rect(12, Ui.H - 174, 384, 162).Contains(m)) return true;      // log
             if (new Rect(12, Ui.H - 282, 264, 100).Contains(m)) return true;      // player card
             if (HotBar.BarRect.Contains(m)) return true;                          // hotbar
+            if (MiniMap.MapRect.Contains(m)) return true;                         // minimap
             if (combat.IsMyTurn && _actionsRect.Contains(m)) return true;         // status strip
             return false;
         }

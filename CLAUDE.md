@@ -66,8 +66,9 @@ Player log (first place to look when the user reports bugs):
   config, and materials from code (scene is disposable; never hand-edit it). Includes
   `DressWorld()` (seeded forests/scatter/wilds sites, sunny lighting).
   `KenneyArt`/`KayKitArt`/`QuaterniusArt` integrate the CC0 packs under
-  `game/Assets/Art` (Quaternius orcs are animated FBX; Bear/Spider/Goblin models were
-  never obtained — their `Resources/Characters` drop-in slots still use stand-ins).
+  `game/Assets/Art` (Quaternius orcs + spider are animated FBX — the spider comes from
+  the Easy Animated Enemy Pack via blend2fbx; Bear/Goblin models were never obtained —
+  their `Resources/Characters` drop-in slots still use stand-ins).
 - All project + memory `*.md` files auto-mirror to the Obsidian vault
   (`C:\Users\Bruce\Documents\obsidian\projects\poolofradiance`) via a Stop hook →
   `scripts/obsidian-sync.ps1`. Markdown edits sync themselves; don't copy manually.
@@ -96,8 +97,11 @@ Player log (first place to look when the user reports bugs):
   states (Death) re-enter every frame and freeze on frame 0.
 - **Loopback is `127.0.0.1`**, not `localhost` (Tugboat binds IPv4).
 - **itch.io downloads** (KayKit/Quaternius, all CC0): GET page → csrf token → POST
-  `/download_url` → GET that page → POST `/file/<upload_id>` → CDN url (expires 60 s;
-  run the whole flow in ONE PowerShell invocation — it fails inside functions).
+  `/download_url` → GET that page → POST `/file/<upload_id>?source=game_download` →
+  CDN url (expires 60 s; run the whole flow in ONE PowerShell invocation — it fails
+  inside functions). Do NOT append the `key` from the download-page URL — it arrives
+  already URL-encoded and the endpoint rejects it ("invalid key"); the session cookie
+  is what authorizes the POST.
 - Kenney kits: one URP material per kit colormap, remapped via
   `ModelImporter.AddRemap`. KayKit free tier has NO melee clip — attack = `Throw`.
   Kenney Nature kit has no colormap atlas — build per-embedded-material URP materials
