@@ -106,16 +106,22 @@ namespace RadiantPool.Game
             var sheet = Sheet;
             int str = sheet.ProficiencyBonus + sheet.Abilities.Modifier(Ability.Str);
             int dex = sheet.ProficiencyBonus + sheet.Abilities.Modifier(Ability.Dex);
+            // Negative modifiers must render "1d6-1", never "1d6+-1" (parser kick bug).
+            string Dmg(string die, Ability ability)
+            {
+                int mod = sheet.Abilities.Modifier(ability);
+                return mod == 0 ? die : mod > 0 ? $"{die}+{mod}" : $"{die}{mod}";
+            }
             return Class switch
             {
                 CharacterClass.Fighter => new AttackDefinition("Longsword", str,
-                    $"1d8+{sheet.Abilities.Modifier(Ability.Str)}", DamageType.Slashing, 5),
+                    Dmg("1d8", Ability.Str), DamageType.Slashing, 5),
                 CharacterClass.Cleric => new AttackDefinition("Mace", str,
-                    $"1d6+{sheet.Abilities.Modifier(Ability.Str)}", DamageType.Bludgeoning, 5),
+                    Dmg("1d6", Ability.Str), DamageType.Bludgeoning, 5),
                 CharacterClass.Wizard => new AttackDefinition("Quarterstaff", str,
-                    $"1d6+{sheet.Abilities.Modifier(Ability.Str)}", DamageType.Bludgeoning, 5),
+                    Dmg("1d6", Ability.Str), DamageType.Bludgeoning, 5),
                 _ => new AttackDefinition("Shortsword", dex,
-                    $"1d6+{sheet.Abilities.Modifier(Ability.Dex)}", DamageType.Piercing, 5),
+                    Dmg("1d6", Ability.Dex), DamageType.Piercing, 5),
             };
         }
     }

@@ -218,6 +218,27 @@ namespace RadiantPool.EditorTools
             volume.isGlobal = true;
             volume.profile = profile;
 
+            // Grid overlay material lives in Resources so its shader ships in builds
+            // (Shader.Find at runtime returns null for stripped shaders — kick bug).
+            if (!AssetDatabase.IsValidFolder("Assets/Resources"))
+                AssetDatabase.CreateFolder("Assets", "Resources");
+            if (!AssetDatabase.IsValidFolder("Assets/Resources/Fx"))
+                AssetDatabase.CreateFolder("Assets/Resources", "Fx");
+            if (AssetDatabase.LoadAssetAtPath<Material>("Assets/Resources/Fx/M_GridOverlay.mat") == null)
+            {
+                var grid = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
+                grid.SetFloat("_Surface", 1f);   // transparent
+                grid.SetFloat("_Blend", 0f);     // alpha blend
+                grid.SetOverrideTag("RenderType", "Transparent");
+                grid.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                grid.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                grid.SetInt("_ZWrite", 0);
+                grid.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                grid.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+                grid.SetColor("_BaseColor", new Color(1f, 1f, 1f, 0.14f));
+                AssetDatabase.CreateAsset(grid, "Assets/Resources/Fx/M_GridOverlay.mat");
+            }
+
             // Gray-box geometry: 120x120 map, hub south-center, docks west,
             // Drowned Market north (gated), Glasslit Temple east (gated).
             var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);

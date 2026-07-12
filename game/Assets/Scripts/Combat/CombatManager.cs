@@ -441,9 +441,18 @@ namespace RadiantPool.Game
             try { _engine.SpendAction(); }
             catch (RuleViolationException e) { TargetReject(conn, e.Message); return; }
 
-            var attack = unit.Player.BasicAttack();
-            var result = CombatMath.ResolveAttack(unit.Creature, target.Creature, attack, _rng);
-            Narrate(unit.Creature, target.Creature, attack.Name, result);
+            try
+            {
+                var attack = unit.Player.BasicAttack();
+                var result = CombatMath.ResolveAttack(unit.Creature, target.Creature, attack, _rng);
+                Narrate(unit.Creature, target.Creature, attack.Name, result);
+            }
+            catch (Exception e)
+            {
+                // Never let an exception escape a ServerRpc — FishNet kicks the sender.
+                Debug.LogError($"[Combat] Attack resolution failed: {e}");
+                TargetReject(conn, "The attack fizzled — a bug was logged.");
+            }
             SyncHp(target.Id);
             BroadcastBudget();
         }
@@ -510,6 +519,11 @@ namespace RadiantPool.Game
             {
                 TargetReject(conn, e.Message);
                 return;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[Combat] Spell resolution failed: {e}");
+                TargetReject(conn, "The spell fizzled — a bug was logged.");
             }
 
             foreach (var u in _server.Values) SyncHp(u.Id);
@@ -852,8 +866,14 @@ namespace RadiantPool.Game
         {
             if (_overlay != null) Destroy(_overlay);
             _overlay = new GameObject("GridOverlay");
-            var mat = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
-            mat.color = new Color(1f, 1f, 1f, 0.14f);
+            // Resources material: shader guaranteed in build (Shader.Find gets stripped).
+            var mat = Resources.Load<Material>("Fx/M_GridOverlay");
+            if (mat == null)
+            {
+                var quadTemp = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                mat = new Material(quadTemp.GetComponent<Renderer>().sharedMaterial);
+                Destroy(quadTemp);
+            }
             for (int x = -8; x <= 8; x++)
                 for (int y = -8; y <= 8; y++)
                 {
