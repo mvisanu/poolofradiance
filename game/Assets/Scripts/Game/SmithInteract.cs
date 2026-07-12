@@ -44,22 +44,21 @@ namespace RadiantPool.Game
 
             if (!_open && InRange())
             {
-                var hint = new GUIStyle(GUI.skin.box) { alignment = TextAnchor.MiddleCenter };
-                GUI.Box(new Rect(Ui.W / 2f - 130, Ui.H - 92, 260, 28),
-                    $"[E] Browse {VendorName}", hint);
+                GUI.Box(new Rect(Ui.W / 2f - 130, Ui.H - 100, 260, 32),
+                    $"[E] Browse {VendorName}", Theme.Toast);
                 return;
             }
             if (!_open) return;
 
-            GUILayout.BeginArea(new Rect(Ui.W / 2f - 210, Ui.H / 2f - 170, 420, 340),
-                GUI.skin.box);
-            GUILayout.Label($"<b>{VendorName}</b> — arms & armor",
-                new GUIStyle(GUI.skin.label) { richText = true });
-            GUILayout.Label($"Party gold: {director.PartyGold.Value}   " +
-                            "(bought gear goes to the stash — equip with I)");
+            GUILayout.BeginArea(new Rect(Ui.W / 2f - 210, Ui.H / 2f - 180, 420, 360),
+                Theme.PanelStyle);
+            GUILayout.Label($"{VendorName} — arms & armor", Theme.Header);
+            GUILayout.Label($"<color=#f2ca50><b>{director.PartyGold.Value}</b> gold</color>" +
+                "   <color=#d0c5af>(bought gear goes to the stash — equip with I)</color>",
+                Theme.Body);
 
             bool wroteArmorHeader = false;
-            GUILayout.Label("<b>Weapons</b>", new GUIStyle(GUI.skin.label) { richText = true });
+            GUILayout.Label("WEAPONS", Theme.Caps);
             foreach (var (id, price) in GameDirector.SmithStock)
             {
                 var item = GameItem.Get(id);
@@ -67,8 +66,7 @@ namespace RadiantPool.Game
                 if (!wroteArmorHeader
                     && (item.Slot == ItemSlot.Armor || item.Slot == ItemSlot.Shield))
                 {
-                    GUILayout.Label("<b>Armor</b>",
-                        new GUIStyle(GUI.skin.label) { richText = true });
+                    GUILayout.Label("ARMOR", Theme.Caps);
                     wroteArmorHeader = true;
                 }
                 int owned = director.Stash.Count(s => s == id);

@@ -198,14 +198,15 @@ namespace RadiantPool.Game
             }
 
             // In-session: compact status strip, top-left.
-            GUILayout.BeginArea(new Rect(12, 12, 360, 96), GUI.skin.box);
-            GUILayout.Label(_status);
+            GUILayout.BeginArea(new Rect(12, 12, 368, 104), Theme.PanelStyle);
+            GUILayout.Label($"<color=#f2ca50>{_status}</color>", Theme.Body);
             if (_hostCode.Length > 0)
             {
                 if (GUILayout.Button($"Copy invite code  {_hostCode}"))
                     GUIUtility.systemCopyBuffer = _hostCode;
             }
-            GUILayout.Label("WASD move · RMB camera · E talk · J journal · I bags · Esc settings");
+            GUILayout.Label("<color=#d0c5af>WASD move · RMB camera · E talk · J journal · " +
+                "I bags · Esc settings</color>", Theme.Body);
             GUILayout.EndArea();
         }
 
@@ -219,23 +220,22 @@ namespace RadiantPool.Game
             float w = Mathf.Min(540f, Ui.W - 20f);
             float h = Mathf.Min(600f, Ui.H - 16f);
             var rect = new Rect((Ui.W - w) / 2f, (Ui.H - h) / 2f, w, h);
-            GUILayout.BeginArea(rect, GUI.skin.box);
+            GUILayout.BeginArea(rect, Theme.PanelStyle);
             GUILayout.BeginVertical();
 
-            var title = new GUIStyle(GUI.skin.label)
-                { richText = true, alignment = TextAnchor.MiddleCenter, fontSize = 24 };
-            GUILayout.Label("<b>RADIANT POOL</b>", title);
-            GUILayout.Label(_status);
+            var title = new GUIStyle(Theme.HeaderBig) { alignment = TextAnchor.MiddleCenter };
+            GUILayout.Label("Radiant Pool", title);
+            var subtitle = new GUIStyle(Theme.Caps) { alignment = TextAnchor.MiddleCenter };
+            GUILayout.Label("SELECT A CLASS TO BEGIN YOUR JOURNEY", subtitle);
+            var statusStyle = new GUIStyle(Theme.Body) { alignment = TextAnchor.MiddleCenter };
+            GUILayout.Label($"<color=#d0c5af>{_status}</color>", statusStyle);
             if (_error.Length > 0)
-            {
-                var errStyle = new GUIStyle(GUI.skin.label) { richText = true };
-                GUILayout.Label($"<color=#ff6666>{_error}</color>", errStyle);
-            }
+                GUILayout.Label($"<color=#ff7a6b>{_error}</color>", statusStyle);
 
             // Scrollable middle: name + character creation.
             _titleScroll = GUILayout.BeginScrollView(_titleScroll, GUILayout.ExpandHeight(true));
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Name:", GUILayout.Width(52));
+            GUILayout.Label("Name:", Theme.Body, GUILayout.Width(52));
             _displayName = GUILayout.TextField(_displayName, 20);
             GUILayout.EndHorizontal();
             DrawCharacterCreation();
@@ -244,12 +244,9 @@ namespace RadiantPool.Game
             // Pinned bottom: always-reachable play/join controls.
             bool valid = CharacterBuild.Local.Validate(out string buildError);
             if (!valid)
-            {
-                var warnStyle = new GUIStyle(GUI.skin.label) { richText = true };
-                GUILayout.Label($"<color=#ffcc66>{buildError}</color>", warnStyle);
-            }
+                GUILayout.Label($"<color=#f2ca50>{buildError}</color>", Theme.Body);
             GUI.enabled = valid;
-            var big = new GUIStyle(GUI.skin.button) { fontSize = 16, fixedHeight = 40 };
+            var big = new GUIStyle(Theme.BtnPrimary) { fontSize = 16, fixedHeight = 42 };
             if (GUILayout.Button("▶  HOST A CAMPAIGN  (solo or with friends)", big))
                 Host();
             GUILayout.BeginHorizontal();
@@ -269,19 +266,20 @@ namespace RadiantPool.Game
             var b = CharacterBuild.Local;
 
             GUILayout.Space(4);
-            GUILayout.Label("Class:");
+            GUILayout.Label("CLASS", Theme.Caps);
             int newClass = GUILayout.SelectionGrid(b.ClassIndex, ClassNames, 4);
             if (newClass != b.ClassIndex)
             {
                 b = CharacterBuild.Default(newClass);   // sensible preset per class
             }
-            GUILayout.Label("Race:");
+            GUILayout.Label("RACE", Theme.Caps);
             b.RaceIndex = GUILayout.SelectionGrid(b.RaceIndex, RaceNames, 4);
 
             int cost = 0;
             try { cost = RadiantPool.Rules.PointBuy.TotalCost(b.Str, b.Dex, b.Con, b.Int, b.Wis, b.Cha); }
             catch { /* out-of-range shown by Validate */ }
-            GUILayout.Label($"Abilities — points {cost}/{RadiantPool.Rules.PointBuy.Budget}:");
+            GUILayout.Label($"ABILITIES — POINTS {cost}/{RadiantPool.Rules.PointBuy.Budget}",
+                Theme.Caps);
 
             void Row(string label, ref int score)
             {

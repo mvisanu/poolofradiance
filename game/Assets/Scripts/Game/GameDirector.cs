@@ -422,34 +422,40 @@ namespace RadiantPool.Game
         {
             Ui.Begin();
             if (Time.time < _noticeUntil && LocalNotice.Length > 0)
-            {
-                var style = new GUIStyle(GUI.skin.box)
-                    { alignment = TextAnchor.MiddleCenter, fontSize = 15 };
-                GUI.Box(new Rect(Ui.W / 2f - 260, 16, 520, 34), LocalNotice, style);
-            }
+                GUI.Box(new Rect(Ui.W / 2f - 260, 16, 520, 38), LocalNotice, Theme.Toast);
 
             if (!_journalOpen) return;
-            GUILayout.BeginArea(new Rect(Ui.W / 2f - 210, 70, 420, 300), GUI.skin.box);
-            GUILayout.Label("<b>Journal</b> (J to close)",
-                new GUIStyle(GUI.skin.label) { richText = true });
+            GUILayout.BeginArea(new Rect(Ui.W / 2f - 215, 64, 430, 356), Theme.PanelStyle);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Journal", Theme.Header);
+            GUILayout.FlexibleSpace();
+            GUILayout.Label("<color=#d0c5af>J to close</color>", Theme.Body);
+            GUILayout.EndHorizontal();
 
+            GUILayout.BeginVertical(Theme.ParchmentStyle);
             DrawQuest("Report to the Council", (QuestState)MusterState.Value,
-                "Speak with Councilor Veresk at the Council Hall.");
+                "Speak with Councilor Veresk at the Council Hall.", -1f);
             for (int i = 0; i < Zones.Length; i++)
             {
                 var cfg = Zones[i];
+                int done = Mathf.Min(i < ZoneClearedCounts.Count ? ZoneClearedCounts[i] : 0,
+                    cfg.RequiredEncounters);
                 DrawQuest(cfg.QuestName, GetZoneState(i),
-                    $"Clear {cfg.DisplayName} " +
-                    $"({Mathf.Min(i < ZoneClearedCounts.Count ? ZoneClearedCounts[i] : 0, cfg.RequiredEncounters)}" +
-                    $"/{cfg.RequiredEncounters}), then return to Veresk.");
+                    $"Clear {cfg.DisplayName} ({done}/{cfg.RequiredEncounters}), " +
+                    "then return to Veresk.",
+                    (float)done / cfg.RequiredEncounters);
             }
             if (CampaignComplete.Value)
-                GUILayout.Label("★ Aldenmere stands free. The campaign is complete!");
+                GUILayout.Label("<color=#b8860b>★ Aldenmere stands free. The campaign is " +
+                    "complete!</color>", Theme.BodyInk);
+            GUILayout.EndVertical();
 
-            GUILayout.Space(8);
+            GUILayout.Space(6);
             int potions = Stash.Count(s => s == "potion_healing");
             int salvage = Stash.Count - potions;
-            GUILayout.Label($"Party gold: {PartyGold.Value}   Potions: {potions}   Salvage: {salvage}");
+            GUILayout.Label($"<color=#f2ca50><b>{PartyGold.Value}</b> gold</color>" +
+                $"   <color=#d0c5af>Potions: <b>{potions}</b>   Salvage: <b>{salvage}</b></color>",
+                Theme.Body);
             bool inCombat = CombatManager.Instance != null && CombatManager.Instance.InCombat.Value;
             if (!inCombat)
             {
@@ -463,18 +469,31 @@ namespace RadiantPool.Game
             GUILayout.EndArea();
         }
 
-        private void DrawQuest(string title, QuestState state, string detail)
+        /// <summary>One journal entry, mock-style: active quests sit in a gold-wash card
+        /// with a progress bar; completed quests are muted; ready-to-turn-in glows.</summary>
+        private void DrawQuest(string title, QuestState state, string detail, float progress)
         {
             if (state == QuestState.Locked) return;
-            string tag = state switch
+            if (state == QuestState.Completed)
             {
-                QuestState.Completed => "✔",
-                QuestState.ObjectivesMet => "!",
-                _ => "•"
-            };
-            GUILayout.Label($"{tag} {title}");
-            if (state == QuestState.Active || state == QuestState.ObjectivesMet)
-                GUILayout.Label($"      {detail}");
+                GUILayout.Label($"<color=#2e7d32>✔</color>  <color=#8a8a8a>{title}</color>",
+                    Theme.BodyInk);
+                return;
+            }
+
+            GUILayout.BeginVertical(Theme.GoldWashStyle);
+            string mark = state == QuestState.ObjectivesMet
+                ? "<color=#b8860b><b>!</b></color>" : "<color=#b8860b>★</color>";
+            GUILayout.Label($"{mark}  <b>{title}</b>", Theme.HeaderInk);
+            GUILayout.Label(state == QuestState.ObjectivesMet
+                ? "<i>Return to Councilor Veresk for your reward.</i>" : detail, Theme.BodyInk);
+            if (progress >= 0f && state == QuestState.Active)
+            {
+                var r = GUILayoutUtility.GetRect(240, 9);
+                Theme.Bar(new Rect(r.x + 2, r.y + 1, 220, 7), progress, Theme.MpBlue);
+            }
+            GUILayout.EndVertical();
+            GUILayout.Space(3);
         }
     }
 }

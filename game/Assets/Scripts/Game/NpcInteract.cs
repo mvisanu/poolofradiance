@@ -67,9 +67,8 @@ namespace RadiantPool.Game
 
             if (!_open && InRange())
             {
-                var hint = new GUIStyle(GUI.skin.box) { alignment = TextAnchor.MiddleCenter };
-                GUI.Box(new Rect(Ui.W / 2f - 130, Ui.H - 60, 260, 28),
-                    $"[E] Talk to {NpcName}", hint);
+                GUI.Box(new Rect(Ui.W / 2f - 130, Ui.H - 64, 260, 32),
+                    $"[E] Talk to {NpcName}", Theme.Toast);
                 return;
             }
             if (!_open) return;
@@ -77,9 +76,9 @@ namespace RadiantPool.Game
             var director = GameDirector.Instance;
             if (director == null || director.Zones.Length == 0) return;
 
-            GUILayout.BeginArea(new Rect(Ui.W / 2f - 260, Ui.H / 2f - 130, 520, 260),
-                GUI.skin.box);
-            GUILayout.Label($"<b>{NpcName}</b>", new GUIStyle(GUI.skin.label) { richText = true });
+            GUILayout.BeginArea(new Rect(Ui.W / 2f - 260, Ui.H / 2f - 140, 520, 280),
+                Theme.PanelStyle);
+            GUILayout.Label(NpcName, Theme.Header);
 
             // Sellswords: offered whenever the party is short of four.
             int partySize = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
@@ -93,10 +92,10 @@ namespace RadiantPool.Game
 
             if ((QuestState)director.MusterState.Value == QuestState.Active)
             {
-                GUILayout.Label("\"So the Exchange found us another company willing to brave the " +
+                Say("\"So the Exchange found us another company willing to brave the " +
                     "old quarters. Aldenmere was a hundred lamplit streets once — we hold six. " +
                     "Prove yourselves at the Old Docks and the Council will pay in gold and gratitude.\"");
-                if (GUILayout.Button("We'll clear the docks."))
+                if (GUILayout.Button("We'll clear the docks.", Theme.BtnPrimary))
                 { director.CmdDialogueChoice("muster_accept"); _open = false; }
                 RecruitButton();
                 GUILayout.EndArea();
@@ -109,7 +108,7 @@ namespace RadiantPool.Game
                 var state = director.GetZoneState(i);
                 if (state == QuestState.Active)
                 {
-                    GUILayout.Label(i < ZoneBriefs.Length ? ZoneBriefs[i]
+                    Say(i < ZoneBriefs.Length ? ZoneBriefs[i]
                         : $"\"Clear {director.Zones[i].DisplayName}, then return to me.\"");
                     if (GUILayout.Button("We're on it.")) _open = false;
                     RecruitButton();
@@ -118,9 +117,10 @@ namespace RadiantPool.Game
                 }
                 if (state == QuestState.ObjectivesMet)
                 {
-                    GUILayout.Label(i < ZoneTurnins.Length ? ZoneTurnins[i]
+                    Say(i < ZoneTurnins.Length ? ZoneTurnins[i]
                         : $"\"{director.Zones[i].DisplayName} is clear. Well done.\"");
-                    if (GUILayout.Button($"{director.Zones[i].DisplayName} is clear. (Turn in)"))
+                    if (GUILayout.Button($"{director.Zones[i].DisplayName} is clear. (Turn in)",
+                            Theme.BtnPrimary))
                     { director.CmdDialogueChoice($"turnin_{i}"); _open = false; }
                     GUILayout.EndArea();
                     return;
@@ -129,16 +129,25 @@ namespace RadiantPool.Game
 
             if (director.CampaignComplete.Value)
             {
-                GUILayout.Label("\"Whatever you ask of this Council, heroes — it is yours. " +
+                Say("\"Whatever you ask of this Council, heroes — it is yours. " +
                     "Aldenmere stands free.\"");
                 if (GUILayout.Button("It was our honor.")) _open = false;
             }
             else
             {
-                GUILayout.Label("\"The Council sits day and night until every quarter is reclaimed.\"");
+                Say("\"The Council sits day and night until every quarter is reclaimed.\"");
                 if (GUILayout.Button("Farewell.")) _open = false;
             }
             GUILayout.EndArea();
+        }
+
+        /// <summary>NPC speech on a parchment card, per the theme mockups.</summary>
+        private static void Say(string text)
+        {
+            GUILayout.BeginVertical(Theme.ParchmentStyle);
+            GUILayout.Label($"<i>{text}</i>", Theme.BodyInk);
+            GUILayout.EndVertical();
+            GUILayout.Space(4);
         }
     }
 }

@@ -43,17 +43,17 @@ namespace RadiantPool.Game
 
             if (!_open && InRange())
             {
-                var hint = new GUIStyle(GUI.skin.box) { alignment = TextAnchor.MiddleCenter };
-                GUI.Box(new Rect(Ui.W / 2f - 130, Ui.H - 92, 260, 28),
-                    $"[E] Trade at {VendorName}", hint);
+                GUI.Box(new Rect(Ui.W / 2f - 130, Ui.H - 100, 260, 32),
+                    $"[E] Trade at {VendorName}", Theme.Toast);
                 return;
             }
             if (!_open) return;
 
-            GUILayout.BeginArea(new Rect(Ui.W / 2f - 200, Ui.H / 2f - 100, 400, 200),
-                GUI.skin.box);
-            GUILayout.Label($"<b>{VendorName}</b>", new GUIStyle(GUI.skin.label) { richText = true });
-            GUILayout.Label($"Party gold: {director.PartyGold.Value}");
+            GUILayout.BeginArea(new Rect(Ui.W / 2f - 200, Ui.H / 2f - 105, 400, 210),
+                Theme.PanelStyle);
+            GUILayout.Label(VendorName, Theme.Header);
+            GUILayout.Label($"<color=#f2ca50><b>{director.PartyGold.Value}</b> gold</color>",
+                Theme.Body);
 
             int potions = director.Stash.Count(s => s == "potion_healing");
             int salvage = director.Stash.Count - potions;

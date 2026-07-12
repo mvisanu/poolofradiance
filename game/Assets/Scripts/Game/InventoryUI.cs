@@ -30,31 +30,37 @@ namespace RadiantPool.Game
             var holder = LocalHolder();
             if (director == null || holder == null) return;
 
-            GUILayout.BeginArea(new Rect(Ui.W / 2f - 230, 60, 460, 420), GUI.skin.box);
-            GUILayout.Label("<b>Inventory</b> (I to close)",
-                new GUIStyle(GUI.skin.label) { richText = true });
+            GUILayout.BeginArea(new Rect(Ui.W / 2f - 230, 60, 460, 420), Theme.PanelStyle);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Inventory", Theme.Header);
+            GUILayout.FlexibleSpace();
+            GUILayout.Label("<color=#d0c5af>I to close</color>", Theme.Body);
+            GUILayout.EndHorizontal();
 
             // Equipped gear.
             var weapon = GameItem.Get(holder.WeaponId.Value);
             var armor = GameItem.Get(holder.ArmorId.Value);
-            GUILayout.Label($"Weapon:  {(weapon != null ? $"{weapon.Name} ({weapon.Damage})" : "—")}");
-            GUILayout.Label($"Armor:   {(armor != null ? armor.Name : "none")}" +
-                            $"{(holder.ShieldEquipped.Value ? "  + Shield" : "")}");
+            GUILayout.Label("EQUIPPED", Theme.Caps);
+            GUILayout.Label($"Weapon:  <b>{(weapon != null ? $"{weapon.Name} ({weapon.Damage})" : "—")}</b>",
+                Theme.Body);
+            GUILayout.Label($"Armor:   <b>{(armor != null ? armor.Name : "none")}" +
+                            $"{(holder.ShieldEquipped.Value ? "  + Shield" : "")}</b>", Theme.Body);
             GUILayout.Space(6);
-            GUILayout.Label($"Party gold: {director.PartyGold.Value}");
-            GUILayout.Label("<b>Party stash:</b>",
-                new GUIStyle(GUI.skin.label) { richText = true });
+            GUILayout.Label($"<color=#f2ca50><b>{director.PartyGold.Value}</b> gold</color>",
+                Theme.Body);
+            GUILayout.Label("PARTY STASH", Theme.Caps);
 
             _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.ExpandHeight(true));
+            GUILayout.BeginVertical(Theme.ParchmentStyle);
             var groups = director.Stash.GroupBy(id => id).OrderBy(g => g.Key).ToList();
             if (groups.Count == 0)
-                GUILayout.Label("(empty — loot the docks!)");
+                GUILayout.Label("(empty — loot the docks!)", Theme.BodyInk);
             foreach (var g in groups)
             {
                 var item = GameItem.Get(g.Key);
                 string label = item != null ? item.Name : g.Key.Replace('_', ' ');
                 GUILayout.BeginHorizontal();
-                GUILayout.Label($"{label} ×{g.Count()}", GUILayout.ExpandWidth(true));
+                GUILayout.Label($"{label} ×{g.Count()}", Theme.BodyInk, GUILayout.ExpandWidth(true));
                 if (item != null && item.Slot is ItemSlot.Weapon or ItemSlot.Armor
                     or ItemSlot.Shield)
                 {
@@ -73,6 +79,7 @@ namespace RadiantPool.Game
                 }
                 GUILayout.EndHorizontal();
             }
+            GUILayout.EndVertical();
             GUILayout.EndScrollView();
             GUILayout.EndArea();
         }

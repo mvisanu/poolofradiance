@@ -33,3 +33,6 @@ scripts/compile-check/obj/
 artifacts/
 rules/**/bin.meta
 rules/**/obj.meta
+
+# Design reference exports (contain third-party placeholder text; local only)
+theme/

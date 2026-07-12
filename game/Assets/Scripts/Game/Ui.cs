@@ -15,11 +15,12 @@ namespace RadiantPool.Game
         public static void Begin()
         {
             GUI.matrix = Matrix4x4.Scale(new Vector3(Scale, Scale, 1f));
-            GUI.skin.label.fontSize = 15;
-            GUI.skin.button.fontSize = 15;
-            GUI.skin.textField.fontSize = 15;
-            GUI.skin.box.fontSize = 15;
-            GUI.skin.toggle.fontSize = 15;
+            Theme.Apply();   // Gilded Quest skin — see Theme.cs and theme/ mockups
+            GUI.skin.label.fontSize = 14;
+            GUI.skin.button.fontSize = 14;
+            GUI.skin.textField.fontSize = 14;
+            GUI.skin.box.fontSize = 13;
+            GUI.skin.toggle.fontSize = 14;
         }
     }
 }
