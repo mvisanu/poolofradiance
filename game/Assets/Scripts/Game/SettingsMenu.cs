@@ -8,8 +8,14 @@ namespace RadiantPool.Game
     public class SettingsMenu : MonoBehaviour
     {
         public static float MouseSensitivity { get; private set; } = 3.5f;
+        public static SettingsMenu Instance { get; private set; }
 
         private bool _open;
+
+        private void Awake() => Instance = this;
+        private void OnDestroy() { if (Instance == this) Instance = null; }
+
+        public void Toggle() => _open = !_open;
         private float _volume;
         private bool _fullscreen;
         private bool _vsync;

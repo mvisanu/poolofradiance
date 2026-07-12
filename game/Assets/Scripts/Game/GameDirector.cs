@@ -421,6 +421,8 @@ namespace RadiantPool.Game
         private bool _journalOpen;
         private Vector2 _journalScroll;
 
+        public void ToggleJournal() => _journalOpen = !_journalOpen;
+
         private void Update()
         {
             if (Input.GetKeyDown(KeyCode.J)) _journalOpen = !_journalOpen;

@@ -10,11 +10,39 @@ namespace RadiantPool.Game
     /// pickers, Dodge and End Turn. Replaced by the themed UI at 3f.</summary>
     public class CombatClientUI : MonoBehaviour
     {
+        public static CombatClientUI Instance { get; private set; }
+
         private enum Mode { Root, PickAttackTarget, PickSpell, PickSpellTarget }
         private Mode _mode = Mode.Root;
         private string _pendingSpell = "";
         private Vector2 _logScroll;
         private GameObject _hoverMarker;
+
+        private void Awake() => Instance = this;
+        private void OnDestroy() { if (Instance == this) Instance = null; }
+
+        /// <summary>HotBar hooks: begin target picking for the basic attack / a spell.</summary>
+        public void PickAttack() => _mode = Mode.PickAttackTarget;
+
+        public void PickSpell(string spellId)
+        {
+            _pendingSpell = spellId;
+            _mode = Mode.PickSpellTarget;
+        }
+
+        /// <summary>Class spell loadout (v1 fixed lists) — shared with the HotBar.</summary>
+        public static string[] KnownSpells(CharacterClass cls) => cls switch
+        {
+            CharacterClass.Wizard =>
+                new[] { "fire_bolt", "magic_missile", "burning_hands", "sleep" },
+            CharacterClass.Cleric =>
+                new[] { "sacred_flame", "guiding_bolt", "cure_wounds", "healing_word", "bless" },
+            _ => System.Array.Empty<string>()
+        };
+
+        public static PlayerCharacterHolder LocalPlayerHolder() =>
+            Object.FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => p.IsOwner);
 
         private static readonly System.Collections.Generic.Dictionary<string, Texture2D>
             IconCache = new System.Collections.Generic.Dictionary<string, Texture2D>();
@@ -22,7 +50,7 @@ namespace RadiantPool.Game
         /// <summary>Action/spell icon from Resources/SpellIcons (game-icons.net, CC BY —
         /// see README). Swap the art by overwriting the same-named PNGs, e.g. with an
         /// imported Asset Store icon pack. Missing icons fall back to text-only.</summary>
-        private static Texture2D Icon(string id)
+        public static Texture2D Icon(string id)
         {
             if (!IconCache.TryGetValue(id, out var tex))
             {
@@ -172,6 +200,7 @@ namespace RadiantPool.Game
             if (InitiativeRect(combat).Contains(m)) return true;
             if (new Rect(12, Ui.H - 208, 520, 196).Contains(m)) return true;      // log
             if (new Rect(12, Ui.H - 318, 264, 102).Contains(m)) return true;      // player card
+            if (HotBar.BarRect.Contains(m)) return true;                          // hotbar
             if (combat.IsMyTurn
                 && new Rect(Ui.W / 2f - 280, Ui.H - 336, 560, 134).Contains(m))    // actions
                 return true;
@@ -364,7 +393,10 @@ namespace RadiantPool.Game
 
             switch (_mode)
             {
-                case Mode.Root: DrawRoot(combat); break;
+                case Mode.Root:
+                    GUILayout.Label("<color=#d0c5af>Pick an action from the bar below, " +
+                        "or click the battlefield.</color>", Theme.Body);
+                    break;
                 case Mode.PickAttackTarget: DrawTargets(combat, enemiesOnly: true,
                     id => { combat.CmdAttack(id); _mode = Mode.Root; }); break;
                 case Mode.PickSpell: DrawSpells(combat); break;
@@ -375,27 +407,6 @@ namespace RadiantPool.Game
                     break;
             }
             GUILayout.EndArea();
-        }
-
-        private void DrawRoot(CombatManager combat)
-        {
-            GUILayout.BeginHorizontal();
-            GUI.enabled = combat.ActionLeft;
-            if (GUILayout.Button(WithIcon("attack", "Attack"), GUILayout.Height(34)))
-                _mode = Mode.PickAttackTarget;
-            var holder = LocalHolder();
-            bool caster = holder != null &&
-                (holder.Class == CharacterClass.Wizard || holder.Class == CharacterClass.Cleric);
-            GUI.enabled = caster && (combat.ActionLeft || combat.BonusLeft);
-            if (GUILayout.Button(WithIcon("cast", "Cast"), GUILayout.Height(34)))
-                _mode = Mode.PickSpell;
-            GUI.enabled = combat.ActionLeft;
-            if (GUILayout.Button(WithIcon("dodge", "Dodge"), GUILayout.Height(34)))
-                combat.CmdDodge();
-            GUI.enabled = true;
-            if (GUILayout.Button(WithIcon("end_turn", "End Turn"), GUILayout.Height(34)))
-                combat.CmdEndTurn();
-            GUILayout.EndHorizontal();
         }
 
         private void DrawSpells(CombatManager combat)

@@ -8,8 +8,15 @@ namespace RadiantPool.Game
     /// class rules and returns the swapped-out item to the stash.</summary>
     public class InventoryUI : MonoBehaviour
     {
+        public static InventoryUI Instance { get; private set; }
+
         private bool _open;
         private Vector2 _scroll;
+
+        private void Awake() => Instance = this;
+        private void OnDestroy() { if (Instance == this) Instance = null; }
+
+        public void Toggle() => _open = !_open;
 
         private PlayerCharacterHolder LocalHolder() =>
             FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
