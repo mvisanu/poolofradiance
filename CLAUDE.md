@@ -47,8 +47,14 @@ Player log (first place to look when the user reports bugs):
   paced AI turn coroutines, glide movement); `GameDirector` = quests/party state/saves
   (4-zone chain: docks → market → warcamp → temple, `ServerRecheckZone` heals
   cleared-before-active dead ends); `SessionLauncher` = title screen + host/join;
-  `Theme.cs` = "Gilded Quest" design system (all IMGUI styling flows through
-  `Ui.Begin()` → `Theme.Apply()`; tune look there, never inline styles).
+  `Theme.cs` = "Gilded Quest" design system, Academia palette (mahogany/oak panels,
+  brass borders, parchment; bright gold = active states only; text contrast ≥4.5:1;
+  MedievalSharp headers / Inter body, OFL, under `Resources/Fonts`). All IMGUI styling
+  flows through `Ui.Begin()` → `Theme.Apply()`; tune look there, never inline styles.
+  `HotBar.cs` = persistent bottom action bar (combat slots delegate to
+  `CombatClientUI.Instance.PickAttack/PickSpell`); combat HUD is a slim strip docked
+  above it so the battlefield stays visible. In combat: click enemy = attack (walks
+  into range first), click ground = move, Space = end turn.
 - `theme/` — Stitch design mockups, **gitignored**: they contain WotC placeholder
   names. Copy visuals only, never text.
 - Asset Store packs can't be fetched headlessly (editor sign-in required). Drop-in
@@ -57,8 +63,14 @@ Player log (first place to look when the user reports bugs):
   separated fallbacks in `CombatManager.MonsterModels`). Import steps:
   `docs/asset-store-import.md`.
 - `game/Assets/Editor` — `ProjectBootstrap` regenerates the ENTIRE scene, prefabs, URP
-  config, and materials from code (scene is disposable; never hand-edit it).
-  `KenneyArt`/`KayKitArt` integrate the CC0 packs under `game/Assets/Art`.
+  config, and materials from code (scene is disposable; never hand-edit it). Includes
+  `DressWorld()` (seeded forests/scatter/wilds sites, sunny lighting).
+  `KenneyArt`/`KayKitArt`/`QuaterniusArt` integrate the CC0 packs under
+  `game/Assets/Art` (Quaternius orcs are animated FBX; Bear/Spider/Goblin models were
+  never obtained — their `Resources/Characters` drop-in slots still use stand-ins).
+- All project + memory `*.md` files auto-mirror to the Obsidian vault
+  (`C:\Users\Bruce\Documents\obsidian\projects\poolofradiance`) via a Stop hook →
+  `scripts/obsidian-sync.ps1`. Markdown edits sync themselves; don't copy manually.
 
 ## Iteration loop (what actually works here)
 
@@ -88,13 +100,24 @@ Player log (first place to look when the user reports bugs):
   run the whole flow in ONE PowerShell invocation — it fails inside functions).
 - Kenney kits: one URP material per kit colormap, remapped via
   `ModelImporter.AddRemap`. KayKit free tier has NO melee clip — attack = `Throw`.
+  Kenney Nature kit has no colormap atlas — build per-embedded-material URP materials
+  instead (see `KenneyArt.ColorMat`).
+- **Unity.exe is a GUI app** — PowerShell `&` returns immediately, so a chained
+  bootstrap+build races itself ("another Unity instance is running"). Use
+  `Start-Process -PassThru -Wait`. Also close the running game exe first: a locked
+  `RadiantPool.exe` fails the build copy step.
+- **Google Drive throttles bulk downloads** (Quaternius packs) — prefer converting the
+  already-downloaded `.blend` files via headless Blender
+  (`blender -b file.blend -P blend2fbx.py`, FBX export with
+  `bake_anim_use_all_actions`) over re-fetching FBX from Drive.
 - **PS 5.1 mangles embedded double quotes** passed to native exes — `git commit -m`
   with `"quoted"` text inside the message splits into bogus pathspecs. Keep commit
   messages free of double quotes.
 - **`RadiantPool.exe` timestamp never changes** between builds (stock player stub).
   To verify a build is fresh, check `RadiantPool_Data/Managed/Assembly-CSharp.dll`.
 - **CombatClientUI HUD rects gate click-to-move**: `IsMouseOverHud` must list the
-  exact same rects the panels draw with, or clicks through/into panels misbehave.
+  exact same rects the panels draw with (including `HotBar.BarRect`), or clicks
+  through/into panels misbehave.
 - Combat-end must clear the Animator `Dead` flag (`CharacterVisuals.SetDead(v,false)`),
   not just rotation — revived characters otherwise walk around in the death pose.
 - Victory revives dead PCs at 1 HP (no permanent death); party wipe revives all at
