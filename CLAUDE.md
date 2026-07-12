@@ -43,8 +43,19 @@ Player log (first place to look when the user reports bugs):
   `SpellLibrary`, `LootLibrary` (tests keep JSON and code aligned by id).
 - `game/Assets/Scripts` — runtime (FishNet networking). Server-authoritative: clients
   send intents (`Cmd*` ServerRpcs), server validates via the rules lib, broadcasts
-  results (`Rpc*`). `CombatManager` = combat FSM + grid; `GameDirector` = quests/party
-  state/saves; `SessionLauncher` = title screen + host/join.
+  results (`Rpc*`). `CombatManager` = combat FSM + grid (click-to-move via `CmdMoveTo`,
+  paced AI turn coroutines, glide movement); `GameDirector` = quests/party state/saves
+  (4-zone chain: docks → market → warcamp → temple, `ServerRecheckZone` heals
+  cleared-before-active dead ends); `SessionLauncher` = title screen + host/join;
+  `Theme.cs` = "Gilded Quest" design system (all IMGUI styling flows through
+  `Ui.Begin()` → `Theme.Apply()`; tune look there, never inline styles).
+- `theme/` — Stitch design mockups, **gitignored**: they contain WotC placeholder
+  names. Copy visuals only, never text.
+- Asset Store packs can't be fetched headlessly (editor sign-in required). Drop-in
+  slots instead: `Resources/SpellIcons/<id>.png`, `Resources/Music/{explore,combat,
+  zone_<zoneId>}`, `Resources/Characters/{Orc,Spider,Bear,Goblin}.prefab` (pipe-
+  separated fallbacks in `CombatManager.MonsterModels`). Import steps:
+  `docs/asset-store-import.md`.
 - `game/Assets/Editor` — `ProjectBootstrap` regenerates the ENTIRE scene, prefabs, URP
   config, and materials from code (scene is disposable; never hand-edit it).
   `KenneyArt`/`KayKitArt` integrate the CC0 packs under `game/Assets/Art`.
@@ -77,6 +88,17 @@ Player log (first place to look when the user reports bugs):
   run the whole flow in ONE PowerShell invocation — it fails inside functions).
 - Kenney kits: one URP material per kit colormap, remapped via
   `ModelImporter.AddRemap`. KayKit free tier has NO melee clip — attack = `Throw`.
+- **PS 5.1 mangles embedded double quotes** passed to native exes — `git commit -m`
+  with `"quoted"` text inside the message splits into bogus pathspecs. Keep commit
+  messages free of double quotes.
+- **`RadiantPool.exe` timestamp never changes** between builds (stock player stub).
+  To verify a build is fresh, check `RadiantPool_Data/Managed/Assembly-CSharp.dll`.
+- **CombatClientUI HUD rects gate click-to-move**: `IsMouseOverHud` must list the
+  exact same rects the panels draw with, or clicks through/into panels misbehave.
+- Combat-end must clear the Animator `Dead` flag (`CharacterVisuals.SetDead(v,false)`),
+  not just rotation — revived characters otherwise walk around in the death pose.
+- Victory revives dead PCs at 1 HP (no permanent death); party wipe revives all at
+  the shrine (`CombatManager.RespawnPoint` must match the bootstrap shrine).
 
 ## IP rule (non-negotiable)
 
