@@ -334,6 +334,27 @@ namespace RadiantPool.EditorTools
                 glow.range = 9f;
             }
 
+            // Shrine of the Dawnmother — where a defeated party wakes
+            // (position must match CombatManager.RespawnPoint).
+            Box("Shrine_Base", new Vector3(-9, 0.1f, -14), new Vector3(5, 0.2f, 5), templeStone);
+            KenneyArt.Place("FantasyTown", "pillar-stone", new Vector3(-11, 0.2f, -16), 0, 3.4f, true);
+            KenneyArt.Place("FantasyTown", "banner-red", new Vector3(-7, 0.2f, -16), 0, 2.6f, true);
+            var shrineLabelGo = new GameObject("ShrineLabel");
+            shrineLabelGo.transform.position = new Vector3(-9, 3.1f, -14.5f);
+            var shrineLabel = shrineLabelGo.AddComponent<TextMesh>();
+            shrineLabel.text = "Shrine of the Dawnmother";
+            shrineLabel.characterSize = 0.11f;
+            shrineLabel.fontSize = 40;
+            shrineLabel.anchor = TextAnchor.LowerCenter;
+            shrineLabel.color = new Color(1f, 0.93f, 0.7f);
+            shrineLabelGo.AddComponent<Billboard>();
+            var shrineLight = new GameObject("ShrineGlow").AddComponent<Light>();
+            shrineLight.transform.position = new Vector3(-9, 2.2f, -14);
+            shrineLight.type = LightType.Point;
+            shrineLight.color = new Color(1f, 0.9f, 0.6f);
+            shrineLight.intensity = 2.2f;
+            shrineLight.range = 11f;
+
             // Hub plaza: fountain, lanterns, banners, trees.
             KenneyArt.Place("FantasyTown", "fountain-round-detail", new Vector3(0, 0, -2), 0, 5f);
             Lantern(new Vector3(-5, 0, -10));
