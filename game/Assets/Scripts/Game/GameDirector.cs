@@ -202,10 +202,16 @@ namespace RadiantPool.Game
         public FishNet.Object.NetworkObject CompanionPrefab;
 
         private static readonly string[] CompanionNames =
-            { "Sera", "Aldric", "Wren", "Torvald", "Isolde", "Fenn" };
+        {
+            "Aldric", "Berthold", "Cedrik", "Eadric", "Giselle", "Godwin",
+            "Hamond", "Hilda", "Isolde", "Leofric", "Mabel", "Osric",
+            "Oswin", "Rowena", "Sybilla", "Thurstan", "Wulfric", "Ysolde"
+        };
 
-        /// <summary>Fills the party to 4 with AI companions, picking classes the party
-        /// lacks (fighter first, then cleric, wizard, rogue).</summary>
+        /// <summary>Fills the party to 4 with AI companions covering every class no one
+        /// is playing (one each — fighter, cleric, wizard, rogue order), then repeats
+        /// classes only if the party still has room. Names are drawn without repeats
+        /// from a medieval pool.</summary>
         [ServerRpc(RequireOwnership = false)]
         public void CmdRecruitCompanions(NetworkConnection conn = null)
         {
@@ -215,13 +221,18 @@ namespace RadiantPool.Game
             int needed = 4 - holders.Count;
             if (needed <= 0) { RpcNotice("The party is already full."); return; }
 
-            var have = holders.Select(h => (int)h.Sheet.Class)
-                .ToHashSet();
+            var have = holders.Select(h => (int)h.Sheet.Class).ToHashSet();
             var priority = new[] { 0, 1, 2, 3 };   // fighter, cleric, wizard, rogue
+            var classes = priority.Where(c => !have.Contains(c))
+                .Concat(priority).Take(needed);
+
             var rng = new System.Random();
+            var usedNames = holders.Select(h => h.Sheet.Name).ToHashSet();
+            var namePool = CompanionNames.OrderBy(_ => rng.Next())
+                .Where(n => !usedNames.Contains(n)).ToList();
+
             int spawned = 0;
-            foreach (int cls in priority.Where(c => !have.Contains(c))
-                         .Concat(priority).Take(needed))
+            foreach (int cls in classes)
             {
                 var anchor = holders.FirstOrDefault(h => !h.IsCompanion);
                 Vector3 pos = anchor != null
@@ -230,10 +241,9 @@ namespace RadiantPool.Game
                 var nob = Instantiate(CompanionPrefab, pos, Quaternion.identity);
                 FishNet.InstanceFinder.ServerManager.Spawn(nob);   // no owner = server AI
                 var holder = nob.GetComponent<PlayerCharacterHolder>();
-                string name = CompanionNames[rng.Next(CompanionNames.Length)];
-                int suffix = 2;
-                while (holders.Any(h => h.Sheet != null && h.Sheet.Name == name))
-                    name = name + " " + suffix++;
+                string name = spawned < namePool.Count
+                    ? namePool[spawned]
+                    : $"Sellsword {spawned + 1}";   // pool exhausted (never in practice)
                 holder.ServerInitCompanion(name, cls);
                 var identity = nob.GetComponent<PlayerIdentity>();
                 if (identity != null) identity.ServerSetName(name);
