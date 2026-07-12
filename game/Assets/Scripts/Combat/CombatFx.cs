@@ -49,6 +49,18 @@ namespace RadiantPool.Game
             Destroy(go);
         }
 
+        // ---------- facing ----------
+
+        /// <summary>Turns a unit to face a world position (Y-axis only, instant).</summary>
+        public static void Face(Transform unit, Vector3 at)
+        {
+            if (unit == null) return;
+            var dir = at - unit.position;
+            dir.y = 0f;
+            if (dir.sqrMagnitude > 0.01f)
+                unit.rotation = Quaternion.LookRotation(dir, Vector3.up);
+        }
+
         // ---------- melee lunge + hit flash ----------
 
         public void Lunge(Transform attacker, Vector3 targetPos)
@@ -92,6 +104,79 @@ namespace RadiantPool.Game
             for (int i = 0; i < renderers.Length; i++)
                 if (target != null && renderers[i] != null && renderers[i] is MeshRenderer)
                     renderers[i].material.color = originals[i];
+        }
+
+        // ---------- blood + cast flare ----------
+
+        /// <summary>Spray of red droplets with gravity — reads as a wound at this art
+        /// scale. Crits spray harder.</summary>
+        public void Blood(Vector3 at, bool heavy = false)
+        {
+            StartCoroutine(BloodRoutine(at + Vector3.up * 1.2f, heavy ? 14 : 8));
+        }
+
+        private IEnumerator BloodRoutine(Vector3 origin, int drops)
+        {
+            var parts = new GameObject[drops];
+            var velocities = new Vector3[drops];
+            var dark = new Color(0.55f, 0.05f, 0.05f);
+            for (int i = 0; i < drops; i++)
+            {
+                var p = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                Destroy(p.GetComponent<Collider>());
+                p.transform.position = origin;
+                p.transform.localScale = Vector3.one * Random.Range(0.08f, 0.18f);
+                p.GetComponent<Renderer>().material.color =
+                    Color.Lerp(dark, new Color(0.8f, 0.1f, 0.08f), Random.value);
+                parts[i] = p;
+                velocities[i] = new Vector3(Random.Range(-1.6f, 1.6f),
+                    Random.Range(1.5f, 3.4f), Random.Range(-1.6f, 1.6f));
+            }
+            float t = 0f;
+            const float dur = 0.7f;
+            while (t < dur)
+            {
+                t += Time.deltaTime;
+                for (int i = 0; i < drops; i++)
+                {
+                    if (parts[i] == null) continue;
+                    velocities[i] += Physics.gravity * Time.deltaTime;
+                    parts[i].transform.position += velocities[i] * Time.deltaTime;
+                    if (parts[i].transform.position.y < 0.03f)
+                        parts[i].transform.position = new Vector3(
+                            parts[i].transform.position.x, 0.03f, parts[i].transform.position.z);
+                }
+                yield return null;
+            }
+            foreach (var p in parts) if (p != null) Destroy(p);
+        }
+
+        /// <summary>Quick expanding ring at a caster's feet when a spell goes off.</summary>
+        public void CastFlare(Vector3 at, Color color)
+        {
+            StartCoroutine(FlareRoutine(at, color));
+        }
+
+        private IEnumerator FlareRoutine(Vector3 at, Color color)
+        {
+            var ring = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            Destroy(ring.GetComponent<Collider>());
+            ring.transform.position = at + Vector3.up * 0.06f;
+            ring.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            var mat = ring.GetComponent<Renderer>().material;
+            mat.EnableKeyword("_EMISSION");
+            float t = 0f;
+            const float dur = 0.35f;
+            while (t < dur)
+            {
+                t += Time.deltaTime;
+                float k = t / dur;
+                ring.transform.localScale = Vector3.one * (0.5f + k * 2.6f);
+                mat.color = new Color(color.r, color.g, color.b, 1f - k);
+                mat.SetColor("_EmissionColor", color * (1.8f * (1f - k)));
+                yield return null;
+            }
+            Destroy(ring);
         }
 
         // ---------- spell bolt + burst ----------

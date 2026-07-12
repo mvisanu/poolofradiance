@@ -325,12 +325,15 @@ namespace RadiantPool.Game
             if (fx == null || target?.Visual == null) return;
             if (attacker?.Visual != null)
             {
+                CombatFx.Face(attacker.Visual, target.Visual.position);
+                CombatFx.Face(target.Visual, attacker.Visual.position);
                 fx.Lunge(attacker.Visual, target.Visual.position);
                 CharacterVisuals.Trigger(attacker.Visual, "Attack");
             }
             if (hit)
             {
                 CharacterVisuals.Trigger(target.Visual, "Hit");
+                fx.Blood(target.Visual.position, crit);
                 fx.Flash(target.Visual, new Color(1f, 0.35f, 0.3f));
                 fx.Popup(target.Visual.position, crit ? $"{damage}!" : damage.ToString(),
                     crit ? new Color(1f, 0.6f, 0.15f) : Color.white, crit ? 1.4f : 1f);
@@ -359,7 +362,9 @@ namespace RadiantPool.Game
             var color = palette[Mathf.Clamp(colorIdx, 0, palette.Length - 1)];
             if (caster?.Visual != null && caster != target)
             {
+                CombatFx.Face(caster.Visual, target.Visual.position);
                 CharacterVisuals.Trigger(caster.Visual, "Attack");
+                fx.CastFlare(caster.Visual.position, color);
                 fx.Bolt(caster.Visual.position, target.Visual.position, color);
             }
             if (isHeal)
@@ -586,6 +591,46 @@ namespace RadiantPool.Game
             var b = _engine.ActiveBudget;
             RpcBudget(_engine.ActiveCreature.Id, b.MovementRemaining,
                 b.ActionAvailable, b.BonusActionAvailable);
+            MaybeAutoEndTurn();
+        }
+
+        /// <summary>Ends a player's turn automatically once nothing useful remains:
+        /// action spent, no movement left, and no usable bonus action (only the cleric's
+        /// Healing Word qualifies in v1). Short grace delay so results stay readable.</summary>
+        [Server]
+        private void MaybeAutoEndTurn()
+        {
+            if (!InCombat.Value || _engine == null) return;
+            var active = _engine.ActiveCreature;
+            if (!_server.TryGetValue(active.Id, out var unit) || unit.Player == null) return;
+            var b = _engine.ActiveBudget;
+            if (b.ActionAvailable || b.MovementRemaining >= 5) return;
+
+            bool bonusUseful = false;
+            if (b.BonusActionAvailable && active is CharacterSheet sheet)
+            {
+                foreach (var spellId in sheet.KnownSpells)
+                {
+                    SpellDefinition spell;
+                    try { spell = SpellLibrary.Get(spellId); }
+                    catch (KeyNotFoundException) { continue; }
+                    if (spell.IsBonusAction
+                        && (spell.Level == 0 || sheet.SlotsRemaining.Any(s => s > 0)))
+                    { bonusUseful = true; break; }
+                }
+            }
+            if (!bonusUseful) StartCoroutine(AutoEndSoon(active.Id));
+        }
+
+        [Server]
+        private IEnumerator AutoEndSoon(string unitId)
+        {
+            yield return new WaitForSeconds(1.1f);
+            if (InCombat.Value && _engine != null && _engine.ActiveCreature.Id == unitId)
+            {
+                ServerLog($"{_engine.ActiveCreature.Name}'s turn ends.");
+                _turnDone = true;
+            }
         }
 
         // ==================== CLIENT ====================
@@ -717,8 +762,13 @@ namespace RadiantPool.Game
         {
             var view = ClientUnits.FirstOrDefault(u => u.Id == unitId);
             if (view == null) return;
+            Vector3 oldPos = CellToWorld(view.Cell);
             view.Cell = new Vector2Int(cx, cy);
-            if (view.Visual != null) SnapVisual(view);
+            if (view.Visual != null)
+            {
+                SnapVisual(view);
+                CombatFx.Face(view.Visual, oldPos + (CellToWorld(view.Cell) - oldPos) * 2f);
+            }
             if (unitId == ActiveUnitId && IsMyTurn) MoveLeft = Math.Max(0, MoveLeft - 5);
         }
 
