@@ -10,20 +10,25 @@ namespace RadiantPool.Game
     /// at runtime (9-sliced rounded rects); fonts ship in Resources/Fonts (SIL OFL).</summary>
     public static class Theme
     {
-        // ---------- palette (theme/.../gilded_quest/DESIGN.md) ----------
-        public static readonly Color Surface        = Hex("#131313");
-        public static readonly Color Panel          = Hex("#202020");
-        public static readonly Color PanelHigh      = Hex("#2a2a2a");
-        public static readonly Color PanelBright    = Hex("#393939");
-        public static readonly Color OnSurface      = Hex("#e5e2e1");
-        public static readonly Color OnSurfaceMuted = Hex("#d0c5af");
-        public static readonly Color Gold           = Hex("#f2ca50");
-        public static readonly Color GoldDeep       = Hex("#d4af37");
-        public static readonly Color OnGold         = Hex("#3c2f00");
-        public static readonly Color Parchment      = Hex("#f5f5f5");
-        public static readonly Color ParchmentEdge  = Hex("#cfc9ba");
-        public static readonly Color Ink            = Hex("#212121");
-        public static readonly Color InkMuted       = Hex("#5c5c5c");
+        // ---------- palette ----------
+        // Base: theme/.../gilded_quest/DESIGN.md, refined with the ui-ux-pro-max
+        // "Academia (Scholarly)" palette: mahogany/oak panels instead of flat gray,
+        // brass borders instead of raw gold, true parchment instead of glare-white,
+        // and parchment text colors that pass the 4.5:1 contrast guideline.
+        public static readonly Color Surface        = Hex("#1c1714");   // mahogany
+        public static readonly Color Panel          = Hex("#241e19");   // oak
+        public static readonly Color PanelHigh      = Hex("#2e2721");
+        public static readonly Color PanelBright    = Hex("#3d332b");   // worn leather
+        public static readonly Color OnSurface      = Hex("#e8e2d8");
+        public static readonly Color OnSurfaceMuted = Hex("#cbbb9c");
+        public static readonly Color Gold           = Hex("#f2ca50");   // active/emphasis
+        public static readonly Color GoldDeep       = Hex("#c9a962");   // brass borders
+        public static readonly Color OnGold         = Hex("#33270a");
+        public static readonly Color Parchment      = Hex("#e8dfd4");   // true parchment
+        public static readonly Color ParchmentEdge  = Hex("#c4b69e");
+        public static readonly Color Ink            = Hex("#2a241e");
+        public static readonly Color InkMuted       = Hex("#6b6257");   // 4.5:1 on parchment
+        public static readonly Color Crimson        = Hex("#8b2635");   // library crimson
         public static readonly Color MageBlue       = Hex("#3860be");
         public static readonly Color FighterRed     = Hex("#c62828");
         public static readonly Color RangerGreen    = Hex("#2e7d32");
@@ -134,7 +139,7 @@ namespace RadiantPool.Game
         public static Texture2D PanelTex => Rounded("panel", Panel, GoldDeep, 2, 8);
         public static Texture2D PanelPlainTex => Rounded("panelPlain", Panel, PanelBright, 1, 6);
         public static Texture2D ParchmentTex => Rounded("parchment", Parchment, ParchmentEdge, 1, 6);
-        public static Texture2D GoldWashTex => Rounded("goldwash", new Color(0.98f, 0.93f, 0.72f), GoldDeep, 2, 6);
+        public static Texture2D GoldWashTex => Rounded("goldwash", new Color(0.94f, 0.88f, 0.72f), GoldDeep, 2, 6);
         public static Texture2D WellTex => Rounded("well", Hex("#0e0e0e"), Color.black, 1, 4);
         public static Texture2D BtnStoneTex => Rounded("btnStone", PanelHigh, GoldDeep, 1, 10);
         public static Texture2D BtnStoneHoverTex => Rounded("btnStoneHov", PanelBright, Gold, 1, 10);

@@ -321,7 +321,7 @@ namespace RadiantPool.Game
             foreach (var u in combat.ClientUnits)
             {
                 bool active = u.Id == combat.ActiveUnitId;
-                string nameColor = u.Dead ? "#6f6f6f"
+                string nameColor = u.Dead ? "#948a7c"
                     : active ? "#f2ca50"
                     : u.IsPc ? "#b2c5ff" : "#ff9e9e";
                 string state = u.Dead ? "  ✝" : u.Down ? "  (down)" : "";
@@ -345,7 +345,7 @@ namespace RadiantPool.Game
         private static string Colorize(string line)
         {
             if (line.Contains("misses") || line.Contains("miss ("))
-                return $"<color=#8a8a8a>{line}</color>";
+                return $"<color=#6b6257>{line}</color>";
             if (line.Contains("CRITS"))
                 return line.Replace("CRITS", "<b><color=#c62828>CRITS</color></b>");
             if (line.Contains("slain") || line.Contains("goes down")

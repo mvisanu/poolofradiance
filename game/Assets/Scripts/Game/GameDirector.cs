@@ -498,7 +498,7 @@ namespace RadiantPool.Game
             if (state == QuestState.Locked) return;
             if (state == QuestState.Completed)
             {
-                GUILayout.Label($"<color=#2e7d32>✔</color>  <color=#8a8a8a>{title}</color>",
+                GUILayout.Label($"<color=#2e7d32>✔</color>  <color=#6b6257>{title}</color>",
                     Theme.BodyInk);
                 return;
             }
