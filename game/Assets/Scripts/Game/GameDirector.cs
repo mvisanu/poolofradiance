@@ -22,6 +22,8 @@ namespace RadiantPool.Game
             public string ZoneId = "";
             public string DisplayName = "";
             public string QuestName = "";
+            /// <summary>Journal text: what to do and WHERE to go (compass direction).</summary>
+            public string Description = "";
             public int RequiredEncounters = 3;
             public int XpEach = 300;
             public int Gold = 100;
@@ -448,15 +450,18 @@ namespace RadiantPool.Game
                 GUILayout.ExpandHeight(true));
             GUILayout.BeginVertical(Theme.ParchmentStyle);
             DrawQuest("Report to the Council", (QuestState)MusterState.Value,
-                "Speak with Councilor Veresk at the Council Hall.", -1f);
+                "Speak with Councilor Veresk on the council platform in the hub plaza " +
+                "(follow the red X on the minimap).", -1f);
             for (int i = 0; i < Zones.Length; i++)
             {
                 var cfg = Zones[i];
                 int done = Mathf.Min(i < ZoneClearedCounts.Count ? ZoneClearedCounts[i] : 0,
                     cfg.RequiredEncounters);
-                DrawQuest(cfg.QuestName, GetZoneState(i),
-                    $"Clear {cfg.DisplayName} ({done}/{cfg.RequiredEncounters}), " +
-                    "then return to Veresk.",
+                string detail = (cfg.Description.Length > 0
+                        ? cfg.Description + "\n" : $"Clear {cfg.DisplayName}. ")
+                    + $"<b>Cleared {done}/{cfg.RequiredEncounters}</b> — the red X on the " +
+                    "minimap marks the nearest fight.";
+                DrawQuest(cfg.QuestName, GetZoneState(i), detail,
                     (float)done / cfg.RequiredEncounters);
             }
             if (CampaignComplete.Value)

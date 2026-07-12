@@ -293,6 +293,68 @@ namespace RadiantPool.Game
             Destroy(burst);
         }
 
+        // ---------- attack-target marker ----------
+
+        private GameObject _targetMarker;
+        private Coroutine _targetRoutine;
+
+        /// <summary>Small red triangle bobbing over the unit the local player is
+        /// attacking. Re-showing moves it; it hides itself after the duration.</summary>
+        public void ShowTargetMarker(Transform unit, float duration = 2.5f)
+        {
+            if (unit == null) return;
+            if (_targetMarker == null)
+            {
+                _targetMarker = new GameObject("TargetMarker");
+                var mesh = new Mesh
+                {
+                    vertices = new[]
+                    {
+                        new Vector3(-0.28f, 0.45f, 0f),
+                        new Vector3(0.28f, 0.45f, 0f),
+                        new Vector3(0f, 0f, 0f)
+                    },
+                    triangles = new[] { 0, 1, 2, 2, 1, 0 }   // double-sided
+                };
+                mesh.RecalculateNormals();
+                _targetMarker.AddComponent<MeshFilter>().mesh = mesh;
+                var mr = _targetMarker.AddComponent<MeshRenderer>();
+                var temp = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                mr.material = new Material(temp.GetComponent<Renderer>().sharedMaterial);
+                Destroy(temp);
+                var red = new Color(1f, 0.22f, 0.16f);
+                mr.material.color = red;
+                mr.material.EnableKeyword("_EMISSION");
+                mr.material.SetColor("_EmissionColor", red * 1.4f);
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                _targetMarker.AddComponent<Billboard>();
+            }
+            if (_targetRoutine != null) StopCoroutine(_targetRoutine);
+            _targetRoutine = StartCoroutine(TargetMarkerRoutine(unit, duration));
+        }
+
+        private IEnumerator TargetMarkerRoutine(Transform unit, float duration)
+        {
+            // Sit just above the unit's head, whatever its model height.
+            float top = 2.3f;
+            var rs = unit.GetComponentsInChildren<Renderer>();
+            if (rs.Length > 0)
+            {
+                var b = rs[0].bounds;
+                for (int i = 1; i < rs.Length; i++) b.Encapsulate(rs[i].bounds);
+                top = Mathf.Max(1.2f, b.max.y - unit.position.y + 0.15f);
+            }
+            _targetMarker.SetActive(true);
+            float until = Time.time + duration;
+            while (Time.time < until && unit != null)
+            {
+                float bob = Mathf.Sin(Time.time * 6f) * 0.1f;
+                _targetMarker.transform.position = unit.position + Vector3.up * (top + bob);
+                yield return null;
+            }
+            if (_targetMarker != null) _targetMarker.SetActive(false);
+        }
+
         // ---------- active-turn ring ----------
 
         public void SetTurnMarker(Transform unit, bool isPc)

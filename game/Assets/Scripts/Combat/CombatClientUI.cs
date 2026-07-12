@@ -45,11 +45,18 @@ namespace RadiantPool.Game
         {
             var combat = CombatManager.Instance;
             var mine = combat?.MyUnit;
-            bool canMove = combat != null && combat.IsMyTurn && _mode == Mode.Root
-                           && mine is { Down: false, Dead: false }
-                           && combat.MoveLeft >= 5 && Camera.main != null;
-            UpdateRangeOverlay(combat, canMove);
-            if (!canMove) { ShowHover(false); return; }
+            bool interactive = combat != null && combat.IsMyTurn && _mode == Mode.Root
+                               && mine is { Down: false, Dead: false }
+                               && Camera.main != null;
+            UpdateRangeOverlay(combat, interactive && combat.MoveLeft >= 5);
+            if (!interactive) { ShowHover(false); return; }
+
+            // Space / Enter: end the turn without touching the mouse.
+            if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return))
+            {
+                combat.CmdEndTurn();
+                return;
+            }
 
             var plane = new Plane(Vector3.up, Vector3.zero);
             var ray = Camera.main.ScreenPointToRay(Input.mousePosition);
@@ -63,15 +70,39 @@ namespace RadiantPool.Game
             { ShowHover(false); return; }
 
             ShowHover(true);
-            // Red over an enemy (walk into reach), blue-white otherwise — per the mock.
-            bool enemyThere = combat.ClientUnits.Any(u => !u.IsPc && !u.Dead && u.Cell == cell);
-            SetHoverColor(enemyThere
+            // Red over an attackable enemy, blue-white for movement — per the mock.
+            var enemy = combat.ClientUnits.FirstOrDefault(
+                u => !u.IsPc && !u.Dead && u.Cell == cell);
+            SetHoverColor(enemy != null
                 ? new Color(0.9f, 0.25f, 0.2f) : new Color(0.45f, 0.9f, 1f));
             _hoverMarker.transform.position = combat.GridOrigin + new Vector3(
                 cell.x * CombatManager.CellSize, 0.05f, cell.y * CombatManager.CellSize);
 
             if (Input.GetMouseButtonDown(0) && cell != mine.Cell)
-                combat.CmdMoveTo(cell.x, cell.y);
+            {
+                // Click an enemy: attack when the weapon reaches, otherwise walk into
+                // reach (CmdMoveTo stops adjacent to occupied cells).
+                if (enemy != null && combat.ActionLeft && InWeaponRange(mine.Cell, cell))
+                {
+                    CombatFx.Instance?.ShowTargetMarker(enemy.Visual);
+                    combat.CmdAttack(enemy.Id);
+                }
+                else if (combat.MoveLeft >= 5)
+                {
+                    if (enemy != null) CombatFx.Instance?.ShowTargetMarker(enemy.Visual);
+                    combat.CmdMoveTo(cell.x, cell.y);
+                }
+            }
+        }
+
+        private bool InWeaponRange(Vector2Int from, Vector2Int to)
+        {
+            int reach = 5;
+            var holder = LocalHolder();
+            var weapon = holder != null ? GameItem.Get(holder.WeaponId.Value) : null;
+            if (weapon != null && weapon.RangeFeet > 0) reach = weapon.RangeFeet;
+            int distFeet = Mathf.Max(Mathf.Abs(to.x - from.x), Mathf.Abs(to.y - from.y)) * 5;
+            return distFeet <= reach;
         }
 
         // ---------- movement-range overlay (blue cells, per the mock) ----------
@@ -320,7 +351,8 @@ namespace RadiantPool.Game
                 Theme.PanelStyle);
             GUILayout.BeginHorizontal();
             GUILayout.Label("Your Turn", Theme.Header, GUILayout.Width(104));
-            GUILayout.Label($"<color=#d0c5af>move <b>{combat.MoveLeft} ft</b> (click a square)" +
+            GUILayout.Label($"<color=#d0c5af>move <b>{combat.MoveLeft} ft</b> — click a square" +
+                " · click an enemy to attack · Space ends turn" +
                 $"   action {(combat.ActionLeft ? "<color=#2e7d32>✔</color>" : "<color=#c62828>✘</color>")}" +
                 $"   bonus {(combat.BonusLeft ? "<color=#2e7d32>✔</color>" : "<color=#c62828>✘</color>")}" +
                 (combat.MySlots.Any(s => s > 0)

@@ -547,6 +547,9 @@ namespace RadiantPool.Game
                 CombatFx.Face(target.Visual, attacker.Visual.position);
                 fx.Lunge(attacker.Visual, target.Visual.position);
                 CharacterVisuals.Trigger(attacker.Visual, "Attack");
+                // Triangle over MY current target so the fight is easy to follow.
+                if (attacker.IsPc && attacker.OwnerId == LocalConnection.ClientId)
+                    fx.ShowTargetMarker(target.Visual);
             }
             if (hit)
             {
@@ -589,6 +592,8 @@ namespace RadiantPool.Game
                 CharacterVisuals.Trigger(caster.Visual, "Attack");
                 fx.CastFlare(caster.Visual.position, color);
                 fx.Bolt(caster.Visual.position, target.Visual.position, color);
+                if (!isHeal && caster.IsPc && caster.OwnerId == LocalConnection.ClientId)
+                    fx.ShowTargetMarker(target.Visual);
             }
             if (isHeal)
                 fx.Popup(target.Visual.position, $"+{amount}", palette[3]);

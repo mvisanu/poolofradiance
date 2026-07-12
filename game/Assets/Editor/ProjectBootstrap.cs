@@ -709,24 +709,33 @@ namespace RadiantPool.EditorTools
                 {
                     ZoneId = "old_docks", DisplayName = "The Old Docks",
                     QuestName = "Retake the Old Docks",
+                    Description = "Squatter gangs hold three yards along the waterfront " +
+                        "WEST of the hub. Break all three, then return to Veresk.",
                     RequiredEncounters = 3, XpEach = 300, Gold = 100
                 },
                 new GameDirector.ZoneConfig
                 {
                     ZoneId = "drowned_market", DisplayName = "The Drowned Market",
                     QuestName = "Silence the Drowned Market",
+                    Description = "The drowned dead haunt the flooded market NORTH of the " +
+                        "hub. Lay all four hauntings to rest — mind the Toll-Keeper.",
                     RequiredEncounters = 4, XpEach = 900, Gold = 250
                 },
                 new GameDirector.ZoneConfig
                 {
                     ZoneId = "sunken_warcamp", DisplayName = "The Sunken Warcamp",
                     QuestName = "The Warband Below",
+                    Description = "Karg Splitjaw's orc warband holds the sunken quarter " +
+                        "SOUTH of the walls. Break both picket bands, then storm the " +
+                        "war-tent and slay the Warchief.",
                     RequiredEncounters = 3, XpEach = 1200, Gold = 400
                 },
                 new GameDirector.ZoneConfig
                 {
                     ZoneId = "glasslit_temple", DisplayName = "The Glasslit Temple",
                     QuestName = "The Fire in the Glass",
+                    Description = "The Kindled cult holds the Glasslit Temple EAST of the " +
+                        "hub. Break their five circles and face what wears the Warden.",
                     RequiredEncounters = 5, XpEach = 3400, Gold = 600
                 }
             };
