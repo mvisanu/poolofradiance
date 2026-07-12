@@ -17,7 +17,8 @@ namespace RadiantPool.Game
     public class MiniMap : MonoBehaviour
     {
         private const int NormalSide = 210;     // on-screen pixels (pre UI scale)
-        private const int Header = 20;          // control strip above the map
+        private const int Header = 26;          // control strip above the map
+        private const int BtnW = 28, BtnH = 22; // icon buttons — readable, easy to hit
         private const float MinRadius = 20f;    // world meters shown from center to edge
         private const float MaxRadius = 220f;   // wide enough to bring any zone objective in view
         private const float MaxPan = 500f;      // metres the view may stray from the player
@@ -44,8 +45,9 @@ namespace RadiantPool.Game
         private RenderTexture _rt;
         private Texture2D _playerArrow, _questX, _enemyTri, _npcDiamond,
             _vendorSq, _smithSq, _gateSq, _partyDot;
+        private Texture2D _icoExpand, _icoShrink, _icoMinimize, _icoRestore;
 
-        private GUIStyle _tagStyle;
+        private GUIStyle _tagStyle, _tipStyle;
 
         private struct Marker { public Vector3 Pos; public Texture2D Tex; public float Size; }
         private readonly List<Marker> _markers = new List<Marker>();
@@ -113,6 +115,11 @@ namespace RadiantPool.Game
             _smithSq = MakeSquare(new Color(0.86f, 0.54f, 0.22f), outline, hollow: false);
             _gateSq = MakeSquare(Theme.Parchment, outline, hollow: true);
             _partyDot = MakeCircle(new Color(0.25f, 0.85f, 0.78f), outline);
+
+            _icoExpand = MakeCornerArrows(outward: true);    // grow / fullscreen
+            _icoShrink = MakeCornerArrows(outward: false);   // maximized → normal
+            _icoMinimize = MakeMinimizeIcon();               // normal → corner pill
+            _icoRestore = _icoExpand;                        // pill → normal
         }
 
         private static void SetSize(int mode)
@@ -201,8 +208,9 @@ namespace RadiantPool.Game
 
             if (EffectiveMode == 0)
             {
+                // Collapsed: a labelled pill — icon alone would be a guessing game.
                 var pill = MapRect;
-                if (GUI.Button(pill, "MAP +")) SetSize(1);
+                if (IconButton(pill, _icoRestore, "Show map (M)", "MAP")) SetSize(1);
                 return;
             }
 
@@ -211,16 +219,25 @@ namespace RadiantPool.Game
             GUI.Box(new Rect(frame.x - 3, frame.y - 3, frame.width + 6, frame.height + 6),
                 GUIContent.none);
 
-            // Header strip: title, recenter (only once panned), shrink/grow controls.
-            GUI.Label(new Rect(frame.x + 6, frame.y + 2, 84, 16),
+            // Header strip: title, recenter (only once panned), then the two size icons.
+            GUI.Label(new Rect(frame.x + 6, frame.y + 5, 84, 16),
                 _pan == Vector2.zero ? "MAP" : "MAP (PANNED)", Theme.Caps);
             if (_pan != Vector2.zero
-                && GUI.Button(new Rect(frame.xMax - 118, frame.y, 68, Header - 2), "RECENTER"))
+                && GUI.Button(new Rect(frame.xMax - 130, frame.y + 2, 62, BtnH), "RECENTER"))
                 Recenter();
-            if (GUI.Button(new Rect(frame.xMax - 46, frame.y, 22, Header - 2), "-"))
+
+            // Left icon shrinks one step: maximized → normal (arrows in), normal →
+            // corner pill (minimize bar). Right icon grows; disabled once maximized.
+            var shrinkRect = new Rect(frame.xMax - BtnW * 2 - 6, frame.y + 2, BtnW, BtnH);
+            var growRect = new Rect(frame.xMax - BtnW - 2, frame.y + 2, BtnW, BtnH);
+
+            bool atMax = _sizeMode >= 2;
+            if (IconButton(shrinkRect, atMax ? _icoShrink : _icoMinimize,
+                    atMax ? "Shrink map" : "Collapse to corner"))
                 SetSize(_sizeMode - 1);
-            GUI.enabled = _sizeMode < 2;
-            if (GUI.Button(new Rect(frame.xMax - 23, frame.y, 22, Header - 2), "+"))
+
+            GUI.enabled = !atMax;
+            if (IconButton(growRect, _icoExpand, atMax ? "Already maximized" : "Expand map (M)"))
                 SetSize(_sizeMode + 1);
             GUI.enabled = true;
 
@@ -277,6 +294,44 @@ namespace RadiantPool.Game
             }
 
             if (EffectiveMode == 2) DrawLegend(view);
+            DrawTooltip(frame);   // last, so map markers can never cover the hint
+        }
+
+        /// <summary>A themed button whose face is a generated icon (fonts have no glyphs
+        /// for these, and a bare "+"/"-" was unreadable at HUD size). The icon is drawn
+        /// over the button so it keeps the stone/gold press states; `tip` shows on hover.
+        /// Optional `text` labels the button for cases where the icon alone is ambiguous.</summary>
+        private bool IconButton(Rect r, Texture2D icon, string tip, string text = null)
+        {
+            bool clicked = GUI.Button(r, new GUIContent(text ?? "", tip));
+
+            float ico = Mathf.Min(16f, r.height - 6f);
+            float x = text == null ? r.center.x - ico / 2f : r.xMax - ico - 8f;
+            var prevColor = GUI.color;
+            // Match the skin's text colours: parchment normally, gold on hover.
+            if (!GUI.enabled) GUI.color = new Color(1f, 1f, 1f, 0.4f);
+            else if (r.Contains(Event.current.mousePosition)) GUI.color = Theme.Gold;
+            else GUI.color = Theme.OnSurface;
+            GUI.DrawTexture(new Rect(x, r.center.y - ico / 2f, ico, ico), icon);
+            GUI.color = prevColor;
+
+            return clicked;
+        }
+
+        /// <summary>Hover hint for the icon buttons, drawn just under the header so it
+        /// never runs off the right edge of the screen.</summary>
+        private void DrawTooltip(Rect frame)
+        {
+            if (string.IsNullOrEmpty(GUI.tooltip)) return;
+            if (_tipStyle == null)
+                _tipStyle = new GUIStyle(Theme.Caps)
+                    { alignment = TextAnchor.MiddleCenter, wordWrap = false };
+
+            var size = _tipStyle.CalcSize(new GUIContent(GUI.tooltip));
+            float w = size.x + 16f, h = 18f;
+            var r = new Rect(Mathf.Max(4f, frame.xMax - w), frame.y + Header + 4f, w, h);
+            GUI.Box(r, GUIContent.none);
+            GUI.Label(r, GUI.tooltip, _tipStyle);
         }
 
         /// <summary>Left-drag inside the map slides the view over the world (grab-the-map
@@ -413,6 +468,68 @@ namespace RadiantPool.Game
                 float d = Mathf.Max(Mathf.Abs(x - c), Mathf.Abs(y - c)) - (c - 2.5f);
                 return hollow ? Mathf.Max(d, -3.5f - d) : d;   // ring for gates
             }, color, outline);
+        }
+
+        // ---------- header icons (white, tinted by GUI.color at draw time) ----------
+
+        /// <summary>Fullscreen-style corner brackets. Outward = the four brackets hug the
+        /// outer corners ("expand"); inward = their corners sit in the middle with arms
+        /// reaching out ("shrink"). Reads at 16 px where a "+"/"-" glyph does not.</summary>
+        private static Texture2D MakeCornerArrows(bool outward)
+        {
+            const int s = 32, th = 3, near = 3, far = 13;
+            var tex = NewTex(s);
+            Fill(tex, Color.clear);
+
+            // One corner, then mirrored into the other three.
+            for (int mx = 0; mx < 2; mx++)
+                for (int my = 0; my < 2; my++)
+                {
+                    int cx = outward ? near : far;       // bracket corner
+                    int cy = outward ? near : far;
+                    int ex = outward ? far : near;       // arm ends
+                    int ey = outward ? far : near;
+                    Bar(tex, s, mx, my, Mathf.Min(cx, ex), cy, Mathf.Max(cx, ex), cy, th);
+                    Bar(tex, s, mx, my, cx, Mathf.Min(cy, ey), cx, Mathf.Max(cy, ey), th);
+                }
+            tex.Apply();
+            return tex;
+        }
+
+        /// <summary>Window-minimize bar: "put the map away into the corner".</summary>
+        private static Texture2D MakeMinimizeIcon()
+        {
+            const int s = 32;
+            var tex = NewTex(s);
+            Fill(tex, Color.clear);
+            Bar(tex, s, 0, 0, 7, 20, 24, 20, 4);        // the bar
+            Bar(tex, s, 0, 0, 7, 9, 24, 9, 2);          // hint of the shrunken window
+            Bar(tex, s, 0, 0, 7, 9, 7, 14, 2);
+            Bar(tex, s, 0, 0, 24, 9, 24, 14, 2);
+            tex.Apply();
+            return tex;
+        }
+
+        /// <summary>Axis-aligned thick bar, optionally mirrored into another quadrant.</summary>
+        private static void Bar(Texture2D tex, int s, int mirrorX, int mirrorY,
+            int x0, int y0, int x1, int y1, int thickness)
+        {
+            int h = thickness / 2;
+            for (int y = Mathf.Min(y0, y1) - h; y <= Mathf.Max(y0, y1) + h; y++)
+                for (int x = Mathf.Min(x0, x1) - h; x <= Mathf.Max(x0, x1) + h; x++)
+                {
+                    if (x < 0 || y < 0 || x >= s || y >= s) continue;
+                    int px = mirrorX == 0 ? x : s - 1 - x;
+                    int py = mirrorY == 0 ? y : s - 1 - y;
+                    tex.SetPixel(px, py, Color.white);
+                }
+        }
+
+        private static void Fill(Texture2D tex, Color c)
+        {
+            var pixels = new Color[tex.width * tex.height];
+            for (int i = 0; i < pixels.Length; i++) pixels[i] = c;
+            tex.SetPixels(pixels);
         }
 
         private static Texture2D MakeCircle(Color color, Color outline)

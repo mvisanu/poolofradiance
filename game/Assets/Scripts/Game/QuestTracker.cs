@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
@@ -20,7 +21,7 @@ namespace RadiantPool.Game
         private GameObject _beacon;
         private float _nextScan;
         private Texture2D _steerArrow;
-        private GUIStyle _distStyle;
+        private GUIStyle _distStyle, _questTitle, _stepStyle, _stepDone;
 
         private void Awake() => Instance = this;
         private void OnDestroy() { if (Instance == this) Instance = null; }
@@ -72,12 +73,18 @@ namespace RadiantPool.Game
                 return;
             }
 
-            if (activeZone < 0) return;   // campaign complete or nothing active
+            // No active zone = the campaign is done. Rather than leaving the party with
+            // nothing to chase, point them at whatever threat is still standing.
+            var candidates = FindObjectsByType<EncounterTrigger>(FindObjectsSortMode.None)
+                .Where(t => !t.Consumed && t.MonsterIds.Length > 0
+                            && !director.ConsumedEncounterIds.Contains(t.EncounterId));
+            if (activeZone >= 0)
+            {
+                string zoneId = director.Zones[activeZone].ZoneId;
+                candidates = candidates.Where(t => t.ZoneId == zoneId && t.RequiredForClear);
+            }
 
-            string zoneId = director.Zones[activeZone].ZoneId;
-            var next = FindObjectsByType<EncounterTrigger>(FindObjectsSortMode.None)
-                .Where(t => t.ZoneId == zoneId && t.RequiredForClear
-                            && !director.ConsumedEncounterIds.Contains(t.EncounterId))
+            var next = candidates
                 .OrderBy(t => Vector3.Distance(player.position, t.transform.position))
                 .FirstOrDefault();
             if (next == null) return;
@@ -85,6 +92,51 @@ namespace RadiantPool.Game
             TargetPosition = next.transform.position;
             TargetLabel = next.DisplayName;
             HasTarget = true;
+        }
+
+        /// <summary>The live objective list: the quest the party is on and exactly what is
+        /// left to do on it. Ticked lines are done, hollow lines are outstanding.</summary>
+        public static (string title, List<(string text, bool done)> steps) Objectives()
+        {
+            var steps = new List<(string, bool)>();
+            var d = GameDirector.Instance;
+            if (d == null || d.Zones.Length == 0) return ("", steps);
+
+            if ((QuestState)d.MusterState.Value == QuestState.Active)
+            {
+                steps.Add(("Speak with Councilor Veresk", false));
+                return ("Report to the Council", steps);
+            }
+
+            for (int i = 0; i < d.Zones.Length; i++)
+            {
+                var state = d.GetZoneState(i);
+                if (state != QuestState.Active && state != QuestState.ObjectivesMet) continue;
+
+                var cfg = d.Zones[i];
+                int done = i < d.ZoneClearedCounts.Count ? d.ZoneClearedCounts[i] : 0;
+                int need = cfg.RequiredEncounters;
+                bool cleared = state == QuestState.ObjectivesMet || done >= need;
+
+                steps.Add((cleared
+                    ? $"Clear {cfg.DisplayName} — {need}/{need}"
+                    : $"Clear {cfg.DisplayName} — {done}/{need} ({need - done} left)", cleared));
+                steps.Add(("Report back to Councilor Veresk", false));
+                return (cfg.QuestName, steps);
+            }
+
+            // Campaign over: the standing order is to mop up whatever still lurks.
+            int lurking = FindObjectsByType<EncounterTrigger>(FindObjectsSortMode.None)
+                .Count(t => !t.Consumed && t.MonsterIds.Length > 0
+                            && !d.ConsumedEncounterIds.Contains(t.EncounterId));
+            if (lurking > 0)
+            {
+                steps.Add(($"Hunt the threats still at large — {lurking} left", false));
+                return ("Standing Orders: Purge the Ruins", steps);
+            }
+
+            steps.Add(("Every threat has been put down", true));
+            return ("The Hollow Flame Recedes", steps);
         }
 
         private void UpdateBeacon()
@@ -115,7 +167,10 @@ namespace RadiantPool.Game
             Ui.Begin();
             var player = LocalPlayer();
             bool inCombat = CombatManager.Instance != null && CombatManager.Instance.InCombat.Value;
-            if (!HasTarget || player == null || inCombat) return;
+            if (player == null || inCombat) return;
+
+            DrawObjectives();   // shown even with no target, so the party is never adrift
+            if (!HasTarget) return;
 
             Vector3 delta = TargetPosition - player.position;
             float dist = new Vector2(delta.x, delta.z).magnitude;
@@ -129,6 +184,48 @@ namespace RadiantPool.Game
 
             DrawSteeringArrow(bearing, dist);
             DrawWorldMarker(dist);
+        }
+
+        /// <summary>Persistent quest card, top-left: the active quest and a checklist of
+        /// what is still outstanding. It updates the instant a quest hands over, so
+        /// finishing one immediately shows the next.</summary>
+        private void DrawObjectives()
+        {
+            var (title, steps) = Objectives();
+            if (string.IsNullOrEmpty(title)) return;
+
+            if (_questTitle == null)
+            {
+                _questTitle = new GUIStyle(Theme.Header) { fontSize = 14, wordWrap = true };
+                _stepStyle = new GUIStyle(Theme.Body) { fontSize = 12, wordWrap = true };
+                _stepDone = new GUIStyle(Theme.Body) { fontSize = 12, wordWrap = true };
+                _stepDone.normal.textColor = Theme.OnSurfaceMuted;
+            }
+
+            const float w = 250f, pad = 12f;
+            float h = pad * 2f + _questTitle.CalcHeight(new GUIContent(title), w - pad * 2f) + 4f;
+            foreach (var (text, _) in steps)
+                h += _stepStyle.CalcHeight(new GUIContent(text), w - pad * 2f - 18f) + 2f;
+
+            var panel = new Rect(12, 118, w, h);
+            GUI.Box(panel, GUIContent.none, Theme.PanelStyle);
+
+            float y = panel.y + pad;
+            float tH = _questTitle.CalcHeight(new GUIContent(title), w - pad * 2f);
+            GUI.Label(new Rect(panel.x + pad, y, w - pad * 2f, tH), title, _questTitle);
+            y += tH + 4f;
+
+            foreach (var (text, done) in steps)
+            {
+                var style = done ? _stepDone : _stepStyle;
+                float sH = style.CalcHeight(new GUIContent(text), w - pad * 2f - 18f);
+                // ASCII markers only: the body font has no box/tick glyphs, and a missing
+                // glyph renders as tofu. State is carried by the marker, not just colour.
+                GUI.Label(new Rect(panel.x + pad, y, 18f, sH),
+                    done ? "<color=#7fc47f>[x]</color>" : "<color=#f2ca50>[ ]</color>", style);
+                GUI.Label(new Rect(panel.x + pad + 18f, y, w - pad * 2f - 18f, sH), text, style);
+                y += sH + 2f;
+            }
         }
 
         /// <summary>The big "go this way" arrow: a gold chevron above the hotbar, rotated
