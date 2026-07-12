@@ -957,8 +957,9 @@ namespace RadiantPool.Game
             { "bonewalker", ("Skeleton_Warrior", Color.white, 1f) },
             { "kindled_zealot", ("Rogue_Hooded", new Color(1f, 0.55f, 0.45f), 1f) },
             { "hollow_warden", ("Knight", new Color(0.65f, 0.4f, 0.4f), 1.3f) },
-            { "orc", ("Orc|Barbarian", new Color(0.55f, 0.75f, 0.4f), 1.05f) },
-            { "orc_warchief", ("Orc|Barbarian", new Color(0.4f, 0.6f, 0.3f), 1.35f) },
+            // Quaternius orcs are already green — no tint when those prefabs exist.
+            { "orc", ("Orc|Barbarian", Color.white, 1.05f) },
+            { "orc_warchief", ("Orc_Skull|Orc|Barbarian", new Color(1f, 0.88f, 0.85f), 1.35f) },
             { "giant_spider", ("Spider", new Color(0.3f, 0.22f, 0.35f), 1.1f) },
             { "brown_bear", ("Bear", new Color(0.5f, 0.35f, 0.2f), 1.3f) },
             { "goblin", ("Goblin|Rogue", new Color(0.5f, 0.8f, 0.35f), 0.85f) },
