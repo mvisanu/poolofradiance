@@ -5,8 +5,10 @@ namespace RadiantPool.Game
 {
     /// <summary>Points the player at their current objective: the nearest uncleared
     /// encounter in the active zone, or Councilor Veresk when it's time to accept or
-    /// turn in. Shows a golden light beacon at the target, a HUD line with direction
-    /// arrow + distance, and feeds the minimap dot.</summary>
+    /// turn in. Shows a golden light beacon at the target, a big steering arrow above the
+    /// hotbar that always points the way to walk (rotated into camera space, so "up" is
+    /// straight ahead), a HUD line with the objective + distance, and feeds the minimap
+    /// X.</summary>
     public class QuestTracker : MonoBehaviour
     {
         public static QuestTracker Instance { get; private set; }
@@ -17,6 +19,8 @@ namespace RadiantPool.Game
 
         private GameObject _beacon;
         private float _nextScan;
+        private Texture2D _steerArrow;
+        private GUIStyle _distStyle;
 
         private void Awake() => Instance = this;
         private void OnDestroy() { if (Instance == this) Instance = null; }
@@ -116,15 +120,74 @@ namespace RadiantPool.Game
             Vector3 delta = TargetPosition - player.position;
             float dist = new Vector2(delta.x, delta.z).magnitude;
 
-            // Bearing arrow relative to camera view.
+            // Bearing relative to the camera, so screen-up always means "walk forward".
             float camYaw = Camera.main != null ? Camera.main.transform.eulerAngles.y : 0f;
             float bearing = Mathf.Atan2(delta.x, delta.z) * Mathf.Rad2Deg - camYaw;
-            string arrow = BearingArrow(bearing);
 
             Theme.DrawToast(Ui.W / 2f, 58,
-                $"{arrow}  NEXT: {TargetLabel}  <color=#d0c5af>— {dist:0} m</color>");
+                $"{BearingArrow(bearing)}  NEXT: {TargetLabel}  <color=#d0c5af>— {dist:0} m</color>");
 
+            DrawSteeringArrow(bearing, dist);
             DrawWorldMarker(dist);
+        }
+
+        /// <summary>The big "go this way" arrow: a gold chevron above the hotbar, rotated
+        /// to the objective's bearing (up = walk straight ahead) and gently pulsing. It is
+        /// the primary wayfinding cue — the minimap X is the map-level confirmation.</summary>
+        private void DrawSteeringArrow(float bearing, float dist)
+        {
+            if (_steerArrow == null) _steerArrow = MakeSteerArrow();
+
+            float size = 96f + Mathf.Sin(Time.time * 2.6f) * 5f;
+            float baseY = HotBar.BarRect.height > 0f ? HotBar.BarRect.y : Ui.H - 92f;
+            var center = new Vector2(Ui.W / 2f, baseY - 22f - size / 2f);
+
+            var prev = GUI.matrix;
+            GUIUtility.RotateAroundPivot(bearing, center);
+            GUI.DrawTexture(new Rect(center.x - size / 2f, center.y - size / 2f, size, size),
+                _steerArrow);
+            GUI.matrix = prev;
+
+            if (_distStyle == null)
+            {
+                _distStyle = new GUIStyle(Theme.Caps)
+                    { alignment = TextAnchor.MiddleCenter, wordWrap = false, fontSize = 12 };
+                _distStyle.normal.textColor = Theme.Gold;
+            }
+            GUI.Label(new Rect(center.x - 90, center.y + size / 2f - 4, 180, 16),
+                $"{dist:0} m", _distStyle);
+        }
+
+        /// <summary>Chunky up-pointing arrow (triangle head + tail) with a dark outline so
+        /// it reads over sky, grass or stone. Generated, so it needs no art asset.</summary>
+        private static Texture2D MakeSteerArrow()
+        {
+            const int s = 64;
+            const float ApexY = s - 4f, BaseY = s * 0.44f, TailY = 5f;
+            const float HeadHalf = s * 0.46f, TailHalf = s * 0.15f;
+
+            // Grow the whole silhouette by g to get the outline band.
+            bool Inside(int x, int y, float g)
+            {
+                float fx = Mathf.Abs(x - (s - 1) / 2f);
+                float headHalf = Mathf.Lerp(0f, HeadHalf,
+                    Mathf.InverseLerp(ApexY, BaseY, y));       // 0 at the point
+                bool head = y <= ApexY + g && y >= BaseY - g && fx <= headHalf + g;
+                bool tail = y >= TailY - g && y <= BaseY + g && fx <= TailHalf + g;
+                return head || tail;
+            }
+
+            var tex = new Texture2D(s, s, TextureFormat.RGBA32, false)
+                { hideFlags = HideFlags.HideAndDontSave };
+            var edge = new Color(0.13f, 0.09f, 0.03f);
+            for (int y = 0; y < s; y++)
+                for (int x = 0; x < s; x++)
+                    tex.SetPixel(x, y,
+                        Inside(x, y, 0f) ? Theme.Gold
+                        : Inside(x, y, 3f) ? edge
+                        : Color.clear);
+            tex.Apply();
+            return tex;
         }
 
         /// <summary>Gold chevron floating over the objective in the world; when the

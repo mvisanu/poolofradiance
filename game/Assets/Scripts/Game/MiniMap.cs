@@ -5,22 +5,29 @@ using UnityEngine;
 namespace RadiantPool.Game
 {
     /// <summary>Top-right minimap: an orthographic camera renders the world straight
-    /// down into a RenderTexture that follows the local player. North-fixed; the player
-    /// is the arrow in the middle. Three sizes — collapsed pill / normal / maximized
-    /// ([-]/[+] buttons or M key), remembered in PlayerPrefs. World objects get distinct
-    /// shape+color markers (never color alone): enemies red triangle, quest gold X,
-    /// NPCs green diamond, shops filled squares, locked gates hollow square, party teal
-    /// circles. Maximized shows a legend. Scroll wheel over the map zooms it (the orbit
-    /// camera yields while hovered).</summary>
+    /// down into a RenderTexture. North-fixed. Three sizes — collapsed pill / normal /
+    /// maximized ([-]/[+] buttons or M key), remembered in PlayerPrefs. Drag inside the
+    /// map to pan away from the player and go looking for the objective; the RECENTER
+    /// button (or releasing after a pan idles out) snaps back. World objects get distinct
+    /// shape+color markers (never color alone): enemies red triangle, quest gold X, NPCs
+    /// green diamond, shops filled squares, locked gates hollow square, party teal
+    /// circles. The quest X is edge-clamped with its distance, so it is always on screen
+    /// even when the objective is far outside the view. Maximized shows a legend. Scroll
+    /// over the map zooms it (the orbit camera yields while hovered).</summary>
     public class MiniMap : MonoBehaviour
     {
         private const int NormalSide = 210;     // on-screen pixels (pre UI scale)
         private const int Header = 20;          // control strip above the map
         private const float MinRadius = 20f;    // world meters shown from center to edge
         private const float MaxRadius = 220f;   // wide enough to bring any zone objective in view
+        private const float MaxPan = 500f;      // metres the view may stray from the player
         private const string SizePref = "minimap.size";
 
         private float _viewRadius = 42f;
+
+        /// <summary>World-space XZ offset of the map view from the player (drag to pan).</summary>
+        private Vector2 _pan;
+        private bool _panning;
 
         // 0 = collapsed pill, 1 = normal, 2 = maximized. Static so MapRect can stay a
         // static property (CombatClientUI/OrbitCamera hit-test it without an instance).
@@ -37,6 +44,8 @@ namespace RadiantPool.Game
         private RenderTexture _rt;
         private Texture2D _playerArrow, _questX, _enemyTri, _npcDiamond,
             _vendorSq, _smithSq, _gateSq, _partyDot;
+
+        private GUIStyle _tagStyle;
 
         private struct Marker { public Vector3 Pos; public Texture2D Tex; public float Size; }
         private readonly List<Marker> _markers = new List<Marker>();
@@ -125,8 +134,12 @@ namespace RadiantPool.Game
             // M toggles between normal and maximized (restores if collapsed).
             if (Input.GetKeyDown(KeyCode.M)) SetSize(_sizeMode == 2 ? 1 : 2);
 
+            bool inCombat = CombatManager.Instance != null
+                            && CombatManager.Instance.InCombat.Value;
+            if (inCombat) Recenter();   // a fight is never the time to be looking elsewhere
+
             _mapCam.enabled = EffectiveMode > 0;
-            _mapCam.transform.position = _player.position + Vector3.up * 90f;
+            _mapCam.transform.position = MapCenter + Vector3.up * 90f;
 
             float scroll = Input.GetAxis("Mouse ScrollWheel");
             if (Mathf.Abs(scroll) > 0.001f && EffectiveMode > 0 && MouseOverMap)
@@ -135,6 +148,11 @@ namespace RadiantPool.Game
                     MinRadius, MaxRadius);
             _mapCam.orthographicSize = _viewRadius;
         }
+
+        /// <summary>World point the map is centred on: the player, plus any drag pan.</summary>
+        private Vector3 MapCenter => _player.position + new Vector3(_pan.x, 0f, _pan.y);
+
+        private void Recenter() { _pan = Vector2.zero; _panning = false; }
 
         /// <summary>Refreshes the local player handle and the marker list (0.5 s cadence
         /// — FindObjectsByType is too heavy for every frame).</summary>
@@ -193,8 +211,12 @@ namespace RadiantPool.Game
             GUI.Box(new Rect(frame.x - 3, frame.y - 3, frame.width + 6, frame.height + 6),
                 GUIContent.none);
 
-            // Header strip: title + shrink/grow controls.
-            GUI.Label(new Rect(frame.x + 6, frame.y + 2, 80, 16), "MAP", Theme.Caps);
+            // Header strip: title, recenter (only once panned), shrink/grow controls.
+            GUI.Label(new Rect(frame.x + 6, frame.y + 2, 84, 16),
+                _pan == Vector2.zero ? "MAP" : "MAP (PANNED)", Theme.Caps);
+            if (_pan != Vector2.zero
+                && GUI.Button(new Rect(frame.xMax - 118, frame.y, 68, Header - 2), "RECENTER"))
+                Recenter();
             if (GUI.Button(new Rect(frame.xMax - 46, frame.y, 22, Header - 2), "-"))
                 SetSize(_sizeMode - 1);
             GUI.enabled = _sizeMode < 2;
@@ -204,15 +226,16 @@ namespace RadiantPool.Game
 
             GUI.DrawTexture(view, _rt, ScaleMode.StretchToFill);
 
+            float half = view.width / 2f;
+            HandlePanDrag(view, half);
+
             // North indicator (map is north-up): dark shadow pass, then parchment.
-            var nRect = new Rect(view.x + view.width / 2f - 6, view.y + 2, 14, 14);
+            var nRect = new Rect(view.x + half - 6, view.y + 2, 14, 14);
             var prevColor = GUI.color;
             GUI.color = Color.black;
             GUI.Label(new Rect(nRect.x + 1, nRect.y + 1, nRect.width, nRect.height), "N", Theme.Caps);
             GUI.color = prevColor;
             GUI.Label(nRect, "<color=#e8dfd4>N</color>", Theme.Caps);
-
-            float half = view.width / 2f;
 
             // World-object markers: drawn only while inside the view radius.
             foreach (var mk in _markers)
@@ -223,30 +246,69 @@ namespace RadiantPool.Game
                     view.y + half + d.y - mk.Size / 2f, mk.Size, mk.Size), mk.Tex);
             }
 
-            // Quest objective: a pulsing gold X, edge-clamped when out of view.
+            // Player arrow, rotated to face heading (map stays north-up). Sits at the
+            // centre until the view is panned away from them.
+            var pd = Vector2.ClampMagnitude(ToMap(_player.position, half), half - 9f);
+            var me = new Vector2(view.x + half + pd.x, view.y + half + pd.y);
+            var prev = GUI.matrix;
+            GUIUtility.RotateAroundPivot(_player.eulerAngles.y, me);
+            GUI.DrawTexture(new Rect(me.x - 9, me.y - 9, 18, 18), _playerArrow);
+            GUI.matrix = prev;
+
+            // Quest objective LAST so nothing can hide it: a pulsing gold X, clamped to
+            // the map edge with its distance when the objective is outside the view.
             var tracker = QuestTracker.Instance;
             if (tracker != null && tracker.HasTarget)
             {
-                var d = Vector2.ClampMagnitude(ToMap(tracker.TargetPosition, half), half - 12f);
-                float xs = 22f + Mathf.Sin(Time.time * 4f) * 3f;
-                GUI.DrawTexture(new Rect(view.x + half + d.x - xs / 2f,
-                    view.y + half + d.y - xs / 2f, xs, xs), _questX);
-            }
+                var raw = ToMap(tracker.TargetPosition, half);
+                var d = Vector2.ClampMagnitude(raw, half - 14f);
+                bool offMap = raw != d;
+                float xs = 24f + Mathf.Sin(Time.time * 4f) * 3f;
+                var at = new Vector2(view.x + half + d.x, view.y + half + d.y);
+                GUI.DrawTexture(new Rect(at.x - xs / 2f, at.y - xs / 2f, xs, xs), _questX);
 
-            // Player arrow, rotated to face heading (map stays north-up).
-            var center = new Vector2(view.x + half, view.y + half);
-            var prev = GUI.matrix;
-            GUIUtility.RotateAroundPivot(_player.eulerAngles.y, center);
-            GUI.DrawTexture(new Rect(center.x - 9, center.y - 9, 18, 18), _playerArrow);
-            GUI.matrix = prev;
+                if (_tagStyle == null)
+                    _tagStyle = new GUIStyle(Theme.Caps)
+                        { alignment = TextAnchor.MiddleCenter, wordWrap = false };
+                _tagStyle.normal.textColor = offMap ? Theme.Gold : Theme.OnSurface;
+                float dist = Vector3.Distance(tracker.TargetPosition, _player.position);
+                GUI.Label(new Rect(at.x - 40, at.y + xs / 2f - 2, 80, 14),
+                    $"{dist:0} m", _tagStyle);
+            }
 
             if (EffectiveMode == 2) DrawLegend(view);
         }
 
-        /// <summary>World offset from the player → map pixels (north-up).</summary>
+        /// <summary>Left-drag inside the map slides the view over the world (grab-the-map
+        /// metaphor) so the objective can be hunted down without walking there. The orbit
+        /// camera only rotates on right-drag, so the two never fight.</summary>
+        private void HandlePanDrag(Rect view, float half)
+        {
+            var e = Event.current;
+            float pxPerMetre = half / _viewRadius;
+            switch (e.type)
+            {
+                case EventType.MouseDown when e.button == 0 && view.Contains(e.mousePosition):
+                    _panning = true;
+                    e.Use();
+                    break;
+                case EventType.MouseDrag when _panning && e.button == 0:
+                    _pan = Vector2.ClampMagnitude(
+                        _pan + new Vector2(-e.delta.x, e.delta.y) / pxPerMetre, MaxPan);
+                    e.Use();
+                    break;
+                case EventType.MouseUp when _panning:
+                    _panning = false;
+                    e.Use();
+                    break;
+            }
+        }
+
+        /// <summary>World position → map pixels, relative to the (possibly panned) map
+        /// centre. North-up: +x east, −y north.</summary>
         private Vector2 ToMap(Vector3 world, float half)
         {
-            Vector3 delta = world - _player.position;
+            Vector3 delta = world - MapCenter;
             return new Vector2(delta.x, -delta.z) * (half / _viewRadius);
         }
 
