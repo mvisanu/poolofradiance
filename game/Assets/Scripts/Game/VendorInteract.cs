@@ -43,8 +43,7 @@ namespace RadiantPool.Game
 
             if (!_open && InRange())
             {
-                GUI.Box(new Rect(Ui.W / 2f - 130, Ui.H - 100, 260, 32),
-                    $"[E] Trade at {VendorName}", Theme.Toast);
+                Theme.DrawToast(Ui.W / 2f, Ui.H - 104, $"[E] Trade at {VendorName}");
                 return;
             }
             if (!_open) return;

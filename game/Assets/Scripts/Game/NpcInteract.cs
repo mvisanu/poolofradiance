@@ -67,8 +67,7 @@ namespace RadiantPool.Game
 
             if (!_open && InRange())
             {
-                GUI.Box(new Rect(Ui.W / 2f - 130, Ui.H - 64, 260, 32),
-                    $"[E] Talk to {NpcName}", Theme.Toast);
+                Theme.DrawToast(Ui.W / 2f, Ui.H - 64, $"[E] Talk to {NpcName}");
                 return;
             }
             if (!_open) return;

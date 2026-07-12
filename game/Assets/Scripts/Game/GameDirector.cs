@@ -433,7 +433,7 @@ namespace RadiantPool.Game
         {
             Ui.Begin();
             if (Time.time < _noticeUntil && LocalNotice.Length > 0)
-                GUI.Box(new Rect(Ui.W / 2f - 260, 16, 520, 38), LocalNotice, Theme.Toast);
+                Theme.DrawToast(Ui.W / 2f, 16, LocalNotice);
 
             if (!_journalOpen) return;
             float jh = Mathf.Min(Ui.H - 110f, 480f);

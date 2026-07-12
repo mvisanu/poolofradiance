@@ -121,9 +121,8 @@ namespace RadiantPool.Game
             float bearing = Mathf.Atan2(delta.x, delta.z) * Mathf.Rad2Deg - camYaw;
             string arrow = BearingArrow(bearing);
 
-            GUI.Box(new Rect(Ui.W / 2f - 210, 52, 420, 34),
-                $"{arrow}  NEXT: {TargetLabel}  <color=#d0c5af>— {dist:0} m</color>",
-                Theme.Toast);
+            Theme.DrawToast(Ui.W / 2f, 58,
+                $"{arrow}  NEXT: {TargetLabel}  <color=#d0c5af>— {dist:0} m</color>");
 
             DrawWorldMarker(dist);
         }

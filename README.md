@@ -37,7 +37,8 @@ Skeletons 1.1 — thank you Kay!
 Spell/action icons from [game-icons.net](https://game-icons.net) by **Lorc** and
 **Delapouite**, licensed [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/)
 (`game/Assets/Resources/SpellIcons`).
-UI fonts: **Source Serif 4** (Adobe) and **Inter** (Rasmus Andersson), both under the
+UI fonts: **MedievalSharp** (wmk69), **Source Serif 4** (Adobe), and **Inter**
+(Rasmus Andersson), all under the
 [SIL Open Font License 1.1](https://openfontlicense.org)
 (`game/Assets/Resources/Fonts`, licenses included).
 

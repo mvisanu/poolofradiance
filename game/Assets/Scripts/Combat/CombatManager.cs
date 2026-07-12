@@ -432,6 +432,16 @@ namespace RadiantPool.Game
                 {
                     pc.Player.Sheet.GainXp(xpEach);
                     pc.Player.Sheet.Conditions.Remove(ConditionType.Blessed);
+                    // Fallen heroes are dragged back to their feet by the party — no
+                    // one is ever permanently out of the campaign.
+                    if (pc.Player.Sheet.IsDead)
+                    {
+                        pc.Player.Sheet.ReviveFull();
+                        pc.Player.Sheet.TakeDamage(
+                            pc.Player.Sheet.MaxHp - 1, DamageType.Bludgeoning);
+                        ServerLog($"{pc.Player.Sheet.Name} is dragged back to their feet " +
+                                  "(1 HP) — rest or drink a potion!");
+                    }
                 }
                 ServerLog($"Victory! Each hero gains {xpEach} XP.");
 
@@ -1166,7 +1176,12 @@ namespace RadiantPool.Game
             foreach (var u in ClientUnits.Where(u => !u.IsPc && u.Visual != null))
                 Destroy(u.Visual.gameObject);
             foreach (var u in ClientUnits.Where(u => u.IsPc && u.Visual != null))
+            {
                 u.Visual.localRotation = Quaternion.identity;
+                // Everyone alive is on their feet after combat (revive/respawn) — clear
+                // the death pose too, not just the capsule rotation.
+                CharacterVisuals.SetDead(u.Visual, false);
+            }
             if (_overlay != null) Destroy(_overlay);
             ClientUnits.Clear();
         }

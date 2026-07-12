@@ -54,7 +54,9 @@ namespace RadiantPool.Game
         {
             if (_fontsLoaded) return;
             _fontsLoaded = true;
-            _serif = Resources.Load<Font>("Fonts/SourceSerif4-Bold");
+            // Headers use MedievalSharp (user's pick); Source Serif is the fallback.
+            _serif = Resources.Load<Font>("Fonts/MedievalSharp");
+            if (_serif == null) _serif = Resources.Load<Font>("Fonts/SourceSerif4-Bold");
             _serifSemi = Resources.Load<Font>("Fonts/SourceSerif4-Semibold");
             _body = Resources.Load<Font>("Fonts/Inter-Regular");
             _bodyBold = Resources.Load<Font>("Fonts/Inter-Bold");
@@ -271,6 +273,26 @@ namespace RadiantPool.Game
                 if (SerifSemi != null) _toast.font = SerifSemi; else _toast.fontStyle = FontStyle.Bold;
                 _toast.normal.textColor = Gold;
                 return _toast;
+            }
+        }
+
+        private static GUIStyle _toastWrap;
+
+        /// <summary>Auto-sized toast: measures the text and fits the box to it (never
+        /// spills past the border); very long text wraps onto extra lines instead.</summary>
+        public static void DrawToast(float centerX, float y, string text, float maxW = 660f)
+        {
+            var content = new GUIContent(text);
+            float w = Toast.CalcSize(content).x + 12f;
+            if (w <= maxW)
+            {
+                GUI.Box(new Rect(centerX - w / 2f, y, w, 38f), content, Toast);
+            }
+            else
+            {
+                if (_toastWrap == null) _toastWrap = new GUIStyle(Toast) { wordWrap = true };
+                float h = _toastWrap.CalcHeight(content, maxW - 28f) + 20f;
+                GUI.Box(new Rect(centerX - maxW / 2f, y, maxW, h), content, _toastWrap);
             }
         }
 
