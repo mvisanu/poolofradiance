@@ -51,6 +51,12 @@ namespace RadiantPool.Game
 
         private struct Marker { public Vector3 Pos; public Texture2D Tex; public float Size; }
         private readonly List<Marker> _markers = new List<Marker>();
+
+        /// <summary>Quarter names painted on the map (centre of each zone's fights), so
+        /// "retake the Old Docks" has somewhere to point to. Active quest zone is gold.</summary>
+        private struct Place { public Vector3 Pos; public string Name; public bool Active; }
+        private readonly List<Place> _places = new List<Place>();
+        private GUIStyle _placeStyle;
         private Transform _player;
         private float _nextScan;
 
@@ -199,6 +205,25 @@ namespace RadiantPool.Game
             }
             foreach (var c in FindObjectsByType<CompanionFollower>(FindObjectsSortMode.None))
                 _markers.Add(new Marker { Pos = c.transform.position, Tex = _partyDot, Size = 8 });
+
+            // Quarter names, positioned at the centre of each zone's encounters.
+            _places.Clear();
+            if (director == null) return;
+            var triggers = FindObjectsByType<EncounterTrigger>(FindObjectsSortMode.None);
+            for (int i = 0; i < director.Zones.Length; i++)
+            {
+                var cfg = director.Zones[i];
+                var inZone = triggers.Where(t => t.ZoneId == cfg.ZoneId).ToList();
+                if (inZone.Count == 0) continue;
+                Vector3 sum = Vector3.zero;
+                foreach (var t in inZone) sum += t.transform.position;
+                _places.Add(new Place
+                {
+                    Pos = sum / inZone.Count,
+                    Name = cfg.DisplayName,
+                    Active = director.GetZoneState(i) == QuestState.Active
+                });
+            }
         }
 
         private void OnGUI()
@@ -253,6 +278,23 @@ namespace RadiantPool.Game
             GUI.Label(new Rect(nRect.x + 1, nRect.y + 1, nRect.width, nRect.height), "N", Theme.Caps);
             GUI.color = prevColor;
             GUI.Label(nRect, "<color=#e8dfd4>N</color>", Theme.Caps);
+
+            // Quarter names first (under the icons): the district the quest names is
+            // written on the map, in gold while it is the active objective.
+            if (_placeStyle == null)
+                _placeStyle = new GUIStyle(Theme.Caps)
+                    { alignment = TextAnchor.MiddleCenter, wordWrap = false };
+            foreach (var place in _places)
+            {
+                var d = ToMap(place.Pos, half);
+                if (Mathf.Abs(d.x) > half - 4f || Mathf.Abs(d.y) > half - 8f) continue;
+                var at = new Rect(view.x + half + d.x - 70f, view.y + half + d.y - 7f, 140f, 14f);
+                _placeStyle.normal.textColor = Color.black;      // shadow for legibility
+                GUI.Label(new Rect(at.x + 1, at.y + 1, at.width, at.height),
+                    place.Name.ToUpperInvariant(), _placeStyle);
+                _placeStyle.normal.textColor = place.Active ? Theme.Gold : Theme.OnSurfaceMuted;
+                GUI.Label(at, place.Name.ToUpperInvariant(), _placeStyle);
+            }
 
             // World-object markers: drawn only while inside the view radius.
             foreach (var mk in _markers)

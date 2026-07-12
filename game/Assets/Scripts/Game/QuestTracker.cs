@@ -41,6 +41,19 @@ namespace RadiantPool.Game
             UpdateBeacon();
         }
 
+        /// <summary>Inside this range of a quarter's centre you are "there", and the
+        /// tracker stops pointing at the district and starts pointing at the next fight.</summary>
+        private const float DistrictRange = 26f;
+
+        /// <summary>Centre of a quarter — the mean of the fights that make it up, so it
+        /// needs no hand-placed anchor and can never drift out of sync with the map.</summary>
+        private static Vector3 Centre(List<EncounterTrigger> triggers)
+        {
+            Vector3 sum = Vector3.zero;
+            foreach (var t in triggers) sum += t.transform.position;
+            return sum / triggers.Count;
+        }
+
         private void Scan()
         {
             HasTarget = false;
@@ -77,11 +90,28 @@ namespace RadiantPool.Game
             // nothing to chase, point them at whatever threat is still standing.
             var candidates = FindObjectsByType<EncounterTrigger>(FindObjectsSortMode.None)
                 .Where(t => !t.Consumed && t.MonsterIds.Length > 0
-                            && !director.ConsumedEncounterIds.Contains(t.EncounterId));
+                            && !director.ConsumedEncounterIds.Contains(t.EncounterId))
+                .ToList();
             if (activeZone >= 0)
             {
                 string zoneId = director.Zones[activeZone].ZoneId;
-                candidates = candidates.Where(t => t.ZoneId == zoneId && t.RequiredForClear);
+                var zoneFights = candidates
+                    .Where(t => t.ZoneId == zoneId && t.RequiredForClear).ToList();
+                if (zoneFights.Count == 0) return;
+
+                // "Retake the Old Docks" is meaningless if you don't know where the Old
+                // Docks are. While the party is still out of the quarter, steer them at
+                // the quarter itself, named; once inside, switch to the next fight in it.
+                Vector3 district = Centre(zoneFights);
+                float toDistrict = Vector3.Distance(player.position, district);
+                if (toDistrict > DistrictRange)
+                {
+                    TargetPosition = district;
+                    TargetLabel = director.Zones[activeZone].DisplayName;
+                    HasTarget = true;
+                    return;
+                }
+                candidates = zoneFights;
             }
 
             var next = candidates
@@ -90,7 +120,10 @@ namespace RadiantPool.Game
             if (next == null) return;
 
             TargetPosition = next.transform.position;
-            TargetLabel = next.DisplayName;
+            // Name the quarter alongside the spot, so the objective always reads in the
+            // same words the quest does.
+            string quarter = activeZone >= 0 ? director.Zones[activeZone].DisplayName : null;
+            TargetLabel = quarter != null ? $"{quarter} — {next.DisplayName}" : next.DisplayName;
             HasTarget = true;
         }
 

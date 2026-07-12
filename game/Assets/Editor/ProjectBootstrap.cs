@@ -650,6 +650,46 @@ namespace RadiantPool.EditorTools
                 new Vector3(34, 1.5f, 4), new Vector3(9, 3, 9), false,
                 new[] { "goblin", "goblin", "goblin", "goblin" });
 
+            // District signs: a quest that says "retake the Old Docks" is useless if
+            // nothing in the world is labelled "the Old Docks". Each quarter gets a name
+            // floating over it (billboarded, high enough to clear the rooftops) on a lit
+            // post, so the destination is visible from the hub. Positions are the centre
+            // of each quarter's required encounters.
+            void District(string label, Vector3 groundPos, Color colour)
+            {
+                var post = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                post.name = $"DistrictSign_{label}";
+                post.transform.position = groundPos + new Vector3(0f, 3f, 0f);
+                post.transform.localScale = new Vector3(0.25f, 3f, 0.25f);
+                Object.DestroyImmediate(post.GetComponent<Collider>());
+                post.GetComponent<Renderer>().sharedMaterial =
+                    Mat("M_SignPost", new Color(0.32f, 0.22f, 0.14f));
+
+                var textGo = new GameObject("DistrictLabel");
+                textGo.transform.SetParent(post.transform, false);
+                textGo.transform.position = groundPos + new Vector3(0f, 8.2f, 0f);
+                var text = textGo.AddComponent<TextMesh>();
+                text.text = label;
+                text.characterSize = 0.34f;      // readable clear across the map
+                text.fontSize = 52;
+                text.anchor = TextAnchor.LowerCenter;
+                text.color = colour;
+                textGo.AddComponent<Billboard>();
+
+                var glow = new GameObject($"DistrictGlow_{label}").AddComponent<Light>();
+                glow.transform.position = groundPos + new Vector3(0f, 6.5f, 0f);
+                glow.type = LightType.Point;
+                glow.range = 16f;
+                glow.intensity = 2.2f;
+                glow.color = colour;
+            }
+
+            var signGold = new Color(1f, 0.87f, 0.55f);
+            District("The Old Docks", new Vector3(-38f, 0f, -3f), signGold);
+            District("The Drowned Market", new Vector3(0f, 0f, 42f), signGold);
+            District("The Sunken Warcamp", new Vector3(15f, 0f, -39f), signGold);
+            District("The Glasslit Temple", new Vector3(48f, 0f, -2f), signGold);
+
             // Vendor NPC by the council platform.
             var vendor = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             vendor.name = "The Salvage Exchange";
