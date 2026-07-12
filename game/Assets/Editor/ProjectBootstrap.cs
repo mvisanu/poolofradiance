@@ -34,6 +34,7 @@ namespace RadiantPool.EditorTools
             SetupUrp();
             KenneyArt.SetupMaterials();
             KayKitArt.Setup();
+            QuaterniusArt.Setup();
             var playerPrefab = CreatePlayerPrefab();
             CreateGrayboxScene(playerPrefab);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
@@ -166,26 +167,127 @@ namespace RadiantPool.EditorTools
             return prefab.GetComponent<NetworkObject>();
         }
 
+        /// <summary>Vibrant open-world dressing from the CC0 Kenney Nature + Survival
+        /// kits: forest bands around the map, scatter (grass/flowers/stones), themed
+        /// wilds encounter sites, and a proper orc warcamp. Deterministic (fixed seed)
+        /// so every bootstrap produces the same world.</summary>
+        private static void DressWorld()
+        {
+            var rnd = new System.Random(1177);
+            float Jit(float range) => (float)(rnd.NextDouble() * 2.0 - 1.0) * range;
+            float Rot() => (float)(rnd.NextDouble() * 360.0);
+
+            void Nature(string model, Vector3 pos, float size, bool byHeight = true) =>
+                KenneyArt.Place("Nature", model, pos, Rot(), size, byHeight);
+
+            // Forest bands along the map edges (leave zone interiors playable).
+            string[] bigTrees = { "tree_default", "tree_oak", "tree_pineTallA",
+                "tree_pineRoundB", "tree_detailed", "tree_fat", "tree_tall" };
+            foreach (var (cx, cz, count) in new (float, float, int)[]
+            {
+                (-52, 30, 8), (-52, -12, 7), (-30, 52, 7), (8, 55, 6),
+                (55, 40, 6), (58, -38, 7), (28, -55, 7), (-14, -52, 7), (-55, -44, 6)
+            })
+                for (int i = 0; i < count; i++)
+                    Nature(bigTrees[rnd.Next(bigTrees.Length)],
+                        new Vector3(cx + Jit(7f), 0, cz + Jit(7f)),
+                        4.2f + (float)rnd.NextDouble() * 2.6f);
+
+            // Mid-map accent trees along the roads between quarters.
+            foreach (var (x, z) in new (float, float)[]
+            {
+                (-16, 14), (-20, -6), (14, 16), (22, 10), (-8, 26),
+                (18, -22), (-26, -18), (34, -6), (-34, 24), (12, 34)
+            })
+                Nature(bigTrees[rnd.Next(bigTrees.Length)],
+                    new Vector3(x + Jit(2f), 0, z + Jit(2f)),
+                    3.6f + (float)rnd.NextDouble() * 1.8f);
+
+            // Ground scatter: grass, flowers, small stones, bushes, stumps.
+            string[] scatter = { "grass_large", "grass", "flower_redA", "flower_yellowA",
+                "flower_purpleA", "plant_bush", "plant_bushLarge", "stone_smallA",
+                "stone_smallD", "rock_smallB", "stump_round", "log" };
+            for (int i = 0; i < 90; i++)
+            {
+                var pos = new Vector3(Jit(56f), 0, Jit(56f));
+                if (Mathf.Abs(pos.x) < 14f && Mathf.Abs(pos.z) < 18f) continue;   // hub
+                Nature(scatter[rnd.Next(scatter.Length)], pos,
+                    0.5f + (float)rnd.NextDouble() * 0.9f);
+            }
+
+            // Wilds sites. Spider hollows: dead trees + moss. Bear dens: cliff + logs.
+            foreach (var (x, z) in new (float, float)[] { (-12, 24), (30, 26) })
+            {
+                Nature("tree_default_dark", new Vector3(x - 3 + Jit(1f), 0, z + Jit(1f)), 4.5f);
+                Nature("tree_thin_dark", new Vector3(x + 3 + Jit(1f), 0, z - 2 + Jit(1f)), 4f);
+                Nature("tree_small_dark", new Vector3(x + Jit(2f), 0, z + 3 + Jit(1f)), 3f);
+                Nature("mushroom_redGroup", new Vector3(x + Jit(3f), 0, z + Jit(3f)), 0.7f);
+            }
+            foreach (var (x, z) in new (float, float)[] { (-24, -28), (26, -12) })
+            {
+                Nature("cliff_block_rock", new Vector3(x - 2, 0, z - 2), 3.5f, false);
+                Nature("rock_largeA", new Vector3(x + 3 + Jit(1f), 0, z + Jit(1f)), 2.2f, false);
+                Nature("log_large", new Vector3(x + Jit(3f), 0, z + 3 + Jit(1f)), 2f, false);
+                Nature("mushroom_tanGroup", new Vector3(x + Jit(3f), 0, z + Jit(3f)), 0.6f);
+            }
+
+            // Goblin ambush spots: small raider tents + a stone campfire.
+            foreach (var (x, z) in new (float, float)[] { (-16, 8), (34, 4) })
+            {
+                Nature("tent_smallOpen", new Vector3(x - 2, 0, z + 2), 1.6f);
+                Nature("campfire_stones", new Vector3(x + 1, 0, z), 0.9f, false);
+                Nature("log", new Vector3(x + 2.5f + Jit(0.5f), 0, z + 1.5f), 1.2f, false);
+            }
+
+            // The Sunken Warcamp (south): fortified orc camp from the Survival kit.
+            void Camp(string model, Vector3 pos, float size, float rot = -1f) =>
+                KenneyArt.Place("Survival", model, pos, rot < 0 ? Rot() : rot, size, false);
+
+            Camp("tent-canvas", new Vector3(10, 0, -36), 3.2f);
+            Camp("tent", new Vector3(14, 0, -34), 3f);
+            Camp("tent-canvas-half", new Vector3(24, 0, -40), 3f);
+            Camp("structure-canvas", new Vector3(14, 0, -48), 4f, 180f);   // war-tent
+            Camp("campfire-pit", new Vector3(12, 0, -40), 1.2f);
+            Camp("campfire-stand", new Vector3(21, 0, -37), 1.3f);
+            Camp("box-large", new Vector3(23, 0, -36.5f), 1.1f);
+            Camp("barrel", new Vector3(24.2f, 0, -37.5f), 0.9f);
+            Camp("chest", new Vector3(15.5f, 0, -47), 1f, 20f);
+            Camp("resource-wood", new Vector3(9, 0, -33), 1.4f);
+            foreach (var (x, z, r) in new (float, float, float)[]
+            {
+                (7, -30, 0), (10, -29.5f, 0), (13, -29.5f, 0), (16, -30, 0),
+                (6, -33, 90), (6, -36, 90), (25.5f, -33, 90), (26, -36, 90)
+            })
+                Camp("fence-fortified", new Vector3(x, 0, z), 2.4f, r);
+
+            // A little farm color by the hub (crops + fence, pure charm).
+            Nature("crops_wheatStageB", new Vector3(-13, 0, -6), 1f);
+            Nature("crops_wheatStageB", new Vector3(-14.2f, 0, -6), 1f);
+            Nature("crops_cornStageC", new Vector3(-13, 0, -7.4f), 1.2f);
+            Nature("crop_pumpkin", new Vector3(-14.2f, 0, -7.4f), 0.7f);
+            Nature("fence_simple", new Vector3(-13.6f, 0, -5f), 1.6f);
+        }
+
         private static void CreateGrayboxScene(NetworkObject playerPrefab)
         {
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-            // Lighting: late-afternoon sun, soft shadows, distance fog for depth.
+            // Lighting: bright sunny day — saturated, cheerful open-world palette.
             var lightGo = new GameObject("Directional Light");
             var light = lightGo.AddComponent<Light>();
             light.type = LightType.Directional;
-            light.intensity = 1.35f;
-            light.color = new Color(1f, 0.93f, 0.8f);
+            light.intensity = 1.55f;
+            light.color = new Color(1f, 0.97f, 0.88f);
             light.shadows = LightShadows.Soft;
-            lightGo.transform.rotation = Quaternion.Euler(48f, -38f, 0f);
+            lightGo.transform.rotation = Quaternion.Euler(52f, -35f, 0f);
             RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.6f, 0.68f, 0.82f);
-            RenderSettings.ambientEquatorColor = new Color(0.5f, 0.48f, 0.52f);
-            RenderSettings.ambientGroundColor = new Color(0.26f, 0.25f, 0.23f);
+            RenderSettings.ambientSkyColor = new Color(0.72f, 0.83f, 0.98f);
+            RenderSettings.ambientEquatorColor = new Color(0.62f, 0.65f, 0.62f);
+            RenderSettings.ambientGroundColor = new Color(0.36f, 0.37f, 0.32f);
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Exponential;
-            RenderSettings.fogColor = new Color(0.62f, 0.68f, 0.78f);
-            RenderSettings.fogDensity = 0.008f;
+            RenderSettings.fogColor = new Color(0.73f, 0.81f, 0.92f);
+            RenderSettings.fogDensity = 0.006f;
 
             // Camera with URP post-processing (bloom + vignette + slight warmth).
             var camGo = new GameObject("Main Camera") { tag = "MainCamera" };
@@ -244,7 +346,7 @@ namespace RadiantPool.EditorTools
             var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.name = "Ground";
             ground.transform.localScale = new Vector3(12f, 1f, 12f); // 120x120 m
-            var groundMat = Mat("M_Ground", new Color(0.72f, 0.7f, 0.66f));
+            var groundMat = Mat("M_Ground", new Color(0.52f, 0.66f, 0.42f));   // sunny grass
             groundMat.mainTexture = GroundTexture();
             groundMat.mainTextureScale = new Vector2(48f, 48f);
             ground.GetComponent<Renderer>().sharedMaterial = groundMat;
@@ -397,11 +499,9 @@ namespace RadiantPool.EditorTools
             Box("Temple_Brazier_1", new Vector3(46, 1f, -18), new Vector3(1, 2, 1), templeEmber);
             Box("Temple_Brazier_2", new Vector3(54, 1f, 4), new Vector3(1, 2, 1), templeEmber);
 
-            // Scattered greens and rocks to break up the plain.
-            KenneyArt.Place("FantasyTown", "tree-high-round", new Vector3(-14, 0, 14), 0, 6f, true);
-            KenneyArt.Place("FantasyTown", "tree-crooked", new Vector3(20, 0, -30), 45f, 4.5f, true);
-            KenneyArt.Place("FantasyTown", "rock-large", new Vector3(24, 0, 12), 15f, 2.5f);
-            KenneyArt.Place("FantasyTown", "rock-wide", new Vector3(-8, 0, 20), 80f, 3f);
+            // Nature + survival dressing (Kenney Nature/Survival kits, CC0): forests,
+            // scatter, dressed wilds encounter sites, and the orc warcamp.
+            DressWorld();
             var lightwell = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             lightwell.name = "The Lightwell";
             lightwell.transform.position = new Vector3(52, 0.3f, 20);
@@ -417,7 +517,7 @@ namespace RadiantPool.EditorTools
             wellLight.intensity = 3.5f;
             wellLight.range = 18f;
 
-            // Spawn points (hub plaza).
+            // Spawn points (hub plaza) — DressWorld() lives below in this class.
             var spawnParent = new GameObject("SpawnPoints");
             var spawns = new List<Transform>();
             for (int i = 0; i < 4; i++)

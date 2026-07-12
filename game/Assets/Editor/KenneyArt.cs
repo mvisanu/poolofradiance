@@ -14,24 +14,34 @@ namespace RadiantPool.EditorTools
 
         public static void SetupMaterials()
         {
-            foreach (string kit in new[] { "FantasyTown", "Pirate" })
+            foreach (string kit in new[] { "FantasyTown", "Pirate", "Nature", "Survival" })
             {
                 string kitPath = $"{Root}/{kit}";
                 if (!AssetDatabase.IsValidFolder(kitPath)) continue;
 
-                // One URP material per kit, pointing at its colormap atlas.
-                string matPath = $"{kitPath}/M_{kit}.mat";
-                var urpMat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
-                if (urpMat == null)
+                // Atlas kits get one URP material pointing at their colormap. Kits
+                // without an atlas (Nature ships plain solid-color materials) get one
+                // URP material per embedded material name, copying its color.
+                var atlasTex = AssetDatabase.FindAssets("colormap t:Texture2D", new[] { kitPath })
+                    .Select(AssetDatabase.GUIDToAssetPath)
+                    .Select(AssetDatabase.LoadAssetAtPath<Texture2D>)
+                    .FirstOrDefault();
+                Material atlasMat = null;
+                if (atlasTex != null)
                 {
-                    urpMat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
-                    var tex = AssetDatabase.FindAssets("colormap t:Texture2D", new[] { kitPath })
-                        .Select(AssetDatabase.GUIDToAssetPath)
-                        .Select(AssetDatabase.LoadAssetAtPath<Texture2D>)
-                        .FirstOrDefault();
-                    if (tex != null) urpMat.SetTexture("_BaseMap", tex);
-                    urpMat.SetFloat("_Smoothness", 0.05f);
-                    AssetDatabase.CreateAsset(urpMat, matPath);
+                    string matPath = $"{kitPath}/M_{kit}.mat";
+                    atlasMat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+                    if (atlasMat == null)
+                    {
+                        atlasMat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                        atlasMat.SetTexture("_BaseMap", atlasTex);
+                        atlasMat.SetFloat("_Smoothness", 0.05f);
+                        AssetDatabase.CreateAsset(atlasMat, matPath);
+                    }
+                }
+                else if (!AssetDatabase.IsValidFolder($"{kitPath}/Mats"))
+                {
+                    AssetDatabase.CreateFolder(kitPath, "Mats");
                 }
 
                 foreach (string guid in AssetDatabase.FindAssets("t:Model", new[] { kitPath }))
@@ -41,13 +51,13 @@ namespace RadiantPool.EditorTools
                     if (importer == null) continue;
                     bool changed = false;
                     var embedded = AssetDatabase.LoadAllAssetsAtPath(path)
-                        .OfType<Material>().Select(m => m.name).Distinct();
+                        .OfType<Material>().Distinct().ToList();
                     var existing = importer.GetExternalObjectMap();
-                    foreach (string matName in embedded)
+                    foreach (var src in embedded)
                     {
-                        var id = new AssetImporter.SourceAssetIdentifier(typeof(Material), matName);
+                        var id = new AssetImporter.SourceAssetIdentifier(typeof(Material), src.name);
                         if (existing.ContainsKey(id)) continue;
-                        importer.AddRemap(id, urpMat);
+                        importer.AddRemap(id, atlasMat != null ? atlasMat : ColorMat(kitPath, src));
                         changed = true;
                     }
                     if (changed)
@@ -56,6 +66,24 @@ namespace RadiantPool.EditorTools
             }
             AssetDatabase.SaveAssets();
             Debug.Log("[Bootstrap] Kenney materials remapped to URP.");
+        }
+
+        /// <summary>URP material per embedded-material name, copying its base color —
+        /// shared across every model in the kit that uses the same material name.</summary>
+        private static Material ColorMat(string kitPath, Material source)
+        {
+            string safe = string.Concat(source.name.Split(System.IO.Path.GetInvalidFileNameChars()));
+            string matPath = $"{kitPath}/Mats/M_{safe}.mat";
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+            if (mat != null) return mat;
+            Color color = Color.white;
+            if (source.HasProperty("_BaseColor")) color = source.GetColor("_BaseColor");
+            else if (source.HasProperty("_Color")) color = source.GetColor("_Color");
+            mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+            mat.SetColor("_BaseColor", color);
+            mat.SetFloat("_Smoothness", 0.05f);
+            AssetDatabase.CreateAsset(mat, matPath);
+            return mat;
         }
 
         /// <summary>Instantiates a kit model. targetSize > 0 uniformly rescales so the

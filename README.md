@@ -30,7 +30,10 @@ dotnet test rules/RadiantPool.Rules.sln
 
 ## Art credits
 Environment models from the CC0 **Kenney** asset kits ([kenney.nl](https://kenney.nl)):
-Fantasy Town Kit 2.0 and Pirate Kit — Creative Commons Zero, thank you Kenney!
+Fantasy Town Kit 2.0, Pirate Kit, Nature Kit, and Survival Kit — Creative Commons
+Zero, thank you Kenney!
+Creature models from the CC0 **Quaternius** packs ([quaternius.com](https://quaternius.com)):
+Ultimate Monsters — Creative Commons Zero, thank you Quaternius!
 Characters from the CC0 **KayKit** packs by Kay Lousberg
 ([kaylousberg.itch.io](https://kaylousberg.itch.io)): Adventurers 2.0 and
 Skeletons 1.1 — thank you Kay!
