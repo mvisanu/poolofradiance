@@ -205,7 +205,7 @@ namespace RadiantPool.Game
                 if (GUILayout.Button($"Copy invite code  {_hostCode}"))
                     GUIUtility.systemCopyBuffer = _hostCode;
             }
-            GUILayout.Label("WASD move · RMB camera · E talk · J journal · Esc settings");
+            GUILayout.Label("WASD move · RMB camera · E talk · J journal · I bags · Esc settings");
             GUILayout.EndArea();
         }
 

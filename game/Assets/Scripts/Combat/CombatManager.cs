@@ -546,8 +546,14 @@ namespace RadiantPool.Game
             if (unit == null) { TargetReject(conn, err); return; }
             if (!_server.TryGetValue(targetId, out var target) || target.Creature.IsDead)
             { TargetReject(conn, "No such target."); return; }
-            if (Chebyshev(unit.Cell, target.Cell) > 1)
-            { TargetReject(conn, "Target is out of reach — move adjacent first."); return; }
+            var reach = unit.Player.BasicAttack();
+            if (Chebyshev(unit.Cell, target.Cell) * 5 > reach.RangeFeet)
+            {
+                TargetReject(conn, reach.RangeFeet > 5
+                    ? $"Out of range ({reach.RangeFeet} ft max)."
+                    : "Target is out of reach — move adjacent first.");
+                return;
+            }
 
             try { _engine.SpendAction(); }
             catch (RuleViolationException e) { TargetReject(conn, e.Message); return; }
@@ -789,6 +795,7 @@ namespace RadiantPool.Game
             MonsterModels = new Dictionary<string, (string, Color, float)>
         {
             { "marsh_skulker", ("Ranger", new Color(0.75f, 0.8f, 0.6f), 1f) },
+            { "dock_rat", ("Rogue", new Color(0.6f, 0.5f, 0.4f), 0.8f) },
             { "risen_drowned", ("Skeleton_Minion", new Color(0.6f, 0.85f, 0.7f), 1f) },
             { "bonewalker", ("Skeleton_Warrior", Color.white, 1f) },
             { "kindled_zealot", ("Rogue_Hooded", new Color(1f, 0.55f, 0.45f), 1f) },

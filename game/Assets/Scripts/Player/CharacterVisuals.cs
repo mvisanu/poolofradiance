@@ -53,6 +53,36 @@ namespace RadiantPool.Game
                 animator.SetTrigger(trigger);
         }
 
+        /// <summary>Puts a weapon/shield model into the character's hand slot at runtime
+        /// (prefabs live under Resources/Weapons). Empty model name clears the hand.</summary>
+        public static void SetHandItem(Transform unitRoot, string side, string modelName)
+        {
+            var visual = unitRoot != null ? unitRoot.Find(VisualName) : null;
+            if (visual == null) return;
+            Transform slot = null;
+            foreach (var t in visual.GetComponentsInChildren<Transform>())
+            {
+                string n = t.name.ToLowerInvariant();
+                if (n.Contains("handslot") && n.Contains(side)) { slot = t; break; }
+            }
+            if (slot == null)
+                foreach (var t in visual.GetComponentsInChildren<Transform>())
+                {
+                    string n = t.name.ToLowerInvariant();
+                    if (n.Contains("hand") && n.Contains(side)) { slot = t; break; }
+                }
+            if (slot == null) return;
+
+            for (int i = slot.childCount - 1; i >= 0; i--)
+                Object.Destroy(slot.GetChild(i).gameObject);
+            if (string.IsNullOrEmpty(modelName)) return;
+            var prefab = Resources.Load<GameObject>($"Weapons/{modelName}");
+            if (prefab == null) return;
+            var item = Object.Instantiate(prefab, slot);
+            item.transform.localPosition = Vector3.zero;
+            item.transform.localRotation = Quaternion.identity;
+        }
+
         public static void SetDead(Transform unitRoot, bool dead)
         {
             var animator = AnimatorOf(unitRoot);

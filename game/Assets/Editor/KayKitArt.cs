@@ -25,7 +25,28 @@ namespace RadiantPool.EditorTools
             SetupMaterialsAndImport();
             var controller = BuildAnimator();
             BuildPrefabs(controller);
+            BuildWeaponPrefabs();
             Debug.Log("[Bootstrap] KayKit characters ready.");
+        }
+
+        /// <summary>Weapon prefabs under Resources/Weapons so equipment changes can swap
+        /// hand models at runtime.</summary>
+        private static void BuildWeaponPrefabs()
+        {
+            string weaponsDir = $"{Root}/Weapons";
+            if (!AssetDatabase.IsValidFolder(weaponsDir)) return;
+            if (!AssetDatabase.IsValidFolder("Assets/Resources/Weapons"))
+                AssetDatabase.CreateFolder("Assets/Resources", "Weapons");
+            foreach (string guid in AssetDatabase.FindAssets("t:Model", new[] { weaponsDir }))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                string name = System.IO.Path.GetFileNameWithoutExtension(path);
+                var model = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (model == null) continue;
+                var instance = (GameObject)PrefabUtility.InstantiatePrefab(model);
+                PrefabUtility.SaveAsPrefabAsset(instance, $"Assets/Resources/Weapons/{name}.prefab");
+                Object.DestroyImmediate(instance);
+            }
         }
 
         /// <summary>Character → (right-hand weapon, left-hand item). Weapon UVs sit on the
@@ -33,11 +54,8 @@ namespace RadiantPool.EditorTools
         private static readonly System.Collections.Generic.Dictionary<string, (string right, string left)>
             Loadouts = new System.Collections.Generic.Dictionary<string, (string, string)>
         {
-            { "Knight", ("sword_1handed", "shield_badge") },
-            { "Barbarian", ("axe_2handed", null) },
-            { "Mage", ("staff", null) },
-            { "Rogue", ("dagger", null) },
-            { "Rogue_Hooded", ("dagger", null) },
+            // Player-class characters get weapons at runtime from equipment SyncVars;
+            // only monsters keep gear baked into their prefabs.
             { "Ranger", ("bow", null) },
             { "Skeleton_Warrior", ("Skeleton_Blade", "Skeleton_Shield_Large_A") },
             { "Skeleton_Rogue", ("dagger", null) },

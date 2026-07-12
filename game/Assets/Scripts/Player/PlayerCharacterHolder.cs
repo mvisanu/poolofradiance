@@ -14,6 +14,9 @@ namespace RadiantPool.Game
         public readonly SyncVar<int> ClassIndex = new SyncVar<int>(-1);
         public readonly SyncVar<string> CharacterName = new SyncVar<string>("");
         public readonly SyncVar<bool> IsCompanionSynced = new SyncVar<bool>(false);
+        public readonly SyncVar<string> WeaponId = new SyncVar<string>("");
+        public readonly SyncVar<string> ArmorId = new SyncVar<string>("");
+        public readonly SyncVar<bool> ShieldEquipped = new SyncVar<bool>(false);
 
         /// <summary>Hired AI party member (server-driven, no owning connection).</summary>
         public bool IsCompanion => IsCompanionSynced.Value;
@@ -31,6 +34,7 @@ namespace RadiantPool.Game
             IsCompanionSynced.Value = true;
             ClassIndex.Value = (int)Sheet.Class;
             CharacterName.Value = Sheet.Name;
+            ServerSetDefaultEquipment();
             Debug.Log($"[RadiantPool] companion hired: {Sheet.Name} the {Sheet.Class}");
         }
 
@@ -43,6 +47,59 @@ namespace RadiantPool.Game
         private void Awake()
         {
             ClassIndex.OnChange += (_, next, _) => ApplyClassVisual(next);
+            WeaponId.OnChange += (_, _, _) => ApplyHandVisuals();
+            ShieldEquipped.OnChange += (_, _, _) => ApplyHandVisuals();
+        }
+
+        private void ApplyHandVisuals()
+        {
+            var weapon = GameItem.Get(WeaponId.Value);
+            CharacterVisuals.SetHandItem(transform, "r", weapon?.HandModel ?? "");
+            CharacterVisuals.SetHandItem(transform, "l",
+                ShieldEquipped.Value ? "shield_badge" : "");
+        }
+
+        /// <summary>Server: equips an item onto the sheet and mirrors it to clients.
+        /// Returns the previously equipped item id (goes back to the stash), or null.</summary>
+        public string ServerEquip(GameItem item)
+        {
+            string previous = null;
+            switch (item.Slot)
+            {
+                case ItemSlot.Weapon:
+                    previous = WeaponId.Value;
+                    WeaponId.Value = item.Id;
+                    break;
+                case ItemSlot.Armor:
+                    previous = ArmorId.Value;
+                    ArmorId.Value = item.Id;
+                    Sheet.EquipArmor(item.Armor);
+                    break;
+                case ItemSlot.Shield:
+                    if (ShieldEquipped.Value) previous = "shield";
+                    ShieldEquipped.Value = true;
+                    Sheet.SetShield(true);
+                    break;
+            }
+            return string.IsNullOrEmpty(previous) ? null : previous;
+        }
+
+        /// <summary>Server: mirror the starting gear CreateSheetFromBuild equipped.</summary>
+        public void ServerSetDefaultEquipment()
+        {
+            switch (Sheet.Class)
+            {
+                case CharacterClass.Fighter:
+                    WeaponId.Value = "longsword"; ArmorId.Value = "chain_mail";
+                    ShieldEquipped.Value = true; break;
+                case CharacterClass.Cleric:
+                    WeaponId.Value = "mace"; ArmorId.Value = "scale_mail";
+                    ShieldEquipped.Value = true; break;
+                case CharacterClass.Wizard:
+                    WeaponId.Value = "quarterstaff"; break;
+                default:
+                    WeaponId.Value = "shortsword"; ArmorId.Value = "leather_armor"; break;
+            }
         }
 
         public override void OnStartClient()
@@ -59,6 +116,7 @@ namespace RadiantPool.Game
         {
             if (classIndex < 0 || classIndex >= ClassModels.Length) return;
             CharacterVisuals.Attach(transform, ClassModels[classIndex]);
+            ApplyHandVisuals();
         }
 
         [ServerRpc]
@@ -84,6 +142,7 @@ namespace RadiantPool.Game
                 : CreateSheetFromBuild(name, build);
             ClassIndex.Value = (int)Sheet.Class;
             CharacterName.Value = Sheet.Name;
+            ServerSetDefaultEquipment();
             Debug.Log($"[RadiantPool] character ready: {Sheet.Name} the {Sheet.Class}" +
                       $" (owner {OwnerId}, HP {Sheet.MaxHp}, AC {Sheet.ArmorClass})");
         }
@@ -117,29 +176,21 @@ namespace RadiantPool.Game
             return sheet;
         }
 
-        /// <summary>The weapon used for the basic Attack action (inventory arrives at 3e-full).</summary>
+        /// <summary>The equipped weapon as an SRD attack. Finesse and ranged weapons use
+        /// the better of Str/Dex; negative modifiers render "1d6-1" (never "1d6+-1").</summary>
         public AttackDefinition BasicAttack()
         {
             var sheet = Sheet;
-            int str = sheet.ProficiencyBonus + sheet.Abilities.Modifier(Ability.Str);
-            int dex = sheet.ProficiencyBonus + sheet.Abilities.Modifier(Ability.Dex);
-            // Negative modifiers must render "1d6-1", never "1d6+-1" (parser kick bug).
-            string Dmg(string die, Ability ability)
-            {
-                int mod = sheet.Abilities.Modifier(ability);
-                return mod == 0 ? die : mod > 0 ? $"{die}+{mod}" : $"{die}{mod}";
-            }
-            return Class switch
-            {
-                CharacterClass.Fighter => new AttackDefinition("Longsword", str,
-                    Dmg("1d8", Ability.Str), DamageType.Slashing, 5),
-                CharacterClass.Cleric => new AttackDefinition("Mace", str,
-                    Dmg("1d6", Ability.Str), DamageType.Bludgeoning, 5),
-                CharacterClass.Wizard => new AttackDefinition("Quarterstaff", str,
-                    Dmg("1d6", Ability.Str), DamageType.Bludgeoning, 5),
-                _ => new AttackDefinition("Shortsword", dex,
-                    Dmg("1d6", Ability.Dex), DamageType.Piercing, 5),
-            };
+            var item = GameItem.Get(WeaponId.Value)
+                       ?? GameItem.Get("dagger");   // bare minimum fallback
+            int strMod = sheet.Abilities.Modifier(Ability.Str);
+            int dexMod = sheet.Abilities.Modifier(Ability.Dex);
+            int mod = item.Finesse || item.RangeFeet > 5
+                ? System.Math.Max(strMod, dexMod) : strMod;
+            string dmg = mod == 0 ? item.Damage
+                : mod > 0 ? $"{item.Damage}+{mod}" : $"{item.Damage}{mod}";
+            return new AttackDefinition(item.Name, sheet.ProficiencyBonus + mod,
+                dmg, item.DamageType, item.RangeFeet);
         }
     }
 }

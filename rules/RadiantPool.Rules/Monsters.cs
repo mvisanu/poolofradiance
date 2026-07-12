@@ -54,7 +54,7 @@ namespace RadiantPool.Rules
                 },
                 new MonsterDefinition
                 {
-                    Id = "dock_rat", Name = "Dock Rat",
+                    Id = "dock_rat", Name = "Dock Scavenger",
                     ArmorClass = 12, HpDice = "2d6", Speed = 30,
                     Abilities = new AbilityScores(7, 15, 11, 2, 10, 4),
                     Xp = 25, LootTable = "lt_vermin", SrdRef = "Giant Rat (SRD 5.1 p.379)",

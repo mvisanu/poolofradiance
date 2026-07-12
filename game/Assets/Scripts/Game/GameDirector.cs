@@ -291,6 +291,30 @@ namespace RadiantPool.Game
             RpcNotice($"Sold salvage for {total} gold.");
         }
 
+        /// <summary>Equip an item from the party stash onto the calling player's
+        /// character. Class restrictions enforced server-side; the replaced item
+        /// returns to the stash.</summary>
+        [ServerRpc(RequireOwnership = false)]
+        public void CmdEquipItem(string itemId, NetworkConnection conn = null)
+        {
+            var item = GameItem.Get(itemId);
+            var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => p.Owner == conn);
+            if (item == null || holder?.Sheet == null) return;
+            if (CombatManager.Instance != null && CombatManager.Instance.InCombat.Value)
+            { RpcNotice("Not during combat."); return; }
+            int idx = Stash.IndexOf(itemId);
+            if (idx < 0) { RpcNotice("That item is not in the stash."); return; }
+            if (!item.UsableBy(holder.Sheet.Class))
+            { RpcNotice($"A {holder.Sheet.Class} cannot use {item.Name}."); return; }
+
+            Stash.RemoveAt(idx);
+            string previous = holder.ServerEquip(item);
+            if (previous != null) Stash.Add(previous);
+            RpcNotice($"{holder.Sheet.Name} equips {item.Name}" +
+                      (item.Slot == ItemSlot.Armor ? $" (AC {holder.Sheet.ArmorClass})" : "") + ".");
+        }
+
         [ServerRpc(RequireOwnership = false)]
         public void CmdUsePotion(NetworkConnection conn = null)
         {
