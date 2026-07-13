@@ -83,6 +83,8 @@ namespace RadiantPool.Game
                 bool buys = GameDirector.SellValue.TryGetValue(g.Key, out int price) && price > 0;
 
                 GUILayout.BeginHorizontal();
+                ItemIcon.Draw(g.Key, 30f);
+                GUILayout.Space(5);
                 GUILayout.Label($"<b>{label}</b> x{g.Count()}", new GUIStyle(Theme.BodyInk)
                     { fontSize = 12, richText = true, wordWrap = false });
                 GUILayout.FlexibleSpace();

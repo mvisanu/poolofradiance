@@ -38,6 +38,7 @@ namespace RadiantPool.EditorTools
             KayKitArt.Setup();
             QuaterniusArt.Setup();
             GeneratedArt.Setup();   // bear + rat: the CC0 packs have neither
+            ItemIconBaker.Bake();   // bag icons, shot from the very models the hands hold
             var playerPrefab = CreatePlayerPrefab();
             CreateGrayboxScene(playerPrefab);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };

@@ -139,6 +139,8 @@ namespace RadiantPool.Game
         {
             GUILayout.BeginHorizontal();
             GUILayout.Label(label.ToUpperInvariant(), _slotStat, GUILayout.Width(58));
+            ItemIcon.Draw(item?.Id, 30f);   // empty slots reserve the gap, so rows line up
+            GUILayout.Space(4);
             GUILayout.BeginVertical();
             GUILayout.Label(item != null
                 ? $"<b>{item.Name}</b>"
@@ -188,6 +190,8 @@ namespace RadiantPool.Game
                 string label = item != null ? item.Name : g.Key.Replace('_', ' ');
 
                 GUILayout.BeginHorizontal();
+                ItemIcon.Draw(g.Key, 38f);
+                GUILayout.Space(6);
                 GUILayout.BeginVertical();
                 GUILayout.Label($"<b>{label}</b> ×{g.Count()}", new GUIStyle(Theme.BodyInk)
                     { fontSize = 12, richText = true, wordWrap = false });

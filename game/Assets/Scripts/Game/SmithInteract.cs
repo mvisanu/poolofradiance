@@ -71,9 +71,14 @@ namespace RadiantPool.Game
                 }
                 int owned = director.Stash.Count(s => s == id);
                 GUI.enabled = director.PartyGold.Value >= price;
+                GUILayout.BeginHorizontal();
+                ItemIcon.Draw(id, 30f);
+                GUILayout.Space(5);
                 if (GUILayout.Button($"{item.Name} — {price}g" +
-                                     (owned > 0 ? $"   (stash: {owned})" : "")))
+                                     (owned > 0 ? $"   (stash: {owned})" : ""),
+                                     GUILayout.Height(30)))
                     director.CmdBuyItem(id);
+                GUILayout.EndHorizontal();
             }
             GUI.enabled = true;
             GUILayout.EndScrollView();
