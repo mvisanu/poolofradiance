@@ -27,6 +27,30 @@ namespace RadiantPool.Game
         public readonly SyncVar<int> StrModSynced = new SyncVar<int>(0);
         public readonly SyncVar<int> DexModSynced = new SyncVar<int>(0);
 
+        // Progression: the XP bar reads these, and the level-up screen spends the points.
+        public readonly SyncVar<int> XpSynced = new SyncVar<int>(0);
+        public readonly SyncVar<int> PendingPointsSynced = new SyncVar<int>(0);
+
+        /// <summary>The six scores themselves (not just the modifiers): the level-up screen
+        /// has to show what a point would be added TO, and whether it is already at 20.</summary>
+        public readonly SyncVar<int> StrSynced = new SyncVar<int>(10);
+        public readonly SyncVar<int> DexSynced = new SyncVar<int>(10);
+        public readonly SyncVar<int> ConSynced = new SyncVar<int>(10);
+        public readonly SyncVar<int> IntSynced = new SyncVar<int>(10);
+        public readonly SyncVar<int> WisSynced = new SyncVar<int>(10);
+        public readonly SyncVar<int> ChaSynced = new SyncVar<int>(10);
+
+        /// <summary>Score by ability, on the client, in the enum's own order.</summary>
+        public int ScoreOf(Ability a) => a switch
+        {
+            Ability.Str => StrSynced.Value,
+            Ability.Dex => DexSynced.Value,
+            Ability.Con => ConSynced.Value,
+            Ability.Int => IntSynced.Value,
+            Ability.Wis => WisSynced.Value,
+            _ => ChaSynced.Value
+        };
+
         private float _nextStatSync;
 
         /// <summary>Server: push the sheet's derived stats out to clients. Cheap — FishNet
@@ -42,6 +66,14 @@ namespace RadiantPool.Game
             ProficiencySynced.Value = Sheet.ProficiencyBonus;
             StrModSynced.Value = Sheet.Abilities.Modifier(Ability.Str);
             DexModSynced.Value = Sheet.Abilities.Modifier(Ability.Dex);
+            XpSynced.Value = Sheet.Xp;
+            PendingPointsSynced.Value = Sheet.PendingAbilityPoints;
+            StrSynced.Value = Sheet.Abilities[Ability.Str];
+            DexSynced.Value = Sheet.Abilities[Ability.Dex];
+            ConSynced.Value = Sheet.Abilities[Ability.Con];
+            IntSynced.Value = Sheet.Abilities[Ability.Int];
+            WisSynced.Value = Sheet.Abilities[Ability.Wis];
+            ChaSynced.Value = Sheet.Abilities[Ability.Cha];
         }
 
         /// <summary>Hired AI party member (server-driven, no owning connection).</summary>

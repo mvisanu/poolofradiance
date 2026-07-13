@@ -9,7 +9,10 @@ namespace RadiantPool.Rules
     {
         public string Id { get; }
         public string Name { get; }
-        public AbilityScores Abilities { get; }
+        /// <summary>Settable only by the creature itself: a PC raises these by spending the
+        /// ability points a level-up grants (CharacterSheet.SpendAbilityPoint). Monster stat
+        /// blocks never change — MonsterLibrary is pinned to the JSON by ContentValidationTests.</summary>
+        public AbilityScores Abilities { get; protected set; }
         public int BaseArmorClass { get; set; }
         public int MaxHp { get; protected set; }
         public int CurrentHp { get; private set; }

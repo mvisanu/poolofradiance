@@ -430,7 +430,13 @@ namespace RadiantPool.Game
                 var pcs = _server.Values.Where(u => u.Player != null).ToList();
                 foreach (var pc in pcs)
                 {
-                    pc.Player.Sheet.GainXp(xpEach);
+                    // Through the director, not Sheet.GainXp: that is where the level loop
+                    // lives, so a kill can actually LEVEL you instead of quietly banking XP
+                    // until the next quest award happened to run it.
+                    if (GameDirector.Instance != null)
+                        GameDirector.Instance.ServerGrantXp(pc.Player, xpEach);
+                    else
+                        pc.Player.Sheet.GainXp(xpEach);
                     pc.Player.Sheet.Conditions.Remove(ConditionType.Blessed);
                     // Fallen heroes are dragged back to their feet by the party — no
                     // one is ever permanently out of the campaign.

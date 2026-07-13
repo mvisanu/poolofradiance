@@ -91,8 +91,11 @@ namespace RadiantPool.Game
                 ZoneClearedCounts.Add(0);
             }
 
-            if (System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-selltest") >= 0)
+            var args = System.Environment.GetCommandLineArgs();
+            if (System.Array.IndexOf(args, "-selltest") >= 0)
                 StartCoroutine(ServerSellSelfTest());
+            if (System.Array.IndexOf(args, "-leveltest") >= 0)
+                StartCoroutine(ServerLevelSelfTest());
 
             if (!SaveSystem.Exists) return;
             var save = SaveSystem.Read();
@@ -458,6 +461,55 @@ namespace RadiantPool.Game
                       $"sale was {(refused ? "refused" : "ALLOWED")}");
         }
 
+        /// <summary>Unattended progression check (`RadiantPool.exe -autohost -leveltest`,
+        /// asserted by scripts/smoke-test.ps1): award XP the way a kill does, and check the
+        /// character actually LEVELS, banks a point, and can spend it into a real score — the
+        /// whole chain the player sees behind the XP bar. Needs -savedir: spending a point
+        /// persists the campaign.</summary>
+        private System.Collections.IEnumerator ServerLevelSelfTest()
+        {
+            yield return new WaitForSeconds(8f);
+
+            var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => !p.IsCompanion && p.Owner != null && p.Owner.IsValid);
+            if (holder == null || holder.Sheet == null)
+            {
+                Debug.Log("[LevelTest] FAIL - no player character");
+                yield break;
+            }
+
+            var sheet = holder.Sheet;
+            int startLevel = sheet.Level;
+            if (startLevel >= RadiantPool.Rules.Progression.MaxLevel)
+            {
+                Debug.Log($"[LevelTest] SKIP - character is already at the level cap");
+                yield break;
+            }
+
+            // Enough XP to cross exactly one threshold, granted through the kill/quest road.
+            int need = RadiantPool.Rules.Progression.XpToNext(sheet.Level, sheet.Xp);
+            ServerGrantXp(holder, need);
+            yield return null;
+
+            bool levelled = sheet.Level == startLevel + 1;
+            bool banked = sheet.PendingAbilityPoints > 0;
+            Debug.Log($"[LevelTest] {(levelled && banked ? "PASS" : "FAIL")} - {need} XP took " +
+                      $"{sheet.Name} from level {startLevel} to {sheet.Level} with " +
+                      $"{sheet.PendingAbilityPoints} point(s) to spend");
+
+            var ability = RadiantPool.Rules.Ability.Con;
+            int before = sheet.Abilities[ability];
+            int pointsBefore = sheet.PendingAbilityPoints;
+            CmdSpendAbilityPoint((int)ability);   // host: the same ServerRpc a client sends
+            yield return new WaitForSeconds(0.3f);
+
+            bool spent = sheet.Abilities[ability] == before + 1
+                         && sheet.PendingAbilityPoints == pointsBefore - 1;
+            Debug.Log($"[LevelTest] {(spent ? "PASS" : "FAIL")} - spending a point took Con " +
+                      $"{before} to {sheet.Abilities[ability]}, " +
+                      $"{sheet.PendingAbilityPoints} left of {pointsBefore}");
+        }
+
         /// <summary>A teleport that sticks. A CharacterController overwrites a direct
         /// transform write on the very next frame (CombatFx parks it to glide for the same
         /// reason) — so park it here too, or the body simply stays where it was.</summary>
@@ -550,19 +602,83 @@ namespace RadiantPool.Game
             RpcNotice("The party takes a long rest — HP and spell slots restored.");
         }
 
+        /// <summary>The ONE road XP travels, whether it came from a quest or from a monster
+        /// (CombatManager calls this too — it used to add XP without ever levelling anyone,
+        /// so kills only paid out later, when a quest award happened to run the level loop).
+        /// Levels are applied here, and each one announces the ability points it granted.
+        /// Companions have nobody at the keyboard, so they spend their points themselves.</summary>
+        [Server]
+        public void ServerGrantXp(PlayerCharacterHolder p, int amount)
+        {
+            if (p == null || p.Sheet == null || amount <= 0) return;
+            p.Sheet.GainXp(amount);
+
+            while (p.Sheet.CanLevelUp)
+            {
+                var result = p.Sheet.LevelUp();
+                if (p.IsCompanion)
+                {
+                    ServerAutoSpend(p.Sheet, result.AbilityPointsGranted);
+                    RpcNotice($"{p.Sheet.Name} reaches level {result.NewLevel}! " +
+                              $"(+{result.HpGained} HP)");
+                    continue;
+                }
+                string points = result.AbilityPointsGranted == 1
+                    ? "1 ability point" : $"{result.AbilityPointsGranted} ability points";
+                RpcNotice($"{p.Sheet.Name} reaches level {result.NewLevel}! " +
+                          $"(+{result.HpGained} HP, {points} to spend - press L)");
+            }
+        }
+
+        /// <summary>An AI companion has no one to choose for it: it puts its points into the
+        /// ability its class lives by, and into Constitution once that is capped.</summary>
+        [Server]
+        private static void ServerAutoSpend(RadiantPool.Rules.CharacterSheet sheet, int points)
+        {
+            var primary = RadiantPool.Rules.Progression.PrimaryAbility(sheet.Class);
+            for (int i = 0; i < points; i++)
+            {
+                if (sheet.CanSpendPointOn(primary)) sheet.SpendAbilityPoint(primary);
+                else if (sheet.CanSpendPointOn(RadiantPool.Rules.Ability.Con))
+                    sheet.SpendAbilityPoint(RadiantPool.Rules.Ability.Con);
+                else break;
+            }
+        }
+
         [Server]
         private void AwardXpToAll(int amount)
         {
             foreach (var p in FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None))
+                ServerGrantXp(p, amount);
+        }
+
+        /// <summary>Spend one of the points a level-up granted. The sheet is server-only, so
+        /// the client can only ASK — and the rules lib is the one that says yes (points in
+        /// hand, score below the SRD's 20). A refusal comes back as a notice, never silence,
+        /// and nothing thrown escapes the RPC.</summary>
+        [ServerRpc(RequireOwnership = false)]
+        public void CmdSpendAbilityPoint(int abilityIndex, NetworkConnection conn = null)
+        {
+            if (abilityIndex < 0 || abilityIndex > 5) return;
+            var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => p.Owner == conn);
+            if (holder == null || holder.Sheet == null) return;
+
+            var ability = (RadiantPool.Rules.Ability)abilityIndex;
+            try
             {
-                if (p.Sheet == null) continue;
-                p.Sheet.GainXp(amount);
-                while (p.Sheet.CanLevelUp)
-                {
-                    var result = p.Sheet.LevelUp();
-                    RpcNotice($"{p.Sheet.Name} reaches level {result.NewLevel}! (+{result.HpGained} HP)");
-                }
+                holder.Sheet.SpendAbilityPoint(ability);
             }
+            catch (RadiantPool.Rules.RuleViolationException e)
+            {
+                RpcNotice(e.Message);
+                return;
+            }
+            RpcNotice($"{holder.Sheet.Name}: {ability} raised to " +
+                      $"{holder.Sheet.Abilities[ability]} " +
+                      $"({holder.Sheet.PendingAbilityPoints} point" +
+                      $"{(holder.Sheet.PendingAbilityPoints == 1 ? "" : "s")} left).");
+            ServerSaveCampaign();   // a spent point is permanent: persist it at once
         }
 
         // ---------------- client ----------------

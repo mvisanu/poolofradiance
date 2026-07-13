@@ -203,6 +203,7 @@ namespace RadiantPool.Game
             if (LogRect.Contains(m)) return true;
             if (MyCardRect.Contains(m)) return true;
             if (HotBar.BarRect.Contains(m)) return true;
+            if (ProgressUI.XpRect.Contains(m)) return true;
             if (MiniMap.MapRect.Contains(m)) return true;
             if (combat.IsMyTurn && _actionsRect.Contains(m)) return true;         // status strip
             return false;

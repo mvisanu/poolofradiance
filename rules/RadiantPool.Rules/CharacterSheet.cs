@@ -135,7 +135,41 @@ namespace RadiantPool.Rules
             Xp += amount;
         }
 
-        public bool CanLevelUp => Level < 5 && ClassData.LevelForXp(Xp) > Level;
+        public bool CanLevelUp => Level < Progression.MaxLevel && ClassData.LevelForXp(Xp) > Level;
+
+        /// <summary>Ability points earned by levelling and not yet spent (Progression's house
+        /// rule: one per level, two at 4th). The level-up UI turns these into +1s.</summary>
+        public int PendingAbilityPoints { get; private set; }
+
+        private readonly int[] _abilityIncreases = new int[6];
+
+        /// <summary>Where this character's spent points went, by ability — the save replays
+        /// exactly this, so a reloaded character is the one you built, not the one you rolled.</summary>
+        public IReadOnlyList<int> AbilityIncreases => _abilityIncreases;
+
+        public bool CanSpendPointOn(Ability a) =>
+            PendingAbilityPoints > 0 && Abilities[a] < Progression.MaxAbilityScore;
+
+        /// <summary>Spends one earned point: +1 to the ability, capped at the SRD's 20. Con
+        /// raises max HP retroactively across every level (and hands you the new HP), Dex may
+        /// raise AC — derived stats are recomputed, never patched.</summary>
+        public void SpendAbilityPoint(Ability a)
+        {
+            if (PendingAbilityPoints <= 0)
+                throw new RuleViolationException("No ability points to spend.");
+            if (Abilities[a] >= Progression.MaxAbilityScore)
+                throw new RuleViolationException(
+                    $"{a} is already at the maximum of {Progression.MaxAbilityScore}.");
+
+            Abilities = Abilities.WithIncrease(a, 1);
+            PendingAbilityPoints--;
+            _abilityIncreases[(int)a]++;
+
+            int oldMax = MaxHp;
+            MaxHp = ComputeMaxHp();
+            if (MaxHp > oldMax) Heal(MaxHp - oldMax);
+            RecomputeAc();
+        }
 
         /// <summary>Applies one level. Returns a summary of what changed (for the level-up UI).</summary>
         public LevelUpResult LevelUp()
@@ -145,6 +179,8 @@ namespace RadiantPool.Rules
             int oldMax = MaxHp;
             Level++;
             ProficiencyBonus = ClassData.ProficiencyBonus(Level);
+            int points = Progression.AbilityPointsForLevel(Level);
+            PendingAbilityPoints += points;
             MaxHp = ComputeMaxHp();
             Heal(MaxHp - oldMax); // level-up HP arrives as current HP too
             var oldSlots = _slotsRemaining;
@@ -155,7 +191,8 @@ namespace RadiantPool.Rules
                 newSlots[i] = Math.Max(0, newSlots[i] - (prevTable[i] - Math.Min(oldSlots[i], prevTable[i])));
             _slotsRemaining = newSlots;
 
-            return new LevelUpResult(Level, MaxHp - oldMax, ClassData.FeaturesAt(Class, Level).ToArray());
+            return new LevelUpResult(Level, MaxHp - oldMax, points,
+                ClassData.FeaturesAt(Class, Level).ToArray());
         }
     }
 
@@ -163,12 +200,15 @@ namespace RadiantPool.Rules
     {
         public int NewLevel { get; }
         public int HpGained { get; }
+        public int AbilityPointsGranted { get; }
         public IReadOnlyList<string> NewFeatures { get; }
 
-        public LevelUpResult(int newLevel, int hpGained, IReadOnlyList<string> newFeatures)
+        public LevelUpResult(int newLevel, int hpGained, int abilityPointsGranted,
+            IReadOnlyList<string> newFeatures)
         {
             NewLevel = newLevel;
             HpGained = hpGained;
+            AbilityPointsGranted = abilityPointsGranted;
             NewFeatures = newFeatures;
         }
     }

@@ -12,13 +12,20 @@ $hostLog = Join-Path $logDir "host.log"
 $clientLog = Join-Path $logDir "client.log"
 Remove-Item $hostLog, $clientLog -ErrorAction SilentlyContinue
 
+# The run gets its OWN campaign file. Without this the test loads - and the self-tests
+# below then SAVE OVER - the real campaign in %USERPROFILE%\Saved Games\RadiantPool.
+$saveDir = Join-Path $logDir "save"
+Remove-Item -Recurse -Force $saveDir -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $saveDir | Out-Null
+
 Write-Host "Starting host instance..."
-# -selltest: the host drives one real shop sale (bag -> trader -> purse) and asserts below.
-$hostProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Anna","-autohost","-selltest","-logFile",$hostLog -PassThru
+# -selltest / -leveltest: the host drives a real sale (bag -> trader -> purse) and a real
+# level-up (XP -> level -> ability point spent), and asserts on both below.
+$hostProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Anna","-autohost","-selltest","-leveltest","-savedir",$saveDir,"-logFile",$hostLog -PassThru
 Start-Sleep -Seconds 12
 
 Write-Host "Starting client instance..."
-$clientProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Ben","-autojoin","localhost","-logFile",$clientLog -PassThru
+$clientProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Ben","-autojoin","localhost","-savedir",$saveDir,"-logFile",$clientLog -PassThru
 Start-Sleep -Seconds 18
 
 Stop-Process -Id $clientProc.Id -Force -ErrorAction SilentlyContinue
@@ -37,7 +44,10 @@ $checks = @(
     @{ Name = "no NullReference in client log";    Ok = $clientText -notmatch "NullReferenceException" },
     @{ Name = "selling an item at a trader pays gold"; Ok = $hostText -match "\[SellTest\] PASS - gold" },
     @{ Name = "selling away from a trader is refused"; Ok = $hostText -match "\[SellTest\] PASS - away" },
-    @{ Name = "no failed sell assertion";          Ok = $hostText -notmatch "\[SellTest\] FAIL" }
+    @{ Name = "no failed sell assertion";          Ok = $hostText -notmatch "\[SellTest\] FAIL" },
+    @{ Name = "earned XP levels the character up"; Ok = $hostText -match "\[LevelTest\] PASS - \d+ XP took" },
+    @{ Name = "an ability point can be spent";     Ok = $hostText -match "\[LevelTest\] PASS - spending" },
+    @{ Name = "no failed level assertion";         Ok = $hostText -notmatch "\[LevelTest\] FAIL" }
 )
 
 $failed = 0
