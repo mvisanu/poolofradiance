@@ -800,6 +800,49 @@ namespace RadiantPool.Game
             BroadcastBudget();
         }
 
+        /// <summary>Drink a Potion of Healing mid-fight. SRD 5.1: drinking a potion is an
+        /// ACTION, so it costs the same as swinging — it is a real tactical choice, not a
+        /// free top-up. Heals 2d4+2 and consumes one potion from the shared party stash.
+        /// A downed character can't drink (they are unconscious); healing them is what
+        /// Cure Wounds and Healing Word are for.</summary>
+        [ServerRpc(RequireOwnership = false)]
+        public void CmdDrinkPotion(NetworkConnection conn = null)
+        {
+            var unit = ValidatedActor(conn, out string err);
+            if (unit == null) { TargetReject(conn, err); return; }
+
+            var director = GameDirector.Instance;
+            if (director == null || !director.ServerHasPotion())
+            { TargetReject(conn, "No potions in the party stash."); return; }
+            if (unit.Creature.IsDown || unit.Creature.IsDead)
+            { TargetReject(conn, "You are unconscious — you can't drink."); return; }
+            if (unit.Creature.CurrentHp >= unit.Creature.MaxHp)
+            { TargetReject(conn, "Already at full health — don't waste it."); return; }
+
+            try { _engine.SpendAction(); }
+            catch (RuleViolationException e) { TargetReject(conn, e.Message); return; }
+
+            try
+            {
+                int rolled = Dice.Roll("2d4+2", _rng).Total;
+                int healed = unit.Creature.Heal(rolled);
+                director.ServerConsumePotion();
+                ServerLog($"{unit.Creature.Name} drinks a Potion of Healing " +
+                          $"and restores {healed} HP.");
+                RpcSpellFx(unit.Id, unit.Id, healed, true, 3);   // green heal numbers
+                RpcSfx("chime");
+            }
+            catch (Exception e)
+            {
+                // Never let an exception escape a ServerRpc — FishNet kicks the sender.
+                Debug.LogError($"[Combat] Potion failed: {e}");
+                TargetReject(conn, "The potion fizzled — a bug was logged.");
+            }
+
+            SyncHp(unit.Id);
+            BroadcastBudget();
+        }
+
         [ServerRpc(RequireOwnership = false)]
         public void CmdDodge(NetworkConnection conn = null)
         {
@@ -1024,9 +1067,8 @@ namespace RadiantPool.Game
             bool boss = view.MaxHp >= 30;   // bosses loom larger and darker
             go.transform.localScale = boss
                 ? new Vector3(1.35f, 1.35f, 1.35f) : new Vector3(0.9f, 0.9f, 0.9f);
-            var renderer = go.GetComponent<Renderer>();
-            renderer.material.color = boss
-                ? new Color(0.55f, 0.1f, 0.12f) : new Color(0.75f, 0.25f, 0.2f);
+            RuntimeArt.Paint(go, boss
+                ? new Color(0.55f, 0.1f, 0.12f) : new Color(0.75f, 0.25f, 0.2f));
             AttachLabel(go.transform, view.Name);
             return go.transform;
         }
@@ -1038,7 +1080,7 @@ namespace RadiantPool.Game
             label.transform.localPosition = new Vector3(0f, 1.9f, 0f);
             var tm = label.AddComponent<TextMesh>();
             tm.text = text;
-            tm.characterSize = 0.09f;
+            tm.characterSize = 0.055f;
             tm.fontSize = 40;
             tm.anchor = TextAnchor.LowerCenter;
             tm.color = new Color(1f, 0.7f, 0.6f);

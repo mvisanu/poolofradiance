@@ -188,8 +188,8 @@ namespace RadiantPool.Game
                 Destroy(p.GetComponent<Collider>());
                 p.transform.position = origin;
                 p.transform.localScale = Vector3.one * Random.Range(0.08f, 0.18f);
-                p.GetComponent<Renderer>().material.color =
-                    Color.Lerp(dark, new Color(0.8f, 0.1f, 0.08f), Random.value);
+                RuntimeArt.Paint(p,
+                    Color.Lerp(dark, new Color(0.8f, 0.1f, 0.08f), Random.value));
                 parts[i] = p;
                 velocities[i] = new Vector3(Random.Range(-1.6f, 1.6f),
                     Random.Range(1.5f, 3.4f), Random.Range(-1.6f, 1.6f));
@@ -225,8 +225,9 @@ namespace RadiantPool.Game
             Destroy(ring.GetComponent<Collider>());
             ring.transform.position = at + Vector3.up * 0.06f;
             ring.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-            var mat = ring.GetComponent<Renderer>().material;
-            mat.EnableKeyword("_EMISSION");
+            // Transparent so it can fade — and NOT the primitive's default material, which
+            // is built-in Standard and renders magenta under URP in a build.
+            var mat = RuntimeArt.Paint(ring, color, emission: 1.8f, glow: true);
             float t = 0f;
             const float dur = 0.35f;
             while (t < dur)
@@ -234,8 +235,8 @@ namespace RadiantPool.Game
                 t += Time.deltaTime;
                 float k = t / dur;
                 ring.transform.localScale = Vector3.one * (0.5f + k * 2.6f);
-                mat.color = new Color(color.r, color.g, color.b, 1f - k);
-                mat.SetColor("_EmissionColor", color * (1.8f * (1f - k)));
+                RuntimeArt.Tint(mat, new Color(color.r, color.g, color.b, 1f - k));
+                if (mat != null) mat.SetColor("_EmissionColor", color * (1.8f * (1f - k)));
                 yield return null;
             }
             Destroy(ring);
@@ -254,10 +255,7 @@ namespace RadiantPool.Game
             var bolt = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             Destroy(bolt.GetComponent<Collider>());
             bolt.transform.localScale = Vector3.one * 0.35f;
-            var mat = bolt.GetComponent<Renderer>().material;
-            mat.color = color;
-            mat.EnableKeyword("_EMISSION");
-            mat.SetColor("_EmissionColor", color * 2.2f);
+            RuntimeArt.Paint(bolt, color, emission: 2.2f);
 
             float t = 0f;
             const float dur = 0.18f;
@@ -276,8 +274,7 @@ namespace RadiantPool.Game
             var burst = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             Destroy(burst.GetComponent<Collider>());
             burst.transform.position = at;
-            var mat = burst.GetComponent<Renderer>().material;
-            mat.EnableKeyword("_EMISSION");
+            var mat = RuntimeArt.Paint(burst, color, emission: 2f, glow: true);
             float t = 0f;
             const float dur = 0.25f;
             while (t < dur)
@@ -285,9 +282,8 @@ namespace RadiantPool.Game
                 t += Time.deltaTime;
                 float k = t / dur;
                 burst.transform.localScale = Vector3.one * (0.3f + k * 1.6f);
-                var c = new Color(color.r, color.g, color.b, 1f - k);
-                mat.color = c;
-                mat.SetColor("_EmissionColor", color * (2f * (1f - k)));
+                RuntimeArt.Tint(mat, new Color(color.r, color.g, color.b, 1f - k));
+                if (mat != null) mat.SetColor("_EmissionColor", color * (2f * (1f - k)));
                 yield return null;
             }
             Destroy(burst);
@@ -319,13 +315,8 @@ namespace RadiantPool.Game
                 mesh.RecalculateNormals();
                 _targetMarker.AddComponent<MeshFilter>().mesh = mesh;
                 var mr = _targetMarker.AddComponent<MeshRenderer>();
-                var temp = GameObject.CreatePrimitive(PrimitiveType.Quad);
-                mr.material = new Material(temp.GetComponent<Renderer>().sharedMaterial);
-                Destroy(temp);
                 var red = new Color(1f, 0.22f, 0.16f);
-                mr.material.color = red;
-                mr.material.EnableKeyword("_EMISSION");
-                mr.material.SetColor("_EmissionColor", red * 1.4f);
+                mr.sharedMaterial = RuntimeArt.Lit(red, emission: 1.4f);
                 mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 _targetMarker.AddComponent<Billboard>();
             }
@@ -365,15 +356,12 @@ namespace RadiantPool.Game
                 Destroy(_turnRing.GetComponent<Collider>());
                 _turnRing.name = "TurnRing";
                 _turnRing.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-                var m = _turnRing.GetComponent<Renderer>().material;
-                m.EnableKeyword("_EMISSION");
             }
             if (unit == null) { _turnRing.SetActive(false); return; }
             _turnRing.SetActive(true);
-            var mat = _turnRing.GetComponent<Renderer>().material;
-            var color = isPc ? new Color(0.4f, 0.75f, 1f) : new Color(1f, 0.45f, 0.35f);
-            mat.color = color;
-            mat.SetColor("_EmissionColor", color * 1.2f);
+            var color = isPc ? new Color(0.4f, 0.75f, 1f, 0.75f)
+                             : new Color(1f, 0.45f, 0.35f, 0.75f);
+            RuntimeArt.Paint(_turnRing, color, emission: 1.2f, glow: true);
             StartCoroutine(FollowRoutine(unit));
         }
 

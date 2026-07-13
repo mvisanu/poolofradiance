@@ -184,10 +184,9 @@ namespace RadiantPool.Game
                 _beacon = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                 Destroy(_beacon.GetComponent<Collider>());
                 _beacon.name = "QuestBeacon";
-                var mat = _beacon.GetComponent<Renderer>().material;
-                mat.EnableKeyword("_EMISSION");
-                mat.color = new Color(1f, 0.85f, 0.3f, 1f);
-                mat.SetColor("_EmissionColor", new Color(1.4f, 1.1f, 0.35f));
+                // Repaint: the primitive's default material is built-in Standard, which
+                // URP renders as a MAGENTA pillar in a build (it looked gold in editor).
+                RuntimeArt.Paint(_beacon, new Color(1f, 0.85f, 0.3f, 1f), emission: 1.4f);
             }
             _beacon.SetActive(true);
             _beacon.transform.position = new Vector3(TargetPosition.x, 14f, TargetPosition.z);

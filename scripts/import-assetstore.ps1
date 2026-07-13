@@ -66,6 +66,17 @@ if (-not $Package) {
 if (-not (Test-Path $Package)) { throw "Package not found: $Package" }
 Write-Host "Importing: $Package" -ForegroundColor Cyan
 
+# Unity's -importPackage hands the path to its archiver WITHOUT quoting it, so any space
+# truncates the path ("...\Unity\Asset Store-5.x\..." dies at "...\Unity\Asset") and the
+# import fails with "Couldn't decompress package". The cache path always has spaces, so
+# stage the package at a space-free path first.
+if ($Package -match ' ') {
+  $staged = Join-Path $env:TEMP ("pkg_" + ([IO.Path]::GetFileNameWithoutExtension($Package) -replace '[^A-Za-z0-9]', '') + ".unitypackage")
+  Copy-Item -LiteralPath $Package -Destination $staged -Force
+  Write-Host "Staged to space-free path: $staged" -ForegroundColor DarkGray
+  $Package = $staged
+}
+
 # A locked exe fails the later build copy step, and a running editor blocks batchmode.
 Get-Process RadiantPool -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 

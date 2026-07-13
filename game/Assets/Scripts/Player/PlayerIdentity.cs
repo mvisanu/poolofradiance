@@ -51,7 +51,9 @@ namespace RadiantPool.Game
             go.transform.SetParent(transform, false);
             go.transform.localPosition = new Vector3(0f, 2.3f, 0f);
             _nameplate = go.AddComponent<TextMesh>();
-            _nameplate.characterSize = 0.08f;
+            // Nameplates are a label, not a billboard: at 0.08 the text was as wide as the
+            // fountain and buried the character it was naming.
+            _nameplate.characterSize = 0.045f;
             _nameplate.fontSize = 48;
             _nameplate.anchor = TextAnchor.LowerCenter;
             _nameplate.alignment = TextAlignment.Center;

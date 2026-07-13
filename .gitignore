@@ -17,6 +17,14 @@ game/*.sln
 game/.vsconfig
 game/Assets/AssetStoreTools*
 
+# Asset Store packs are licensed to the Unity ACCOUNT that bought them and may not be
+# redistributed — and this repo is PUBLIC, so committing them would be exactly that.
+# They are drop-ins: import the pack and re-bootstrap (scripts/import-assetstore.ps1) and
+# the world picks it up; with no pack the bootstrap falls back to the CC0 Kenney kits.
+# See docs/asset-store-import.md.
+game/Assets/RPGPP_LT/
+game/Assets/RPGPP_LT.meta
+
 # OS / editor
 .vs/
 .idea/

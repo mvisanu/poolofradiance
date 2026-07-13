@@ -21,36 +21,49 @@ namespace RadiantPool.EditorTools
         /// <summary>Where the pack is looked for. Any folder whose name contains one of
         /// these is treated as the pack root, wherever it sits under Assets/.</summary>
         private static readonly string[] RootHints =
-            { "RPG Poly Pack", "RPGPolyPack", "PolyPack", "AssetStore/PolyPack" };
+            { "RPG Poly Pack", "RPGPolyPack", "RPGPP", "PolyPack", "AssetStore/PolyPack" };
 
         public enum Kind
         {
             Tree, Pine, Bush, Rock, Cliff, Grass, Flower, Mushroom, Log,
-            House, Ruin, Fence, Prop, Tent
+            House, Ruin, Fence, Prop, Tent, Path
         }
 
-        /// <summary>Name fragments that sort a prefab into a bucket. First match wins, so
-        /// the order matters: "pine tree" must hit Pine before Tree.</summary>
+        /// <summary>Never scattered into the world: the pack's skybox and clouds, and its
+        /// big terrain tiles — those are GROUND, and bounds-normalising one down to a 0.6 m
+        /// "bush" would drop a shrunken landscape on the lawn.</summary>
+        private static readonly string[] Skip =
+            { "sky", "cloud", "terrain_grass", "terrain_sand", "preset", "_lod", "collider" };
+
+        /// <summary>Name fragments that sort a prefab into a bucket. FIRST MATCH WINS, so
+        /// the ORDER is the whole design: specific before generic. Two traps this pack
+        /// sprang: half its props are named *_wood_* (shed_wood, fence_wood, bench_wood),
+        /// so "wood" cannot mean Log; and `bird_house_01` files as a BUILDING — and gets
+        /// planted as an 8 m cottage — unless small props are matched first.</summary>
         private static readonly (Kind kind, string[] words)[] Rules =
         {
+            (Kind.Path,     new[] { "path", "road", "cobble" }),
             (Kind.Pine,     new[] { "pine", "fir", "spruce", "conifer" }),
             (Kind.Tree,     new[] { "tree", "oak", "birch", "willow", "maple", "poplar" }),
             (Kind.Bush,     new[] { "bush", "shrub", "hedge", "fern" }),
-            (Kind.Cliff,    new[] { "cliff", "boulder", "mountain", "formation" }),
-            (Kind.Rock,     new[] { "rock", "stone", "pebble" }),
-            (Kind.Grass,    new[] { "grass", "reed", "wheat", "plant" }),
             (Kind.Flower,   new[] { "flower", "clover", "lily", "tulip" }),
+            (Kind.Grass,    new[] { "grass", "plant", "reed", "wheat" }),
             (Kind.Mushroom, new[] { "mushroom", "shroom", "fungus" }),
-            (Kind.Log,      new[] { "log", "stump", "branch", "trunk", "wood" }),
+            (Kind.Cliff,    new[] { "cliff", "mountain", "hill", "boulder", "formation" }),
+            (Kind.Rock,     new[] { "rock", "stone", "pebble" }),
+            (Kind.Log,      new[] { "log", "stump", "branch", "trunk" }),   // never "wood"
             (Kind.Ruin,     new[] { "ruin", "wreck", "broken", "pillar", "column", "grave" }),
-            (Kind.House,    new[] { "house", "hut", "cottage", "building", "barn", "mill",
-                                    "tower", "church", "shed", "cabin", "home", "shop",
-                                    "tavern", "roof", "wall_" }),
-            (Kind.Fence,    new[] { "fence", "gate", "railing", "post" }),
-            (Kind.Tent,     new[] { "tent", "camp", "canvas" }),
-            (Kind.Prop,     new[] { "barrel", "crate", "box", "cart", "wagon", "well",
-                                    "bench", "sign", "lamp", "lantern", "torch", "bucket",
-                                    "anvil", "chest", "sack", "ladder", "bridge" }),
+            (Kind.Tent,     new[] { "tent", "canvas", "awning" }),
+            // Small stuff BEFORE buildings, or bird_house becomes a cottage.
+            (Kind.Prop,     new[] { "barrel", "crate", "box", "basket", "sack", "bucket",
+                                    "jug", "vase", "bowl", "bench", "chair", "table",
+                                    "ladder", "broom", "rake", "wagon", "cart", "well",
+                                    "banner", "sign", "trough", "bathtub", "hanger",
+                                    "package", "shield", "bird", "lamp", "lantern",
+                                    "torch", "anvil", "chest", "stones" }),
+            (Kind.Fence,    new[] { "fence", "railing", "picket" }),
+            (Kind.House,    new[] { "building", "house", "hut", "cottage", "shed", "barn",
+                                    "mill", "tower", "church", "cabin", "tavern", "shop" }),
         };
 
         private static string _root;
@@ -87,11 +100,19 @@ namespace RadiantPool.EditorTools
             _root = FindRoot();
             if (_root == null) return;
 
-            // Prefabs first — they carry the pack's materials and LODs. A pack that ships
-            // only FBX still works: models are picked up the same way.
-            var paths = AssetDatabase.FindAssets("t:Prefab", new[] { _root })
-                .Concat(AssetDatabase.FindAssets("t:Model", new[] { _root }))
-                .Select(AssetDatabase.GUIDToAssetPath)
+            // Prefabs BEAT the raw FBX of the same model: the pack ships both, and the
+            // prefab is the one carrying the material assignments and LOD groups (taking
+            // the FBX would place the same tree twice, one of them unskinned).
+            var prefabs = AssetDatabase.FindAssets("t:Prefab", new[] { _root })
+                .Select(AssetDatabase.GUIDToAssetPath).ToList();
+            var prefabNames = new HashSet<string>(
+                prefabs.Select(System.IO.Path.GetFileNameWithoutExtension));
+
+            var paths = prefabs
+                .Concat(AssetDatabase.FindAssets("t:Model", new[] { _root })
+                    .Select(AssetDatabase.GUIDToAssetPath)
+                    .Where(p => !prefabNames.Contains(
+                        System.IO.Path.GetFileNameWithoutExtension(p))))
                 .Distinct()
                 .OrderBy(p => p)                      // deterministic: same world every run
                 .ToList();
@@ -138,11 +159,13 @@ namespace RadiantPool.EditorTools
 
         private static bool Classify(string fileName, out Kind kind)
         {
+            kind = Kind.Prop;
             string n = fileName.ToLowerInvariant();
+            foreach (string s in Skip)
+                if (n.Contains(s)) return false;
             foreach (var (k, words) in Rules)
                 foreach (string w in words)
                     if (n.Contains(w)) { kind = k; return true; }
-            kind = Kind.Prop;
             return false;   // unrecognised: don't scatter mystery meshes around the map
         }
 
@@ -197,6 +220,33 @@ namespace RadiantPool.EditorTools
             var list = _root == null ? null : _buckets[kind];
             if (list == null || list.Count == 0) return null;
             return list[Mathf.Abs(index) % list.Count];
+        }
+
+        /// <summary>Index of the first prefab in a bucket whose name contains `nameLike`,
+        /// or `fallback` when the pack has nothing matching. Lets the bootstrap ask for the
+        /// RIGHT member of a bucket ("the dirt path, not the boardwalk planks") without
+        /// hard-coding a prefab name that another pack won't have.</summary>
+        public static int IndexOf(Kind kind, string nameLike, int fallback = 0)
+        {
+            Scan();
+            var list = _root == null ? null : _buckets[kind];
+            if (list == null || list.Count == 0) return fallback;
+            for (int i = 0; i < list.Count; i++)
+                if (list[i].name.IndexOf(nameLike, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    return i;
+            return fallback;
+        }
+
+        /// <summary>World size of a bucket member at its NATURAL scale — so layout code can
+        /// step tiles by how long they actually are instead of guessing.</summary>
+        public static Vector3 NaturalSize(Kind kind, int index)
+        {
+            var prefab = Pick(kind, index);
+            if (prefab == null) return Vector3.one;
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            var size = Bounds(go).size;
+            Object.DestroyImmediate(go);
+            return size;
         }
 
         /// <summary>Places one pack prefab, scaled so its bounds match targetSize metres

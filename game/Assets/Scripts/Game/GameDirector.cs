@@ -396,11 +396,27 @@ namespace RadiantPool.Game
                       (item.Slot == ItemSlot.Armor ? $" (AC {holder.Sheet.ArmorClass})" : "") + ".");
         }
 
+        /// <summary>Party stash potion accessors for CombatManager — drinking mid-fight is
+        /// a combat ACTION and resolves there (CmdDrinkPotion), but the potions live in
+        /// the shared stash, which is this object's server-authoritative state.</summary>
+        [Server]
+        public bool ServerHasPotion() => Stash.Contains("potion_healing");
+
+        [Server]
+        public bool ServerConsumePotion()
+        {
+            int idx = Stash.IndexOf("potion_healing");
+            if (idx < 0) return false;
+            Stash.RemoveAt(idx);
+            return true;
+        }
+
         [ServerRpc(RequireOwnership = false)]
         public void CmdUsePotion(NetworkConnection conn = null)
         {
+            // In a fight, drinking costs your action and goes through the combat FSM.
             if (CombatManager.Instance != null && CombatManager.Instance.InCombat.Value)
-            { RpcNotice("Not during combat (v1)."); return; }
+            { RpcNotice("Drink it on your turn — the potion button costs your action."); return; }
             int idx = Stash.IndexOf("potion_healing");
             if (idx < 0) { RpcNotice("No potions in the party stash."); return; }
             var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)

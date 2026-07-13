@@ -83,33 +83,39 @@ namespace RadiantPool.EditorTools
 
         /// <summary>Procedural cobblestone-ish tile so the ground reads as a surface,
         /// not a void. Replaced by real textures at the 3f asset pass.</summary>
+        /// <summary>The ground is GRASS, not pavement. It used to be a 4x4 cobblestone tile
+        /// repeated across the whole 120 m map — which reads as one enormous stone floor
+        /// with a forest growing out of it, and left the dirt roads with nothing to be a
+        /// road THROUGH. Soft green noise instead: no grid, no mortar lines, just enough
+        /// variation to stop it looking like flat paint.</summary>
         private static Texture2D GroundTexture()
         {
-            string path = SettingsDir + "/T_Ground.png";
+            string path = SettingsDir + "/T_GroundGrass.png";
             var existing = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
             if (existing != null) return existing;
 
             const int size = 128;
             var tex = new Texture2D(size, size, TextureFormat.RGB24, false);
             var rand = new System.Random(7);
-            // 4x4 stones per tile with mortar lines and per-stone tint.
-            const int stones = 4;
-            var tints = new float[stones, stones];
-            for (int sx = 0; sx < stones; sx++)
-                for (int sy = 0; sy < stones; sy++)
-                    tints[sx, sy] = 0.82f + (float)rand.NextDouble() * 0.28f;
-            for (int x = 0; x < size; x++)
+
+            // Two octaves of value noise: broad patches + a fine speckle, so the tiling
+            // never resolves into a visible grid the way the stones did.
+            float Noise(int x, int y, int cells)
             {
+                int c = size / cells;
+                int gx = x / c, gy = y / c;
+                var r = new System.Random(gx * 73856093 ^ gy * 19349663 ^ cells);
+                return (float)r.NextDouble();
+            }
+
+            for (int x = 0; x < size; x++)
                 for (int y = 0; y < size; y++)
                 {
-                    int cell = size / stones;
-                    int sx = x / cell, sy = y / cell;
-                    bool mortar = x % cell < 2 || y % cell < 2;
-                    float noise = 0.94f + (float)rand.NextDouble() * 0.12f;
-                    float v = mortar ? 0.62f : tints[sx, sy] * noise;
-                    tex.SetPixel(x, y, new Color(0.5f * v, 0.49f * v, 0.47f * v));
+                    float broad = Noise(x, y, 8) * 0.10f;          // patchiness
+                    float fine = (float)rand.NextDouble() * 0.06f;  // blade speckle
+                    float v = 0.90f + broad + fine;
+                    tex.SetPixel(x, y, new Color(0.42f * v, 0.60f * v, 0.32f * v));
                 }
-            }
             tex.Apply();
             System.IO.File.WriteAllBytes(path, tex.EncodeToPNG());
             AssetDatabase.ImportAsset(path);
@@ -296,6 +302,83 @@ namespace RadiantPool.EditorTools
                 Ground(new Vector3(x + 2.5f + Jit(0.5f), 0, z + 1.5f), 1.2f);
             }
 
+            // --- Roads. Wayfinding is the whole point: the quest arrow says "that way",
+            // and a road on the ground going the same way says it again, continuously, in
+            // the world itself. One out of the hub to each quarter.
+            //
+            // Drawn as flat strips, NOT out of the pack's path pieces. Those are terrain
+            // chunks sized for the demo scene's own layout: laid end to end they came out
+            // as giant disconnected sand slabs floating on the grass. A road has to be
+            // continuous or it isn't a road, and a strip I generate is continuous by
+            // construction — at any length, on any bearing.
+            var roadMat = Mat("M_Road", new Color(0.62f, 0.51f, 0.35f));   // packed dirt
+
+            void Road(Vector3 from, Vector3 to, float width = 3.2f)
+            {
+                float len = Vector3.Distance(from, to);
+                if (len < 0.5f) return;
+                var mid = (from + to) * 0.5f;
+                var dir = (to - from).normalized;
+
+                var strip = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                strip.name = "Road";
+                Object.DestroyImmediate(strip.GetComponent<Collider>());   // walk over it
+                // Sits just proud of the ground plane: exactly co-planar, the two surfaces
+                // z-fight and the road flickers as the camera moves.
+                strip.transform.position = new Vector3(mid.x, 0.02f, mid.z);
+                strip.transform.rotation = Quaternion.Euler(
+                    0f, Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg, 0f);
+                strip.transform.localScale = new Vector3(width, 0.04f, len);
+                strip.GetComponent<Renderer>().sharedMaterial = roadMat;
+            }
+
+            var hubCentre = new Vector3(0, 0, -8);
+            Road(hubCentre, new Vector3(-30, 0, -2));                 // west, the Old Docks
+            Road(new Vector3(0, 0, 2), new Vector3(0, 0, 24));        // north, the Market gate
+            Road(new Vector3(3, 0, -12), new Vector3(12, 0, -30));    // south, the warcamp
+            Road(new Vector3(8, 0, -6), new Vector3(34, 0, 0));       // east, the Temple
+
+            // Horizon: hills and a mountain OUTSIDE the perimeter walls. The map is a
+            // 120 m box with a hard edge; a ring of big silhouettes past the wall gives it
+            // a beyond, and gives the eye something to measure the world against.
+            foreach (var (x, z, size) in new (float, float, float)[]
+            {
+                (-78, 40, 26f), (-72, -30, 22f), (0, 84, 30f), (70, 60, 24f),
+                (86, -10, 34f), (30, -84, 26f), (-40, -80, 22f), (78, 30, 20f),
+            })
+                PolyPackArt.Place(PolyPackArt.Kind.Cliff, pick++,
+                    new Vector3(x, -1f, z), (x * 53f) % 360f, size, byHeight: false);
+
+            // Lived-in detail: the pack's well, wagon, benches, crates and sacks, placed
+            // where people would actually put them — around the hub, along the docks, in
+            // the market. Kept clear of the plaza centre, the shrine and the council
+            // platform so nothing blocks the paths the player walks every session.
+            // Sized by HEIGHT, at human scale. Sizing props by footprint (byHeight: false)
+            // is what turned a vase into a 3 m urn: a narrow object gets scaled up until
+            // its BASE is that wide. A barrel is knee-high; a well is chest-high.
+            if (PolyPackArt.Count(PolyPackArt.Kind.Prop) > 0)
+                foreach (var (x, z, rot, size) in new (float, float, float, float)[]
+                {
+                    (7, -12, 20f, 1.1f), (-12, -3, 0f, 1.0f), (10, 3, 200f, 0.9f),
+                    (-7, 5, 90f, 0.8f), (6, 8, 130f, 0.9f),          // hub
+                    (-30, -2, 40f, 0.9f), (-34, 6, 310f, 1.0f),      // docks quayside
+                    (-27, 12, 15f, 0.8f), (-42, -14, 75f, 0.9f),
+                    (-5, 42, 0f, 1.0f), (5, 38, 180f, 0.9f),         // market
+                    (14, 44, 250f, 0.8f), (-16, 50, 60f, 1.0f),
+                })
+                    PolyPackArt.Place(PolyPackArt.Kind.Prop, pick++,
+                        new Vector3(x, 0f, z), rot, size, byHeight: true);
+
+            // Fences: a paddock behind the hub farm, and rails along the market road.
+            if (PolyPackArt.Count(PolyPackArt.Kind.Fence) > 0)
+                foreach (var (x, z, rot) in new (float, float, float)[]
+                {
+                    (-16, -4, 0f), (-16, -7, 0f), (-11, -9, 90f), (-15, -9, 90f),
+                    (-9, 20, 90f), (-9, 24, 90f), (9, 20, 90f), (9, 24, 90f),
+                })
+                    PolyPackArt.Place(PolyPackArt.Kind.Fence, pick++,
+                        new Vector3(x, 0f, z), rot, 3f, byHeight: false);
+
             // The Sunken Warcamp (south): fortified orc camp from the Survival kit.
             void Camp(string model, Vector3 pos, float size, float rot = -1f) =>
                 KenneyArt.Place("Survival", model, pos, rot < 0 ? Rot() : rot, size, false);
@@ -396,6 +479,18 @@ namespace RadiantPool.EditorTools
                 grid.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
                 grid.SetColor("_BaseColor", new Color(1f, 1f, 1f, 0.14f));
                 AssetDatabase.CreateAsset(grid, "Assets/Resources/Fx/M_GridOverlay.mat");
+            }
+
+            // Opaque twin of the above, for everything built at runtime (RuntimeArt.Lit):
+            // primitives are born with the built-in Standard "Default-Material", which URP
+            // renders MAGENTA in a build. Same reason this lives in Resources: an
+            // unreferenced shader is stripped and Shader.Find comes back null.
+            if (AssetDatabase.LoadAssetAtPath<Material>("Assets/Resources/Fx/M_Solid.mat") == null)
+            {
+                var solid = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                solid.SetColor("_BaseColor", Color.white);
+                solid.SetFloat("_Smoothness", 0.1f);
+                AssetDatabase.CreateAsset(solid, "Assets/Resources/Fx/M_Solid.mat");
             }
 
             // Gray-box geometry: 120x120 map, hub south-center, docks west,
@@ -538,7 +633,7 @@ namespace RadiantPool.EditorTools
             shrineLabelGo.transform.position = new Vector3(-9, 3.1f, -14.5f);
             var shrineLabel = shrineLabelGo.AddComponent<TextMesh>();
             shrineLabel.text = "Shrine of the Dawnmother";
-            shrineLabel.characterSize = 0.11f;
+            shrineLabel.characterSize = 0.07f;
             shrineLabel.fontSize = 40;
             shrineLabel.anchor = TextAnchor.LowerCenter;
             shrineLabel.color = new Color(1f, 0.93f, 0.7f);
@@ -644,7 +739,7 @@ namespace RadiantPool.EditorTools
             plateGo.transform.localPosition = new Vector3(0f, 1.4f, 0f);
             var plate = plateGo.AddComponent<TextMesh>();
             plate.text = "Councilor Veresk";
-            plate.characterSize = 0.09f;
+            plate.characterSize = 0.055f;
             plate.fontSize = 40;
             plate.anchor = TextAnchor.LowerCenter;
             plate.color = new Color(1f, 0.92f, 0.6f);
@@ -804,7 +899,7 @@ namespace RadiantPool.EditorTools
             vplateGo.transform.localPosition = new Vector3(0f, 1.4f, 0f);
             var vplate = vplateGo.AddComponent<TextMesh>();
             vplate.text = "Salvage Exchange";
-            vplate.characterSize = 0.09f;
+            vplate.characterSize = 0.055f;
             vplate.fontSize = 40;
             vplate.anchor = TextAnchor.LowerCenter;
             vplate.color = new Color(0.7f, 1f, 0.8f);
@@ -824,7 +919,7 @@ namespace RadiantPool.EditorTools
             splateGo.transform.localPosition = new Vector3(0f, 1.4f, 0f);
             var splate = splateGo.AddComponent<TextMesh>();
             splate.text = "The Broken Anvil (smith)";
-            splate.characterSize = 0.09f;
+            splate.characterSize = 0.055f;
             splate.fontSize = 40;
             splate.anchor = TextAnchor.LowerCenter;
             splate.color = new Color(1f, 0.8f, 0.6f);

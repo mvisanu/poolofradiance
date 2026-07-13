@@ -83,17 +83,29 @@ namespace RadiantPool.Game
                 GUILayout.Space(gap);
             }
 
+            // Potions work IN COMBAT: drinking one is an Action (SRD), so it is live only
+            // on your turn while you still have an action — and the tooltip says the price
+            // out loud, because spending your attack on a drink is a real decision.
             int potions = director.Stash.Count(s => s == "potion_healing");
-            GUI.enabled = potions > 0 && !inCombat;
-            bool drink = GUILayout.Button(new GUIContent(CombatClientUI.Icon("potion"),
-                    potions > 0
-                        ? $"Drink Potion of Healing ({potions} left)"
-                        : "No potions — buy one at the Salvage Exchange"),
+            bool canDrink = potions > 0 && (!inCombat || (myTurn && combat.ActionLeft));
+            string potionTip = potions == 0
+                ? "No potions — buy one at the Salvage Exchange"
+                : inCombat
+                    ? $"Drink Potion of Healing — costs your ACTION, heals 2d4+2 ({potions} left)"
+                    : $"Drink Potion of Healing — heals 2d4+2 ({potions} left)";
+
+            GUI.enabled = canDrink;
+            bool drink = GUILayout.Button(
+                new GUIContent(CombatClientUI.Icon("potion"), potionTip),
                 GUILayout.Width(_slot), GUILayout.Height(_slot));
             // The badge hangs off the button GUILayout actually placed, so it can never
             // drift out of register with the bar the way hand-computed offsets did.
             var potionRect = GUILayoutUtility.GetLastRect();
-            if (drink) director.CmdUsePotion();
+            if (drink)
+            {
+                if (inCombat) combat.CmdDrinkPotion();
+                else director.CmdUsePotion();
+            }
             GUI.enabled = true;
 
             if (Btn("bag", "Inventory (I)")) Ui.Toggle(Ui.Panel.Inventory);

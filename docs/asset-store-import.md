@@ -54,6 +54,9 @@ Notes:
   scene; put art under `Resources/` (or ask for bootstrap placements).
 - Character prefabs are looked up by exact name via `CharacterVisuals.Attach`;
   a missing prefab falls back to the KayKit stand-in, then a capsule.
-- Asset Store EULA: these packs are licensed to your Unity account for use in
-  your game builds — fine to commit into this private repo, but don't
-  redistribute the raw assets separately.
+- **Asset Store EULA — do NOT commit the packs.** They are licensed to *your Unity
+  account*; redistributing the raw assets is not allowed, and **this repo is public
+  (github.com/mvisanu/poolofradiance)**, so pushing them there would be redistribution.
+  They are gitignored. Each machine imports them itself — which costs nothing, because
+  every pack here is a drop-in: import + re-bootstrap and the game picks it up, and with
+  no pack installed the world falls back to the CC0 Kenney kits and still builds.

@@ -222,18 +222,21 @@ namespace RadiantPool.Game
                 _hoverMarker.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
                 _hoverMarker.transform.localScale =
                     Vector3.one * (CombatManager.CellSize * 0.9f);
-                _hoverMat = _hoverMarker.GetComponent<Renderer>().material;
-                _hoverMat.EnableKeyword("_EMISSION");
-                SetHoverColor(new Color(0.45f, 0.9f, 1f));
+                // Repainted, not born-with: the primitive's default material is built-in
+                // Standard and renders magenta under URP in a build.
+                _hoverMat = RuntimeArt.Paint(_hoverMarker,
+                    new Color(0.45f, 0.9f, 1f, 0.55f), emission: 0.9f, glow: true);
+                _hoverColor = new Color(0.45f, 0.9f, 1f, 0.55f);
             }
             _hoverMarker.SetActive(on);
         }
 
         private void SetHoverColor(Color color)
         {
+            color.a = 0.55f;   // the marker is a translucent wash over the grid cell
             if (_hoverMat == null || _hoverColor == color) return;
             _hoverColor = color;
-            _hoverMat.color = color;
+            RuntimeArt.Tint(_hoverMat, color);
             _hoverMat.SetColor("_EmissionColor", color * 0.9f);
         }
 
