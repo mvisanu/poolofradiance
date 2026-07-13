@@ -45,6 +45,11 @@ Player log (first place to look when the user reports bugs):
   and attack at −1 to hit; PCs stay pure SRD, XP is untouched. Stat blocks in
   `Monsters.cs` stay canonical (ContentValidationTests pins them to the JSON) — retune
   the knobs, never the blocks. `DifficultyTests` pins the current values.
+  **Party roles live in `PartyComposition.cs`**: the sellswords Veresk musters are picked
+  by ROLE, never by class order — a healer first, then damage dealers of two *different*
+  classes, counting whoever is already being played (so nobody is handed a second cleric
+  while the party has no rogue). `GameDirector.CmdRecruitCompanions` only spawns what it
+  returns; `PartyCompositionTests` pins the guarantee.
 - `content/` — zones/quests/monsters/items/loot/dialogue as JSON. Cross-referenced and
   IP-scanned by `ContentValidationTests`. In-code mirrors: `MonsterLibrary`,
   `SpellLibrary`, `LootLibrary` (tests keep JSON and code aligned by id).

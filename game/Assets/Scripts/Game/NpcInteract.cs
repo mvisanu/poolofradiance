@@ -80,13 +80,16 @@ namespace RadiantPool.Game
             GUILayout.BeginArea(Ui.Fit(520f, 280f), Theme.PanelStyle);
             GUILayout.Label(NpcName, Theme.Header);
 
-            // Sellswords: offered whenever the party is short of four.
+            // Sellswords: offered whenever the party is short of four. The roster they
+            // bring is PartyComposition's (a healer, then two damage classes) — say so, so
+            // the player knows the hire covers what the party is missing.
             int partySize = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
                 .Count(p => p.ClassIndex.Value >= 0);
+            int free = RadiantPool.Rules.PartyComposition.MaxPartySize - partySize;
             void RecruitButton()
             {
-                if (partySize < 4 && GUILayout.Button(
-                        $"We could use sellswords. (hire {4 - partySize} companions)"))
+                if (free > 0 && GUILayout.Button(
+                        $"We could use sellswords. (hire {free}: a healer and swords)"))
                 { director.CmdRecruitCompanions(); _open = false; }
             }
 

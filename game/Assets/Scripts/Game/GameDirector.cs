@@ -237,31 +237,30 @@ namespace RadiantPool.Game
             "Oswin", "Rowena", "Sybilla", "Thurstan", "Wulfric", "Ysolde"
         };
 
-        /// <summary>Fills the party to 4 with AI companions covering every class no one
-        /// is playing (one each — fighter, cleric, wizard, rogue order), then repeats
-        /// classes only if the party still has room. Names are drawn without repeats
-        /// from a medieval pool.</summary>
+        /// <summary>Fills the party to 4 with AI companions. WHICH classes is
+        /// RadiantPool.Rules.PartyComposition's call (rules lib, unit-tested): a healer
+        /// first, then damage dealers of two different classes, counting whoever is already
+        /// playing. Names are drawn without repeats from a medieval pool.</summary>
         [ServerRpc(RequireOwnership = false)]
         public void CmdRecruitCompanions(NetworkConnection conn = null)
         {
             if (CompanionPrefab == null) { RpcNotice("No sellswords available."); return; }
             var holders = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
                 .Where(p => p.Sheet != null).ToList();
-            int needed = 4 - holders.Count;
+            int needed = RadiantPool.Rules.PartyComposition.MaxPartySize - holders.Count;
             if (needed <= 0) { RpcNotice("The party is already full."); return; }
 
-            var have = holders.Select(h => (int)h.Sheet.Class).ToHashSet();
-            var priority = new[] { 0, 1, 2, 3 };   // fighter, cleric, wizard, rogue
-            var classes = priority.Where(c => !have.Contains(c))
-                .Concat(priority).Take(needed);
+            var classes = RadiantPool.Rules.PartyComposition.Recruits(
+                holders.Select(h => h.Sheet.Class), needed);
 
             var rng = new System.Random();
             var usedNames = holders.Select(h => h.Sheet.Name).ToHashSet();
             var namePool = CompanionNames.OrderBy(_ => rng.Next())
                 .Where(n => !usedNames.Contains(n)).ToList();
 
+            var hired = new System.Collections.Generic.List<string>();
             int spawned = 0;
-            foreach (int cls in classes)
+            foreach (var cls in classes)
             {
                 var anchor = holders.FirstOrDefault(h => !h.IsCompanion);
                 Vector3 pos = anchor != null
@@ -273,13 +272,16 @@ namespace RadiantPool.Game
                 string name = spawned < namePool.Count
                     ? namePool[spawned]
                     : $"Sellsword {spawned + 1}";   // pool exhausted (never in practice)
-                holder.ServerInitCompanion(name, cls);
+                holder.ServerInitCompanion(name, (int)cls);
                 var identity = nob.GetComponent<PlayerIdentity>();
                 if (identity != null) identity.ServerSetName(name);
                 holders.Add(holder);
+                hired.Add($"{name} the {cls}");
                 spawned++;
             }
-            RpcNotice($"{spawned} sellsword{(spawned == 1 ? "" : "s")} joined the party!");
+            RpcNotice(spawned == 1
+                ? $"{hired[0]} joined the party!"
+                : $"Sellswords joined the party: {string.Join(", ", hired)}.");
         }
 
         /// <summary>Dialogue actions arrive from whichever client is talking to the NPC.</summary>
