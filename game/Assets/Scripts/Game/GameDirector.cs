@@ -445,14 +445,13 @@ namespace RadiantPool.Game
             _noticeUntil = Time.time + 6f;
         }
 
-        private bool _journalOpen;
         private Vector2 _journalScroll;
 
-        public void ToggleJournal() => _journalOpen = !_journalOpen;
+        public void ToggleJournal() => Ui.Toggle(Ui.Panel.Journal);
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.J)) _journalOpen = !_journalOpen;
+            if (Input.GetKeyDown(KeyCode.J) && !Ui.Typing) Ui.Toggle(Ui.Panel.Journal);
             if (Input.GetKeyDown(KeyCode.F5) && IsServerStarted)
             {
                 ServerSaveCampaign();
@@ -466,13 +465,15 @@ namespace RadiantPool.Game
             if (Time.time < _noticeUntil && LocalNotice.Length > 0)
                 Theme.DrawToast(Ui.W / 2f, 16, LocalNotice);
 
-            if (!_journalOpen) return;
-            float jh = Mathf.Min(Ui.H - 110f, 480f);
-            GUILayout.BeginArea(new Rect(Ui.W / 2f - 215, 94, 430, jh), Theme.PanelStyle);
+            if (!Ui.IsOpen(Ui.Panel.Journal)) return;
+            var rect = Ui.FitTop(440f, 480f, top: 92f, bottomMargin: 100f);
+            GUILayout.BeginArea(rect, Theme.PanelStyle);
             GUILayout.BeginHorizontal();
             GUILayout.Label("Journal", Theme.Header);
             GUILayout.FlexibleSpace();
-            GUILayout.Label("<color=#d0c5af>J to close</color>", Theme.Body);
+            GUILayout.Label("<color=#d0c5af>J or Esc to close</color>", Theme.Body);
+            if (GUILayout.Button("X", GUILayout.Width(28), GUILayout.Height(22)))
+                Ui.Close(Ui.Panel.Journal);
             GUILayout.EndHorizontal();
 
             _journalScroll = GUILayout.BeginScrollView(_journalScroll,
@@ -494,7 +495,7 @@ namespace RadiantPool.Game
                     (float)done / cfg.RequiredEncounters);
             }
             if (CampaignComplete.Value)
-                GUILayout.Label("<color=#b8860b>★ Aldenmere stands free. The campaign is " +
+                GUILayout.Label("<color=#8a6d1f><b>Aldenmere stands free.</b> The campaign is " +
                     "complete!</color>", Theme.BodyInk);
             GUILayout.EndVertical();
             GUILayout.EndScrollView();
@@ -525,14 +526,16 @@ namespace RadiantPool.Game
             if (state == QuestState.Locked) return;
             if (state == QuestState.Completed)
             {
-                GUILayout.Label($"<color=#2e7d32>✔</color>  <color=#6b6257>{title}</color>",
+                // Markers are ASCII: the shipped fonts have no ✔/★ glyph, and a missing
+                // glyph renders as a tofu box rather than the symbol you meant.
+                GUILayout.Label($"{Theme.Check(true)}  <color=#6b6257>{title}</color>",
                     Theme.BodyInk);
                 return;
             }
 
             GUILayout.BeginVertical(Theme.GoldWashStyle);
             string mark = state == QuestState.ObjectivesMet
-                ? "<color=#b8860b><b>!</b></color>" : "<color=#b8860b>★</color>";
+                ? "<color=#8a6d1f><b>[!]</b></color>" : "<color=#8a6d1f><b>[ ]</b></color>";
             GUILayout.Label($"{mark}  <b>{title}</b>", Theme.HeaderInk);
             GUILayout.Label(state == QuestState.ObjectivesMet
                 ? "<i>Return to Councilor Veresk for your reward.</i>" : detail, Theme.BodyInk);

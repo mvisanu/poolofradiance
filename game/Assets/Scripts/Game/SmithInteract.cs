@@ -45,14 +45,12 @@ namespace RadiantPool.Game
 
             if (!_open && InRange())
             {
-                Theme.DrawToast(Ui.W / 2f, Ui.H - 104, $"[E] Browse {VendorName}");
+                Theme.DrawToast(Ui.W / 2f, 190f, $"[E] Browse {VendorName}");
                 return;
             }
             if (!_open) return;
 
-            float ph = Mathf.Min(Ui.H - 60f, 420f);
-            GUILayout.BeginArea(new Rect(Ui.W / 2f - 210, (Ui.H - ph) / 2f, 420, ph),
-                Theme.PanelStyle);
+            GUILayout.BeginArea(Ui.Fit(420f, 420f), Theme.PanelStyle);
             GUILayout.Label($"{VendorName} — arms & armor", Theme.Header);
             GUILayout.Label($"<color=#f2ca50><b>{director.PartyGold.Value}</b> gold</color>" +
                 "   <color=#d0c5af>(bought gear goes to the stash — equip with I)</color>",

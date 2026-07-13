@@ -60,9 +60,12 @@ namespace RadiantPool.Game
         private Transform _player;
         private float _nextScan;
 
+        /// <summary>Map size in logical units. The normal map gives ground back on a short
+        /// canvas (a big UI scale can shrink the logical height below the design 630) so it
+        /// never crowds the initiative list docked underneath it.</summary>
         private static float Side => EffectiveMode == 2
             ? Mathf.Min(Ui.W - 24f, Ui.H - 200f)
-            : NormalSide;
+            : Mathf.Clamp(Ui.H * 0.33f, 150f, NormalSide);
 
         /// <summary>Full interactive frame (header buttons + map) in Ui-scaled space;
         /// this is the rect HUD hit-tests block clicks against.</summary>
@@ -87,15 +90,7 @@ namespace RadiantPool.Game
         }
 
         /// <summary>True while the cursor is over the minimap — scroll belongs to it.</summary>
-        public static bool MouseOverMap
-        {
-            get
-            {
-                var m = new Vector2(Input.mousePosition.x / Ui.Scale,
-                    (Screen.height - Input.mousePosition.y) / Ui.Scale);
-                return MapRect.Contains(m);
-            }
-        }
+        public static bool MouseOverMap => MapRect.Contains(Ui.Mouse);
 
         private void Start()
         {
@@ -145,7 +140,7 @@ namespace RadiantPool.Game
             if (_player == null) { _mapCam.enabled = false; return; }
 
             // M toggles between normal and maximized (restores if collapsed).
-            if (Input.GetKeyDown(KeyCode.M)) SetSize(_sizeMode == 2 ? 1 : 2);
+            if (Input.GetKeyDown(KeyCode.M) && !Ui.Typing) SetSize(_sizeMode == 2 ? 1 : 2);
 
             bool inCombat = CombatManager.Instance != null
                             && CombatManager.Instance.InCombat.Value;

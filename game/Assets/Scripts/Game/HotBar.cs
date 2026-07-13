@@ -7,15 +7,21 @@ namespace RadiantPool.Game
     /// <summary>Persistent bottom action bar (classic MMO hotbar): attack/dodge/spell
     /// slots while in combat, plus potion, inventory, journal, and settings buttons at
     /// all times. Icon slots use Resources/SpellIcons; combat clicks delegate to
-    /// CombatClientUI's target pickers.</summary>
+    /// CombatClientUI's target pickers.
+    ///
+    /// The bar sizes itself to the window: a cleric in combat needs twelve slots, which
+    /// at the design size is wider than a small window — the slots shrink to fit rather
+    /// than running off both edges (they never shrink below a comfortable click target).</summary>
     public class HotBar : MonoBehaviour
     {
         /// <summary>This frame's bar rect in Ui space — CombatClientUI excludes it from
         /// click-to-move.</summary>
         public static Rect BarRect { get; private set; }
 
-        private const float Slot = 46f;
-        private const float SlotH = 44f;
+        private const float MaxSlot = 46f;   // design size
+        private const float MinSlot = 34f;   // still an easy click target
+
+        private float _slot = MaxSlot;
 
         private static GUIContent IconOnly(string id, string fallback)
         {
@@ -38,9 +44,17 @@ namespace RadiantPool.Game
                 : System.Array.Empty<string>();
 
             int combatSlots = inCombat ? 3 + spells.Length : 0;   // attack, dodge, end
-            int utilSlots = 4;                                     // potion, bag, journal, cog
-            float w = (combatSlots + utilSlots) * (Slot + 4f) + (inCombat ? 14f : 0f) + 28f;
-            var rect = new Rect(Ui.W / 2f - w / 2f, Ui.H - SlotH - 22f, w, SlotH + 16f);
+            const int utilSlots = 4;                              // potion, bag, journal, cog
+            int slots = combatSlots + utilSlots;
+
+            // Fit the bar to the window: shrink the slots before ever overflowing the edge.
+            float gap = inCombat ? 14f : 0f;
+            float chrome = gap + 28f;
+            float avail = Ui.W - 24f;
+            _slot = Mathf.Clamp((avail - chrome) / slots - 4f, MinSlot, MaxSlot);
+
+            float w = slots * (_slot + 4f) + chrome;
+            var rect = new Rect(Ui.W / 2f - w / 2f, Ui.H - _slot - 38f, w, _slot + 16f);
             BarRect = rect;
 
             GUILayout.BeginArea(rect, Theme.PanelStyle);
@@ -66,29 +80,34 @@ namespace RadiantPool.Game
                 GUI.enabled = myTurn;
                 if (Btn("end_turn", "End Turn (Space)")) combat.CmdEndTurn();
                 GUI.enabled = true;
-                GUILayout.Space(14f);
+                GUILayout.Space(gap);
             }
 
             int potions = director.Stash.Count(s => s == "potion_healing");
             GUI.enabled = potions > 0 && !inCombat;
-            if (GUILayout.Button(new GUIContent(CombatClientUI.Icon("potion"),
-                    $"Drink Potion of Healing ({potions} left)"),
-                    GUILayout.Width(Slot), GUILayout.Height(SlotH)))
-                director.CmdUsePotion();
+            bool drink = GUILayout.Button(new GUIContent(CombatClientUI.Icon("potion"),
+                    potions > 0
+                        ? $"Drink Potion of Healing ({potions} left)"
+                        : "No potions — buy one at the Salvage Exchange"),
+                GUILayout.Width(_slot), GUILayout.Height(_slot));
+            // The badge hangs off the button GUILayout actually placed, so it can never
+            // drift out of register with the bar the way hand-computed offsets did.
+            var potionRect = GUILayoutUtility.GetLastRect();
+            if (drink) director.CmdUsePotion();
             GUI.enabled = true;
 
-            if (Btn("bag", "Inventory (I)")) InventoryUI.Instance?.Toggle();
-            if (Btn("journal", "Journal (J)")) director.ToggleJournal();
-            if (Btn("settings", "Settings (Esc)")) SettingsMenu.Instance?.Toggle();
+            if (Btn("bag", "Inventory (I)")) Ui.Toggle(Ui.Panel.Inventory);
+            if (Btn("journal", "Journal (J)")) Ui.Toggle(Ui.Panel.Journal);
+            if (Btn("settings", "Settings (Esc)")) Ui.Toggle(Ui.Panel.Settings);
 
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
 
-            // Potion count badge + hover tooltip line above the bar.
             if (potions > 0)
-                GUI.Label(new Rect(rect.x + (inCombat ? combatSlots * (Slot + 4f) + 28f : 14f)
-                        + Slot - 16f, rect.y + SlotH - 10f, 30f, 16f),
+                GUI.Label(new Rect(rect.x + potionRect.xMax - 18f,
+                        rect.y + potionRect.yMax - 16f, 24f, 16f),
                     $"<b><color=#f2ca50>{potions}</color></b>", Theme.Caps);
+
             if (GUI.tooltip.Length > 0)
             {
                 var tipStyle = new GUIStyle(Theme.Caps)
@@ -98,8 +117,8 @@ namespace RadiantPool.Game
             }
         }
 
-        private static bool Btn(string icon, string tooltip) =>
+        private bool Btn(string icon, string tooltip) =>
             GUILayout.Button(IconOnly(icon, tooltip),
-                GUILayout.Width(Slot), GUILayout.Height(SlotH));
+                GUILayout.Width(_slot), GUILayout.Height(_slot));
     }
 }

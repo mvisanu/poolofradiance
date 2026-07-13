@@ -14,14 +14,13 @@ namespace RadiantPool.Game
     {
         public static InventoryUI Instance { get; private set; }
 
-        private bool _open;
-        private Vector2 _scroll;
+        private Vector2 _scroll, _wornScroll;
         private GUIStyle _slotName, _slotStat, _itemStat, _better, _worse;
 
         private void Awake() => Instance = this;
         private void OnDestroy() { if (Instance == this) Instance = null; }
 
-        public void Toggle() => _open = !_open;
+        public void Toggle() => Ui.Toggle(Ui.Panel.Inventory);
 
         private PlayerCharacterHolder LocalHolder() =>
             FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
@@ -29,9 +28,9 @@ namespace RadiantPool.Game
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.I)) _open = !_open;
+            if (Input.GetKeyDown(KeyCode.I) && !Ui.Typing) Ui.Toggle(Ui.Panel.Inventory);
             if (CombatManager.Instance != null && CombatManager.Instance.InCombat.Value)
-                _open = false;
+                Ui.Close(Ui.Panel.Inventory);
         }
 
         private void EnsureStyles()
@@ -50,21 +49,27 @@ namespace RadiantPool.Game
         private void OnGUI()
         {
             Ui.Begin();
-            if (!_open) return;
+            if (!Ui.IsOpen(Ui.Panel.Inventory)) return;
             var director = GameDirector.Instance;
             var holder = LocalHolder();
             if (director == null || holder == null) return;
             EnsureStyles();
 
-            GUILayout.BeginArea(new Rect(Ui.W / 2f - 300, 60, 600, 440), Theme.PanelStyle);
+            // Fits any window: full size when there is room, shrunk (and scrolled) when not.
+            var rect = Ui.FitTop(620f, 460f, top: 56f, bottomMargin: 96f);
+            GUILayout.BeginArea(rect, Theme.PanelStyle);
             GUILayout.BeginHorizontal();
             GUILayout.Label("Inventory", Theme.Header);
             GUILayout.FlexibleSpace();
-            GUILayout.Label("<color=#d0c5af>I to close</color>", Theme.Body);
+            GUILayout.Label("<color=#d0c5af>I or Esc to close</color>", Theme.Body);
+            if (GUILayout.Button("X", GUILayout.Width(28), GUILayout.Height(22)))
+                Ui.Close(Ui.Panel.Inventory);
             GUILayout.EndHorizontal();
 
             GUILayout.BeginHorizontal();
-            DrawEquipped(holder);
+            // The worn column takes a share of the panel, not a fixed 250 px — on a narrow
+            // window the fixed column used to squeeze the stash into nothing.
+            DrawEquipped(holder, Mathf.Clamp(rect.width * 0.42f, 180f, 260f));
             GUILayout.Space(10);
             DrawStash(director, holder);
             GUILayout.EndHorizontal();
@@ -73,12 +78,13 @@ namespace RadiantPool.Game
 
         /// <summary>The "what am I wearing" column: every slot, filled or empty, plus the
         /// totals those pieces produce (AC, HP, to-hit and damage of the equipped weapon).</summary>
-        private void DrawEquipped(PlayerCharacterHolder holder)
+        private void DrawEquipped(PlayerCharacterHolder holder, float width)
         {
-            GUILayout.BeginVertical(GUILayout.Width(250));
+            GUILayout.BeginVertical(GUILayout.Width(width));
             GUILayout.Label("WORN BY " + (holder.CharacterName.Value.Length > 0
                 ? holder.CharacterName.Value.ToUpperInvariant() : "YOU"), Theme.Caps);
 
+            _wornScroll = GUILayout.BeginScrollView(_wornScroll);
             GUILayout.BeginVertical(Theme.ParchmentStyle);
             var weapon = GameItem.Get(holder.WeaponId.Value);
             var armor = GameItem.Get(holder.ArmorId.Value);
@@ -115,6 +121,7 @@ namespace RadiantPool.Game
                     weapon.DamageType.ToString().ToLowerInvariant());
             }
             GUILayout.EndVertical();
+            GUILayout.EndScrollView();
             GUILayout.EndVertical();
         }
 

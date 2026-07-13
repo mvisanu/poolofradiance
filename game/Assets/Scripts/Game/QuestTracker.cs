@@ -213,7 +213,8 @@ namespace RadiantPool.Game
             float bearing = Mathf.Atan2(delta.x, delta.z) * Mathf.Rad2Deg - camYaw;
 
             Theme.DrawToast(Ui.W / 2f, 58,
-                $"{BearingArrow(bearing)}  NEXT: {TargetLabel}  <color=#d0c5af>— {dist:0} m</color>");
+                $"NEXT: {TargetLabel}  <color=#d0c5af>— {dist:0} m {Bearing(bearing)}</color>",
+                maxW: Mathf.Min(660f, Ui.W - 40f));
 
             DrawSteeringArrow(bearing, dist);
             DrawWorldMarker(dist);
@@ -235,12 +236,13 @@ namespace RadiantPool.Game
                 _stepDone.normal.textColor = Theme.OnSurfaceMuted;
             }
 
-            const float w = 250f, pad = 12f;
+            float w = Mathf.Clamp(Ui.W * 0.24f, 200f, 250f);
+            const float pad = 12f;
             float h = pad * 2f + _questTitle.CalcHeight(new GUIContent(title), w - pad * 2f) + 4f;
             foreach (var (text, _) in steps)
                 h += _stepStyle.CalcHeight(new GUIContent(text), w - pad * 2f - 18f) + 2f;
 
-            var panel = new Rect(12, 118, w, h);
+            var panel = new Rect(12, 118, w, Mathf.Min(h, Ui.H - 240f));
             GUI.Box(panel, GUIContent.none, Theme.PanelStyle);
 
             float y = panel.y + pad;
@@ -252,10 +254,10 @@ namespace RadiantPool.Game
             {
                 var style = done ? _stepDone : _stepStyle;
                 float sH = style.CalcHeight(new GUIContent(text), w - pad * 2f - 18f);
+                if (y + sH > panel.yMax - pad) break;   // never spill out of the card
                 // ASCII markers only: the body font has no box/tick glyphs, and a missing
                 // glyph renders as tofu. State is carried by the marker, not just colour.
-                GUI.Label(new Rect(panel.x + pad, y, 18f, sH),
-                    done ? "<color=#7fc47f>[x]</color>" : "<color=#f2ca50>[ ]</color>", style);
+                GUI.Label(new Rect(panel.x + pad, y, 18f, sH), Theme.Check(done), style);
                 GUI.Label(new Rect(panel.x + pad + 18f, y, w - pad * 2f - 18f, sH), text, style);
                 y += sH + 2f;
             }
@@ -321,12 +323,17 @@ namespace RadiantPool.Game
         }
 
         /// <summary>Gold chevron floating over the objective in the world; when the
-        /// objective is off-screen the marker clamps to the screen edge and shows the
-        /// bearing arrow instead, so there is always something to walk toward.</summary>
+        /// objective is off-screen the marker clamps to the screen edge and the arrow
+        /// points at it, so there is always something to walk toward. The chevron is the
+        /// generated arrow texture, rotated — the "▼" it used to draw is not a glyph any
+        /// of the shipped fonts actually has.</summary>
         private void DrawWorldMarker(float dist)
         {
             var cam = Camera.main;
-            if (cam == null) return;
+            var player = LocalPlayer();
+            if (cam == null || player == null) return;
+            if (_steerArrow == null) _steerArrow = MakeSteerArrow();
+
             Vector3 sp = cam.WorldToScreenPoint(TargetPosition + Vector3.up * 3.2f);
             bool behind = sp.z < 0f;
             if (behind) { sp.x = Screen.width - sp.x; sp.y = Screen.height - sp.y; }
@@ -336,32 +343,37 @@ namespace RadiantPool.Game
             gui.x = Mathf.Clamp(gui.x, 40, Ui.W - 40);
             gui.y = Mathf.Clamp(gui.y, 100, Ui.H - 70);
 
-            var mark = new GUIStyle(Theme.Header)
-                { alignment = TextAnchor.MiddleCenter, fontSize = 24, wordWrap = false };
+            var caption = new GUIStyle(Theme.Caps)
+                { alignment = TextAnchor.MiddleCenter, wordWrap = false };
             float bob = offscreen ? 0f : Mathf.Sin(Time.time * 3f) * 4f;
-            if (offscreen)
-            {
-                Vector3 d = TargetPosition - LocalPlayer().position;
-                float camYaw = cam.transform.eulerAngles.y;
-                string a = BearingArrow(Mathf.Atan2(d.x, d.z) * Mathf.Rad2Deg - camYaw);
-                GUI.Label(new Rect(gui.x - 60, gui.y - 16, 120, 30),
-                    $"{a} {dist:0}m", mark);
-            }
-            else
-            {
-                GUI.Label(new Rect(gui.x - 60, gui.y - 18 + bob, 120, 26), "▼", mark);
-                var caption = new GUIStyle(Theme.Caps)
-                    { alignment = TextAnchor.MiddleCenter, wordWrap = false };
-                GUI.Label(new Rect(gui.x - 110, gui.y + 8 + bob, 220, 16),
-                    TargetLabel, caption);
-            }
+
+            Vector3 d = TargetPosition - player.position;
+            float bearing = Mathf.Atan2(d.x, d.z) * Mathf.Rad2Deg - cam.transform.eulerAngles.y;
+            // Off-screen: the arrow points the way. On-screen: it points down at the spot.
+            float angle = offscreen ? bearing : 180f;
+            var at = new Vector2(gui.x, gui.y - 8f + bob);
+
+            var prev = GUI.matrix;
+            GUIUtility.RotateAroundPivot(angle, at);
+            GUI.DrawTexture(new Rect(at.x - 14f, at.y - 14f, 28f, 28f), _steerArrow);
+            GUI.matrix = prev;
+
+            GUI.Label(new Rect(gui.x - 110, gui.y + 10 + bob, 220, 16),
+                offscreen ? $"{TargetLabel} — {dist:0} m" : TargetLabel, caption);
         }
 
-        private static string BearingArrow(float degrees)
+        /// <summary>Relative bearing in words — "ahead", "ahead-right", … Words instead of
+        /// arrow glyphs (↑↗→ are not in MedievalSharp/Inter and render as tofu), and they
+        /// read faster than a symbol anyway.</summary>
+        private static string Bearing(float degrees)
         {
             degrees = (degrees % 360f + 360f) % 360f;
-            string[] arrows = { "↑", "↗", "→", "↘", "↓", "↙", "←", "↖" };
-            return arrows[Mathf.RoundToInt(degrees / 45f) % 8];
+            string[] names =
+            {
+                "ahead", "ahead-right", "to your right", "behind-right",
+                "behind you", "behind-left", "to your left", "ahead-left"
+            };
+            return names[Mathf.RoundToInt(degrees / 45f) % 8];
         }
     }
 }

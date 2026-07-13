@@ -191,17 +191,19 @@ namespace RadiantPool.Game
                 }
         }
 
-        /// <summary>The HUD rects from OnGUI, in Ui-scaled space — clicks inside them
-        /// are button presses, not move orders.</summary>
+        /// <summary>The HUD rects from OnGUI, in Ui-scaled space — clicks inside them are
+        /// button presses, not move orders. These are the SAME Rect properties the panels
+        /// draw with: hand-copied literals here drifted from the panels and let clicks
+        /// fall through the HUD onto the grid.</summary>
         private bool IsMouseOverHud(CombatManager combat)
         {
-            var m = new Vector2(Input.mousePosition.x / Ui.Scale,
-                (Screen.height - Input.mousePosition.y) / Ui.Scale);
+            if (Ui.OpenPanel != Ui.Panel.None) return true;   // a screen is up: never move
+            var m = Ui.Mouse;
             if (InitiativeRect(combat).Contains(m)) return true;
-            if (new Rect(12, Ui.H - 174, 384, 162).Contains(m)) return true;      // log
-            if (new Rect(12, Ui.H - 282, 264, 100).Contains(m)) return true;      // player card
-            if (HotBar.BarRect.Contains(m)) return true;                          // hotbar
-            if (MiniMap.MapRect.Contains(m)) return true;                         // minimap
+            if (LogRect.Contains(m)) return true;
+            if (MyCardRect.Contains(m)) return true;
+            if (HotBar.BarRect.Contains(m)) return true;
+            if (MiniMap.MapRect.Contains(m)) return true;
             if (combat.IsMyTurn && _actionsRect.Contains(m)) return true;         // status strip
             return false;
         }
@@ -251,28 +253,72 @@ namespace RadiantPool.Game
             else _mode = Mode.Root;
         }
 
+        // ---------- HUD geometry (one definition per panel; IsMouseOverHud reuses these) ----------
+
+        /// <summary>Combat log, bottom-left. Width and height give way on a small window
+        /// rather than sliding off the edge.</summary>
+        private static Rect LogRect
+        {
+            get
+            {
+                float w = Mathf.Clamp(Ui.W * 0.32f, 240f, 384f);
+                float h = Mathf.Clamp(Ui.H * 0.26f, 110f, 162f);
+                return new Rect(12f, Ui.H - 12f - h, w, h);
+            }
+        }
+
+        /// <summary>Player card, stacked directly above the log.</summary>
+        private static Rect MyCardRect
+        {
+            get
+            {
+                float w = Mathf.Min(264f, Ui.W * 0.28f);
+                var log = LogRect;
+                return new Rect(12f, log.y - 8f - 100f, Mathf.Max(w, 200f), 100f);
+            }
+        }
+
+        /// <summary>Initiative order, top-right — docked BELOW the minimap (it used to be
+        /// pinned to the top-right corner and drew straight through it) and capped so a
+        /// nine-unit fight scrolls instead of running off the bottom of the screen.</summary>
+        private static Rect InitiativeRect(CombatManager combat)
+        {
+            float w = Mathf.Clamp(Ui.W * 0.22f, 190f, 250f);
+            float top = MiniMap.MapRect.yMax + 8f;
+            float wanted = 44f + combat.ClientUnits.Count * 36f;
+            float h = Mathf.Min(wanted, Ui.H - top - 12f);
+            return new Rect(Ui.W - w - 12f, top, w, Mathf.Max(h, 80f));
+        }
+
         /// <summary>Persistent player card above the log (mock: portrait card with HP/MP
-        /// bars): name in serif gold, red HP bar, remaining spell slots as blue pips.</summary>
+        /// bars): name in serif gold, red HP bar, remaining spell slots as pips.</summary>
         private void DrawMyCard(CombatManager combat)
         {
             var mine = combat.MyUnit;
             if (mine == null) return;
-            GUILayout.BeginArea(new Rect(12, Ui.H - 282, 264, 100), Theme.PanelStyle);
+            var rect = MyCardRect;
+            GUILayout.BeginArea(rect, Theme.PanelStyle);
             GUILayout.Label(mine.Name +
                 (combat.IsMyTurn ? "   <size=11><color=#d0c5af>— your turn</color></size>" : ""),
                 Theme.Header);
-            var row = GUILayoutUtility.GetRect(232, 14);
+
+            float inner = rect.width - 28f;
+            var row = GUILayoutUtility.GetRect(inner, 14f);
             GUI.Label(new Rect(row.x, row.y - 2, 26, 14), "HP", Theme.Caps);
-            Theme.Bar(new Rect(row.x + 28, row.y + 1, 142, 9),
+            float barW = Mathf.Max(60f, inner - 28f - 56f);
+            Theme.Bar(new Rect(row.x + 28, row.y + 1, barW, 9),
                 mine.MaxHp > 0 ? (float)mine.Hp / mine.MaxHp : 0f, Theme.HpRed);
-            GUI.Label(new Rect(row.x + 176, row.y - 2, 60, 14),
+            GUI.Label(new Rect(row.x + 32 + barW, row.y - 2, 56, 14),
                 $"{mine.Hp}/{mine.MaxHp}", Theme.Caps);
+
+            // Pips = spell slots still available (the client only knows what is left, not
+            // the capacity, so every pip drawn is one you can actually spend).
             int slots = combat.MySlots.Sum();
             if (slots > 0)
-                GUILayout.Label($"SLOTS  <color=#3d6ff2>{new string('●', Mathf.Min(slots, 12))}</color>",
-                    Theme.Caps);
+                GUILayout.Label($"SLOTS  {Theme.Pips(slots, Mathf.Min(slots, 10))}", Theme.Caps);
             if (mine.Down)
-                GUILayout.Label("<color=#c62828><b>DOWN — roll death saves</b></color>", Theme.Caps);
+                GUILayout.Label("<color=#ff8a80><b>DOWN — rolling death saves</b></color>",
+                    Theme.Caps);
             GUILayout.EndArea();
         }
 
@@ -287,9 +333,8 @@ namespace RadiantPool.Game
             var prevColor = GUI.color;
             GUI.color = new Color(1f, 1f, 1f, alpha);
 
-            const float w = 460f;
-            const float h = 150f;
-            var rect = new Rect(Ui.W / 2f - w / 2f, Ui.H * 0.22f, w, h);
+            var rect = Ui.Fit(460f, 150f);
+            rect.y = Ui.H * 0.22f;
             GUI.Box(rect, GUIContent.none, Theme.PanelStyle);
 
             var titleStyle = new GUIStyle(Theme.HeaderBig)
@@ -298,13 +343,13 @@ namespace RadiantPool.Game
             };
             string color = combat.BannerVictory ? "#f2ca50" : "#ff7a6b";
             GUI.Label(new Rect(rect.x, rect.y + 12, rect.width, 46),
-                $"<color={color}>{(combat.BannerVictory ? "⚔  " : "")}{combat.BannerTitle}</color>",
-                titleStyle);
+                $"<color={color}>{combat.BannerTitle}</color>", titleStyle);
 
             var detailStyle = new GUIStyle(Theme.Body)
             {
                 alignment = TextAnchor.UpperCenter,
-                fontSize = 16
+                fontSize = 16,
+                wordWrap = true
             };
             GUI.Label(new Rect(rect.x + 12, rect.y + 62, rect.width - 24, rect.height - 70),
                 combat.BannerDetail, detailStyle);
@@ -312,32 +357,38 @@ namespace RadiantPool.Game
             GUI.color = prevColor;
         }
 
-        private Rect InitiativeRect(CombatManager combat) => new Rect(Ui.W - 262, 12, 250,
-            Mathf.Min(52f + combat.ClientUnits.Count * 36f, Ui.H - 24f));
+        private Vector2 _initScroll;
 
         private void DrawInitiative(CombatManager combat)
         {
-            GUILayout.BeginArea(InitiativeRect(combat), Theme.PanelStyle);
+            var rect = InitiativeRect(combat);
+            GUILayout.BeginArea(rect, Theme.PanelStyle);
             GUILayout.Label($"Round {combat.Round}", Theme.Header);
+
+            _initScroll = GUILayout.BeginScrollView(_initScroll);
+            float barW = Mathf.Max(80f, rect.width - 28f - 52f);
             foreach (var u in combat.ClientUnits)
             {
                 bool active = u.Id == combat.ActiveUnitId;
                 string nameColor = u.Dead ? "#948a7c"
                     : active ? "#f2ca50"
                     : u.IsPc ? "#b2c5ff" : "#ff9e9e";
-                string state = u.Dead ? "  ✝" : u.Down ? "  (down)" : "";
-                GUILayout.Label($"{(active ? "► " : "")}<color={nameColor}>{u.Name}</color>" +
+                // State in words, never a dingbat: the fonts have no ✝/► glyph and a
+                // missing glyph renders as a tofu box.
+                string state = u.Dead ? "  (slain)" : u.Down ? "  (down)" : "";
+                GUILayout.Label($"{(active ? "> " : "")}<color={nameColor}>{u.Name}</color>" +
                     $"<color=#d0c5af>{state}</color>", Theme.Body);
                 if (!u.Dead)
                 {
-                    var row = GUILayoutUtility.GetRect(216, 9);
-                    Theme.Bar(new Rect(row.x + 2, row.y, 168, 7),
+                    var row = GUILayoutUtility.GetRect(barW + 48f, 9f);
+                    Theme.Bar(new Rect(row.x + 2, row.y, barW, 7),
                         u.MaxHp > 0 ? (float)u.Hp / u.MaxHp : 0f, Theme.HpRed);
-                    GUI.Label(new Rect(row.x + 176, row.y - 4, 46, 14),
+                    GUI.Label(new Rect(row.x + barW + 8f, row.y - 4, 46, 14),
                         $"{u.Hp}/{u.MaxHp}", Theme.Caps);
                 }
                 GUILayout.Space(2);
             }
+            GUILayout.EndScrollView();
             GUILayout.EndArea();
         }
 
@@ -360,7 +411,7 @@ namespace RadiantPool.Game
 
         private void DrawLog(CombatManager combat)
         {
-            GUILayout.BeginArea(new Rect(12, Ui.H - 174, 384, 162), Theme.PanelStyle);
+            GUILayout.BeginArea(LogRect, Theme.PanelStyle);
             GUILayout.Label("Combat", Theme.Header);
             _logScroll = GUILayout.BeginScrollView(_logScroll);
             GUILayout.BeginVertical(Theme.ParchmentStyle);
@@ -381,17 +432,23 @@ namespace RadiantPool.Game
         private void DrawActions(CombatManager combat)
         {
             float h = _mode == Mode.Root ? 50f : 100f;
-            _actionsRect = new Rect(Ui.W / 2f - 370f, Ui.H - 94f - h, 740f, h);
+            float w = Mathf.Min(740f, Ui.W - 24f);
+            // Sits on the hotbar, wherever the hotbar ended up — it moves with the window.
+            float barTop = HotBar.BarRect.height > 0f ? HotBar.BarRect.y : Ui.H - 82f;
+            _actionsRect = new Rect(Ui.W / 2f - w / 2f, barTop - h - 6f, w, h);
             GUILayout.BeginArea(_actionsRect, Theme.PanelStyle);
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Your Turn", Theme.Header, GUILayout.Width(96));
+            GUILayout.Label("Your Turn", Theme.Header, GUILayout.Width(88));
+            // The hint line is the thing that gets cut off first on a narrow window, so it
+            // sheds detail rather than overflowing: essentials always, the rest if it fits.
+            bool roomy = Ui.W > 900f;
             string info = combat.LastRejection.Length > 0
                 ? $"<color=#f2ca50>{combat.LastRejection}</color>"
                 : $"<color=#d0c5af>move <b>{combat.MoveLeft} ft</b> · click square = walk · " +
-                  "enemy = attack · Space = end turn · WASD/middle-drag = pan, F = recenter" +
-                  $" · action {(combat.ActionLeft ? "<color=#2e7d32>✔</color>" : "<color=#c62828>✘</color>")}" +
-                  $" bonus {(combat.BonusLeft ? "<color=#2e7d32>✔</color>" : "<color=#c62828>✘</color>")}" +
-                  "</color>";
+                  "enemy = attack · Space = end turn"
+                  + (roomy ? " · WASD/middle-drag = pan, F = recenter" : "")
+                  + $" · action {Theme.Ready(combat.ActionLeft)}"
+                  + $" · bonus {Theme.Ready(combat.BonusLeft)}</color>";
             GUILayout.Label(info, Theme.Body);
             GUILayout.EndHorizontal();
 
@@ -413,9 +470,10 @@ namespace RadiantPool.Game
         {
             var holder = LocalHolder();
             if (holder == null) { _mode = Mode.Root; return; }
-            var known = holder.Class == CharacterClass.Wizard
-                ? new[] { "fire_bolt", "magic_missile", "burning_hands", "sleep" }
-                : new[] { "sacred_flame", "guiding_bolt", "cure_wounds", "healing_word", "bless" };
+            // One source of truth for who knows what: this used to fall back to the CLERIC
+            // list for anyone who wasn't a wizard, so a Fighter was offered Cure Wounds.
+            var known = KnownSpells(holder.Class);
+            if (known.Length == 0) { _mode = Mode.Root; return; }
             int col = 0;
             GUILayout.BeginHorizontal();
             foreach (var id in known)

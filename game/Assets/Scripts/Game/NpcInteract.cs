@@ -67,7 +67,9 @@ namespace RadiantPool.Game
 
             if (!_open && InRange())
             {
-                Theme.DrawToast(Ui.W / 2f, Ui.H - 64, $"[E] Talk to {NpcName}");
+                // Under the quest banner, not over the hotbar: the bottom of the screen is
+                // hotbar + steering arrow, and the prompt used to land on top of them.
+                Theme.DrawToast(Ui.W / 2f, 102f, $"[E] Talk to {NpcName}");
                 return;
             }
             if (!_open) return;
@@ -75,8 +77,7 @@ namespace RadiantPool.Game
             var director = GameDirector.Instance;
             if (director == null || director.Zones.Length == 0) return;
 
-            GUILayout.BeginArea(new Rect(Ui.W / 2f - 260, Ui.H / 2f - 140, 520, 280),
-                Theme.PanelStyle);
+            GUILayout.BeginArea(Ui.Fit(520f, 280f), Theme.PanelStyle);
             GUILayout.Label(NpcName, Theme.Header);
 
             // Sellswords: offered whenever the party is short of four.

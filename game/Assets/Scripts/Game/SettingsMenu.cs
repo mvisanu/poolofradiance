@@ -2,20 +2,23 @@ using UnityEngine;
 
 namespace RadiantPool.Game
 {
-    /// <summary>Esc settings panel (Phase 4): audio volume, window mode, vsync/quality,
-    /// camera sensitivity. Persisted via PlayerPrefs. Keybinds stay fixed in v1
-    /// (documented in README) — full rebinding is listed in known-limitations.</summary>
+    /// <summary>Esc settings panel: audio volume, UI size, window mode, vsync, camera
+    /// sensitivity. Persisted via PlayerPrefs. Keybinds stay fixed in v1 (documented in
+    /// README) — full rebinding is listed in known-limitations.
+    ///
+    /// Esc is a "back" key, not a settings toggle: with the inventory or journal up it
+    /// closes that first, and only opens Settings from a clear screen. That is the
+    /// behaviour every player already expects from Esc.</summary>
     public class SettingsMenu : MonoBehaviour
     {
         public static float MouseSensitivity { get; private set; } = 3.5f;
         public static SettingsMenu Instance { get; private set; }
 
-        private bool _open;
-
         private void Awake() => Instance = this;
         private void OnDestroy() { if (Instance == this) Instance = null; }
 
-        public void Toggle() => _open = !_open;
+        public void Toggle() => Ui.Toggle(Ui.Panel.Settings);
+
         private float _volume;
         private bool _fullscreen;
         private bool _vsync;
@@ -43,25 +46,43 @@ namespace RadiantPool.Game
 
         private void Update()
         {
-            if (Input.GetKeyDown(KeyCode.Escape)) _open = !_open;
+            if (!Input.GetKeyDown(KeyCode.Escape) || Ui.Typing) return;
+            // Back, not toggle: dismiss whatever screen is up before opening Settings.
+            if (Ui.OpenPanel != Ui.Panel.None) Ui.CloseAll();
+            else Ui.Show(Ui.Panel.Settings);
         }
 
         private void OnGUI()
         {
             Ui.Begin();
-            if (!_open) return;
-            GUILayout.BeginArea(new Rect(Ui.W / 2f - 170, Ui.H / 2f - 130,
-                340, 260), GUI.skin.box);
-            GUILayout.Label("<b>Settings</b> (Esc to close)",
-                new GUIStyle(GUI.skin.label) { richText = true });
+            if (!Ui.IsOpen(Ui.Panel.Settings)) return;
 
-            GUILayout.Label($"Master volume: {_volume:P0}");
+            var rect = Ui.Fit(360f, 330f);
+            GUILayout.BeginArea(rect, Theme.PanelStyle);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Settings", Theme.Header);
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("X", GUILayout.Width(28), GUILayout.Height(22)))
+                Ui.Close(Ui.Panel.Settings);
+            GUILayout.EndHorizontal();
+
+            GUILayout.Label($"MASTER VOLUME — {_volume:P0}", Theme.Caps);
             float volume = GUILayout.HorizontalSlider(_volume, 0f, 1f);
-            GUILayout.Label($"Camera sensitivity: {MouseSensitivity:0.0}");
+
+            // The one control that makes the game usable on a 4K panel or a tiny window:
+            // everything (fonts, panels, hit targets) scales off this.
+            GUILayout.Label($"UI SIZE — {Ui.UserScale:P0}", Theme.Caps);
+            float uiScale = GUILayout.HorizontalSlider(Ui.UserScale, 0.7f, 1.6f);
+
+            GUILayout.Label($"CAMERA SENSITIVITY — {MouseSensitivity:0.0}", Theme.Caps);
             float sens = GUILayout.HorizontalSlider(MouseSensitivity, 1f, 8f);
+
+            GUILayout.Space(6);
             bool fullscreen = GUILayout.Toggle(_fullscreen, " Fullscreen (borderless)");
             bool vsync = GUILayout.Toggle(_vsync, " VSync");
 
+            if (!Mathf.Approximately(uiScale, Ui.UserScale))
+                Ui.UserScale = uiScale;
             if (!Mathf.Approximately(volume, _volume) || fullscreen != _fullscreen
                 || vsync != _vsync || !Mathf.Approximately(sens, MouseSensitivity))
             {
@@ -72,10 +93,13 @@ namespace RadiantPool.Game
                 Apply();
             }
 
-            GUILayout.Space(6);
-            GUILayout.Label("Keys: WASD move, Space jump, RMB camera, E interact, " +
-                            "J journal, F5 save (host).");
-            if (GUILayout.Button("Close")) _open = false;
+            GUILayout.Space(8);
+            GUILayout.Label("<color=#cbbb9c>WASD move · RMB camera · E talk · I bags · " +
+                "J journal · M map · F5 save (host)\nIn combat: click to walk, click an " +
+                "enemy to attack, Space ends your turn.</color>", Theme.Body);
+
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Close", Theme.BtnPrimary)) Ui.Close(Ui.Panel.Settings);
             GUILayout.EndArea();
         }
     }

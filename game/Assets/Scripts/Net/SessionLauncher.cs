@@ -198,7 +198,8 @@ namespace RadiantPool.Game
             }
 
             // In-session: compact status strip, top-left.
-            GUILayout.BeginArea(new Rect(12, 12, 368, 104), Theme.PanelStyle);
+            GUILayout.BeginArea(new Rect(12, 12, Mathf.Min(368f, Ui.W * 0.42f), 104),
+                Theme.PanelStyle);
             GUILayout.Label($"<color=#f2ca50>{_status}</color>", Theme.Body);
             if (_hostCode.Length > 0)
             {
@@ -247,7 +248,7 @@ namespace RadiantPool.Game
                 GUILayout.Label($"<color=#f2ca50>{buildError}</color>", Theme.Body);
             GUI.enabled = valid;
             var big = new GUIStyle(Theme.BtnPrimary) { fontSize = 16, fixedHeight = 42 };
-            if (GUILayout.Button("▶  HOST A CAMPAIGN  (solo or with friends)", big))
+            if (GUILayout.Button("HOST A CAMPAIGN  (solo or with friends)", big))
                 Host();
             GUILayout.BeginHorizontal();
             _joinCode = GUILayout.TextField(_joinCode, 12);
@@ -285,11 +286,15 @@ namespace RadiantPool.Game
             {
                 GUILayout.BeginHorizontal();
                 GUILayout.Label(label, GUILayout.Width(34));
-                if (GUILayout.Button("−", GUILayout.Width(26)) && score > 8) score--;
+                // ASCII hyphen, not U+2212: the theme fonts are not guaranteed to carry
+                // the typographic minus, and a missing glyph draws as a tofu box.
+                if (GUILayout.Button("-", GUILayout.Width(30), GUILayout.Height(24))
+                    && score > 8) score--;
                 GUILayout.Label(score.ToString(),
                     new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter },
                     GUILayout.Width(28));
-                if (GUILayout.Button("+", GUILayout.Width(26)) && score < 15) score++;
+                if (GUILayout.Button("+", GUILayout.Width(30), GUILayout.Height(24))
+                    && score < 15) score++;
                 int mod = (score - 10) >= 0 ? (score - 10) / 2 : (score - 11) / 2;
                 GUILayout.Label($"({(mod >= 0 ? "+" : "")}{mod})", GUILayout.Width(36));
                 GUILayout.EndHorizontal();

@@ -60,8 +60,9 @@ Player log (first place to look when the user reports bugs):
   MedievalSharp headers / Inter body, OFL, under `Resources/Fonts`). All IMGUI styling
   flows through `Ui.Begin()` → `Theme.Apply()`; tune look there, never inline styles.
   `HotBar.cs` = persistent bottom action bar (combat slots delegate to
-  `CombatClientUI.Instance.PickAttack/PickSpell`); combat HUD is a slim strip docked
-  above it so the battlefield stays visible. In combat: click enemy = attack (walks
+  `CombatClientUI.Instance.PickAttack/PickSpell`); its slots SHRINK to fit rather than
+  overflow (a cleric in combat needs 12). Combat HUD is a slim strip docked above it so
+  the battlefield stays visible. In combat: click enemy = attack (walks
   into range first), click ground = move, Space = end turn, **WASD/middle-drag pans the
   camera and F recentres** (the grid owns movement, so those keys are free).
   `OrbitCamera` **x-rays whatever hides a combatant**: every unit on the board gets a
@@ -69,6 +70,18 @@ Player log (first place to look when the user reports bugs):
   one fades to a transparent clone of its own materials, shadows off. Kenney props have no
   colliders, so this tests renderer BOUNDS, not raycasts — and `bounds.Contains` is what
   catches a monster spawned *inside* a warehouse (encounter boxes overlap the buildings).
+- **Responsive UI (`Ui.cs`) — the rules every panel obeys.** The HUD is laid out on a
+  **logical canvas** (`Ui.W`/`Ui.H`, ~630 units tall), never `Screen.width/height`, so
+  1080p/1440p/4K get the same layout at bigger pixels. `Ui.Scale` is driven by height AND
+  width: a narrow or short window scales the whole UI DOWN instead of cropping the HUD off
+  the edges, and `Ui.UserScale` (Settings slider, PlayerPrefs) multiplies it. Size panels
+  with `Ui.Fit()`/`Ui.FitTop()` — they clamp to the space that actually exists; a raw
+  `new Rect(...)` with design-size constants WILL run off a small window. Long HUD text
+  sheds detail on a narrow canvas rather than overflowing (see the combat hint line).
+  `Ui.OpenPanel` makes inventory/journal/settings **mutually exclusive** (they used to
+  stack dead centre); Esc = back (closes what is open, only then opens Settings). Guard
+  every single-letter hotkey with `!Ui.Typing` — naming a character "Jim" used to open the
+  journal, the bags and the map on the way through.
 - **Wayfinding** — the player must always know what to do and where. `QuestTracker` =
   quest card top-left (active quest + `[x]/[ ]` checklist of what is left), centre banner,
   big gold steering arrow above the hotbar (rotated into camera space: up = walk forward),
@@ -158,9 +171,19 @@ Player log (first place to look when the user reports bugs):
   messages free of double quotes.
 - **`RadiantPool.exe` timestamp never changes** between builds (stock player stub).
   To verify a build is fresh, check `RadiantPool_Data/Managed/Assembly-CSharp.dll`.
-- **CombatClientUI HUD rects gate click-to-move**: `IsMouseOverHud` must list the
-  exact same rects the panels draw with (including `HotBar.BarRect`), or clicks
-  through/into panels misbehave.
+- **CombatClientUI HUD rects gate click-to-move**: `IsMouseOverHud` must test the exact
+  same rects the panels draw with. It used to re-declare them as hand-copied literals
+  (`new Rect(12, Ui.H - 174, ...)`), which drifted from the panels the moment either moved.
+  They are now `Rect` PROPERTIES (`LogRect`, `MyCardRect`, `InitiativeRect`, plus
+  `HotBar.BarRect` / `MiniMap.MapRect`) — one definition, both users. Never re-type a rect.
+- **NO dingbat/arrow glyphs in UI strings** — MedievalSharp and Inter carry no
+  `✔ ✘ ⚔ ✝ ★ ● ▼ ► ↑↗→ ▶ −`, and a missing glyph renders as a **tofu box**, not the symbol
+  you meant. This has bitten the minimap buttons AND the whole combat HUD. Use ASCII
+  (`[x]`, `[ ]`, `>`), words (`Theme.Ready()` = "ready"/"spent", bearings as "ahead-right"),
+  or a **generated texture** (`QuestTracker.MakeSteerArrow`, `MiniMap.Make*`).
+- **The initiative panel sits BELOW the minimap** (`MiniMap.MapRect.yMax`), not in the
+  top-right corner — pinned to the corner it drew straight through the map. Any new
+  top-right HUD must dock off the same anchor, and cap its height with a scroll view.
 - Combat-end must clear the Animator `Dead` flag (`CharacterVisuals.SetDead(v,false)`),
   not just rotation — revived characters otherwise walk around in the death pose.
 - Victory revives dead PCs at 1 HP (no permanent death); party wipe revives all at

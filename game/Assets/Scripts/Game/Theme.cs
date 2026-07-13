@@ -364,6 +364,45 @@ namespace RadiantPool.Game
             skin.verticalScrollbar.normal.background = Solid("scrollBg", Hex("#0e0e0e"));
             skin.horizontalScrollbarThumb.normal.background = Solid("scrollThumb", GoldDeep);
             skin.verticalScrollbarThumb.normal.background = Solid("scrollThumb", GoldDeep);
+
+            // Sliders were raw Unity gray and the thumb was a 10 px sliver — the settings
+            // panel is the one place the mouse has to hit something small, so the thumb is
+            // sized to be grabbable and the groove is themed like the HP wells.
+            skin.horizontalSlider.normal.background = WellTex;
+            skin.horizontalSlider.border = new RectOffset(4, 4, 4, 4);
+            skin.horizontalSlider.fixedHeight = 14f;
+            skin.horizontalSlider.margin = new RectOffset(4, 4, 8, 8);
+            skin.horizontalSliderThumb.normal.background = BtnGoldTex;
+            skin.horizontalSliderThumb.hover.background = BtnGoldTex;
+            skin.horizontalSliderThumb.active.background = BtnGoldTex;
+            skin.horizontalSliderThumb.border = new RectOffset(6, 6, 6, 6);
+            skin.horizontalSliderThumb.fixedWidth = 20f;
+            skin.horizontalSliderThumb.fixedHeight = 20f;
+        }
+
+        // ---------- text markers ----------
+        // The fonts here have no dingbat glyphs — ✔ ✘ ⚔ ✝ ● all render as tofu boxes on
+        // MedievalSharp/Inter. State reads in words (and colour on top), never in a glyph
+        // that may not exist. Same rule as the minimap's generated icons.
+
+        /// <summary>"ready" / "spent" pair for action economy — colour AND word.</summary>
+        public static string Ready(bool on) => on
+            ? "<color=#7fc47f>ready</color>"
+            : "<color=#c47f7f>spent</color>";
+
+        /// <summary>Done/outstanding checklist marker (ASCII, always renders).</summary>
+        public static string Check(bool done) => done
+            ? "<color=#7fc47f>[x]</color>"
+            : "<color=#f2ca50>[ ]</color>";
+
+        /// <summary>Spell slots as ASCII pips — "[+][+][ ][ ]".</summary>
+        public static string Pips(int filled, int total)
+        {
+            filled = Mathf.Clamp(filled, 0, total);
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < total; i++)
+                sb.Append(i < filled ? "<color=#3d6ff2>[+]</color>" : "<color=#6b6257>[ ]</color>");
+            return sb.ToString();
         }
     }
 }

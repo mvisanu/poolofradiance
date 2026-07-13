@@ -43,13 +43,12 @@ namespace RadiantPool.Game
 
             if (!_open && InRange())
             {
-                Theme.DrawToast(Ui.W / 2f, Ui.H - 104, $"[E] Trade at {VendorName}");
+                Theme.DrawToast(Ui.W / 2f, 146f, $"[E] Trade at {VendorName}");
                 return;
             }
             if (!_open) return;
 
-            GUILayout.BeginArea(new Rect(Ui.W / 2f - 200, Ui.H / 2f - 105, 400, 210),
-                Theme.PanelStyle);
+            GUILayout.BeginArea(Ui.Fit(400f, 210f), Theme.PanelStyle);
             GUILayout.Label(VendorName, Theme.Header);
             GUILayout.Label($"<color=#f2ca50><b>{director.PartyGold.Value}</b> gold</color>",
                 Theme.Body);
