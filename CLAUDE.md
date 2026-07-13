@@ -24,6 +24,9 @@ scripts/smoke-test.ps1
 
 # IP banned-term gate:
 scripts/ip-scan.ps1
+
+# Rebuild the self-made beast models (bear, rat) — writes FBX + preview PNGs:
+& "C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" -b -P scripts/make_beasts.py
 ```
 
 Build output: `game/Builds/Win64/RadiantPool.exe`. Exe flags for automation:
@@ -38,6 +41,10 @@ Player log (first place to look when the user reports bugs):
   artifacts redirect to `/artifacts` via `rules/Directory.Build.props`). **All game math
   lives here and is unit-tested** — `CampaignSimulationTests` plays the whole campaign
   headlessly and enforces the level-5 XP curve; run it after any balance change.
+  **Difficulty knobs live in `Difficulty.cs` and nowhere else**: monsters spawn at 85 % HP
+  and attack at −1 to hit; PCs stay pure SRD, XP is untouched. Stat blocks in
+  `Monsters.cs` stay canonical (ContentValidationTests pins them to the JSON) — retune
+  the knobs, never the blocks. `DifficultyTests` pins the current values.
 - `content/` — zones/quests/monsters/items/loot/dialogue as JSON. Cross-referenced and
   IP-scanned by `ContentValidationTests`. In-code mirrors: `MonsterLibrary`,
   `SpellLibrary`, `LootLibrary` (tests keep JSON and code aligned by id).
@@ -45,30 +52,57 @@ Player log (first place to look when the user reports bugs):
   send intents (`Cmd*` ServerRpcs), server validates via the rules lib, broadcasts
   results (`Rpc*`). `CombatManager` = combat FSM + grid (click-to-move via `CmdMoveTo`,
   paced AI turn coroutines, glide movement); `GameDirector` = quests/party state/saves
-  (4-zone chain: docks → market → warcamp → temple, `ServerRecheckZone` heals
-  cleared-before-active dead ends); `SessionLauncher` = title screen + host/join;
-  `Theme.cs` = "Gilded Quest" design system, Academia palette (mahogany/oak panels,
+  (4-zone chain: docks → market → warcamp → temple; `ServerRecountZone` derives cleared
+  counts from `ConsumedEncounterIds` and `ServerRecheckZone` heals cleared-before-active
+  dead ends — both run on load, which repairs old saves); `SessionLauncher` = title screen
+  + host/join. `Theme.cs` = "Gilded Quest" design system, Academia palette (mahogany/oak panels,
   brass borders, parchment; bright gold = active states only; text contrast ≥4.5:1;
   MedievalSharp headers / Inter body, OFL, under `Resources/Fonts`). All IMGUI styling
   flows through `Ui.Begin()` → `Theme.Apply()`; tune look there, never inline styles.
   `HotBar.cs` = persistent bottom action bar (combat slots delegate to
   `CombatClientUI.Instance.PickAttack/PickSpell`); combat HUD is a slim strip docked
   above it so the battlefield stays visible. In combat: click enemy = attack (walks
-  into range first), click ground = move, Space = end turn.
+  into range first), click ground = move, Space = end turn, **WASD/middle-drag pans the
+  camera and F recentres** (the grid owns movement, so those keys are free).
+- **Wayfinding** — the player must always know what to do and where. `QuestTracker` =
+  quest card top-left (active quest + `[x]/[ ]` checklist of what is left), centre banner,
+  big gold steering arrow above the hotbar (rotated into camera space: up = walk forward),
+  and a world beacon. While >26 m from the active quarter it aims at the QUARTER and names
+  it ("The Old Docks"); inside, it switches to the next fight. Bootstrap plants a lit
+  **district sign** over each quarter; `MiniMap` paints the quarter names on the map (gold
+  = active quest). After the campaign ends the tracker issues standing orders against any
+  encounters still standing, so there is never a questless state.
+- `MiniMap.cs` — three sizes (collapsed pill / normal / maximized) via header **icon**
+  buttons or `M`, remembered in PlayerPrefs; **left-drag pans** the view with a RECENTER
+  button; scroll zooms. Markers are shape+colour, never colour alone (enemy = red
+  triangle, quest = gold X with distance, NPC = green diamond, vendor/smith = squares,
+  locked gate = hollow square, party = teal circles); legend when maximized. All icons are
+  **generated textures, not font glyphs** — the body font has no box/tick/arrow glyphs and
+  a missing glyph renders as tofu (this is why the old `-`/`+` buttons were unreadable).
+- `InventoryUI.cs` (I) — left column = what the character is WEARING (slot rows + each
+  piece's stat line + totals: AC with its breakdown, HP, attack, damage); right column =
+  stash, every item showing damage/protection and compared against what is equipped
+  ("upgrade: +2 AC"). Client display needs the derived stats, which the sheet cannot give
+  it (server-only) — `PlayerCharacterHolder` mirrors them as SyncVars on a slow poll.
 - `theme/` — Stitch design mockups, **gitignored**: they contain WotC placeholder
   names. Copy visuals only, never text.
 - Asset Store packs can't be fetched headlessly (editor sign-in required). Drop-in
   slots instead: `Resources/SpellIcons/<id>.png`, `Resources/Music/{explore,combat,
-  zone_<zoneId>}`, `Resources/Characters/{Orc,Spider,Bear,Goblin}.prefab` (pipe-
-  separated fallbacks in `CombatManager.MonsterModels`). Import steps:
-  `docs/asset-store-import.md`.
+  zone_<zoneId>}`, `Resources/Characters/<Name>.prefab` (pipe-separated fallbacks in
+  `CombatManager.MonsterModels`). Import steps: `docs/asset-store-import.md`.
 - `game/Assets/Editor` — `ProjectBootstrap` regenerates the ENTIRE scene, prefabs, URP
   config, and materials from code (scene is disposable; never hand-edit it). Includes
-  `DressWorld()` (seeded forests/scatter/wilds sites, sunny lighting).
-  `KenneyArt`/`KayKitArt`/`QuaterniusArt` integrate the CC0 packs under
+  `DressWorld()` (seeded forests/scatter/wilds sites, sunny lighting) and the district
+  signs. `KenneyArt`/`KayKitArt`/`QuaterniusArt` integrate the CC0 packs under
   `game/Assets/Art` (Quaternius orcs + spider are animated FBX — the spider comes from
-  the Easy Animated Enemy Pack via blend2fbx; Bear/Goblin models were never obtained —
-  their `Resources/Characters` drop-in slots still use stand-ins).
+  the Easy Animated Enemy Pack via blend2fbx).
+- **Beasts we make ourselves** — the CC0 packs ship no bear and no rat, so
+  `scripts/make_beasts.py` builds them in headless Blender
+  (`blender -b -P scripts/make_beasts.py` → `Art/Generated/*.fbx` + a preview PNG to
+  eyeball) and `GeneratedArt.cs` imports them. Original geometry ⇒ no licence attaches.
+  These are **not** height-normalised like the humanoid packs — a bear is long and low, so
+  the prefab keeps the mesh's true metre scale. **Every monster id must map to a real
+  prefab**: the capsule fallback is a bug, not a style, and now logs a warning.
 - All project + memory `*.md` files auto-mirror to the Obsidian vault
   (`C:\Users\Bruce\Documents\obsidian\projects\poolofradiance`) via a Stop hook →
   `scripts/obsidian-sync.ps1`. Markdown edits sync themselves; don't copy manually.
@@ -126,6 +160,22 @@ Player log (first place to look when the user reports bugs):
   not just rotation — revived characters otherwise walk around in the death pose.
 - Victory revives dead PCs at 1 HP (no permanent death); party wipe revives all at
   the shrine (`CombatManager.RespawnPoint` must match the bootstrap shrine).
+- **Never keep a counter that duplicates persisted truth.** `ZoneClearedCounts` used to be
+  incremented by hand *after* the autosave ran, so every save persisted a count one behind
+  `ConsumedEncounterIds`; reloading restored the stale count while the fight stayed
+  consumed, and the zone ended up demanding fights that no longer existed. It is now
+  **derived** from the consumed list (`ServerRecountZone`), recounted on every clear and on
+  load — which self-heals broken saves. Order is always recount → recheck → save.
+- **Companions have no connection** (server-owned AI, `Owner` invalid). A `TargetRpc` aimed
+  at one logs "Target is not an observer" on every call — guard with
+  `!IsCompanion && Owner != null && Owner.IsValid` (see `CombatManager.SyncHp`).
+- **Camera assists must be one-shot, not per-frame.** The combat "tactical assist" ran every
+  frame and hauled pitch/zoom back the moment the mouse was released — the camera would not
+  stay where the player put it. It now fires once per fight and any camera input cancels it.
+- **Read the save, not just the code**, when the user reports a stuck quest:
+  `%USERPROFILE%\Saved Games\RadiantPool\campaign.json` holds `ZoneStates`,
+  `ZoneClearedCounts` and `ConsumedEncounters` — it pinpointed the counter bug in one look.
+  Back it up before running the game against it (the load path rewrites it).
 
 ## IP rule (non-negotiable)
 
