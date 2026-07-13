@@ -21,7 +21,7 @@ namespace RadiantPool.Game
         private GameObject _beacon;
         private float _nextScan;
         private Texture2D _steerArrow;
-        private GUIStyle _distStyle, _questTitle, _stepStyle, _stepDone;
+        private GUIStyle _distStyle, _questTitle, _stepStyle, _stepDone, _cardBtn;
 
         private void Awake() => Instance = this;
         private void OnDestroy() { if (Instance == this) Instance = null; }
@@ -249,7 +249,12 @@ namespace RadiantPool.Game
 
             float w = Mathf.Clamp(Ui.W * 0.24f, 200f, 250f);
             const float pad = 12f;
-            const float btn = 46f;   // the Hide/Show button, reserved out of the title's width
+            // The Hide/Show button. It has to be wide enough for its own WORD at this font:
+            // at 46 px the skin's padding ate the label and "Show" rendered as "how".
+            const float btn = 62f;
+            if (_cardBtn == null)
+                _cardBtn = new GUIStyle(GUI.skin.button) { fontSize = 11, wordWrap = false,
+                    padding = new RectOffset(2, 2, 2, 2), clipping = TextClipping.Overflow };
 
             // Collapsed: one slim bar with the quest's name, and the way back.
             if (Collapsed)
@@ -259,7 +264,8 @@ namespace RadiantPool.Game
                 var nameStyle = new GUIStyle(Theme.Body) { fontSize = 12, wordWrap = false,
                     clipping = TextClipping.Clip };
                 GUI.Label(new Rect(pill.x + 8f, pill.y + 6f, w - btn - 14f, 18f), title, nameStyle);
-                if (GUI.Button(new Rect(pill.xMax - btn - 5f, pill.y + 4f, btn, 22f), "Show"))
+                if (GUI.Button(new Rect(pill.xMax - btn - 5f, pill.y + 4f, btn, 22f),
+                        "Show", _cardBtn))
                     Collapsed = false;
                 return;
             }
@@ -275,7 +281,8 @@ namespace RadiantPool.Game
             float y = panel.y + pad;
             float tH = _questTitle.CalcHeight(new GUIContent(title), titleW);
             GUI.Label(new Rect(panel.x + pad, y, titleW, tH), title, _questTitle);
-            if (GUI.Button(new Rect(panel.xMax - btn - 5f, panel.y + 6f, btn, 22f), "Hide"))
+            if (GUI.Button(new Rect(panel.xMax - btn - 5f, panel.y + 6f, btn, 22f),
+                    "Hide", _cardBtn))
                 Collapsed = true;
             y += tH + 4f;
 
