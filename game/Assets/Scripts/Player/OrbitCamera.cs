@@ -5,9 +5,11 @@ namespace RadiantPool.Game
 {
     /// <summary>WoW-style orbit camera: follows a target, right-mouse drag rotates,
     /// scroll wheel zooms. In combat it eases to a steeper tactical angle (so rooftops
-    /// don't hide the grid), and any tall environment piece sitting between the camera
-    /// and the player is temporarily hidden (props have no colliders, so this tests
-    /// renderer bounds against the view line).
+    /// don't hide the grid), and any environment piece that hides a combatant fades to a
+    /// see-through ghost (props have no colliders, so this tests renderer bounds against
+    /// the view lines). Out of combat only your own line of sight is cleared; in combat
+    /// every unit on the board gets one, so a monster standing inside a warehouse is
+    /// still something you can see and click.
     ///
     /// The view can also be panned off the player — middle-mouse drag any time, and in
     /// combat WASD/arrows too (the grid owns movement then, so those keys are free), which
@@ -146,11 +148,33 @@ namespace RadiantPool.Game
         private static bool AnyPanelWantsKeys() =>
             GUIUtility.keyboardControl != 0;
 
-        // ---------- occlusion hiding ----------
+        // ---------- x-ray: see through whatever is hiding a combatant ----------
+
+        /// <summary>A blocking renderer's two faces: its real materials, and transparent
+        /// clones we fade in its place. Cloned per renderer (not per source material) so
+        /// two walls sharing M_Wall can be at different alphas.</summary>
+        private class Ghost
+        {
+            public Material[] Solid;
+            public Material[] Fade;
+            public UnityEngine.Rendering.ShadowCastingMode Shadows;
+            public float Alpha = 1f;      // 1 = solid, GhostAlpha = fully ghosted
+            public bool FadeApplied;
+        }
+
+        private const float GhostAlpha = 0.18f;   // enough silhouette to keep the shape
+        private const float FadeSpeed = 5f;       // alpha per second
+
+        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        private static readonly int ColorId = Shader.PropertyToID("_Color");
 
         private readonly List<Renderer> _envRenderers = new List<Renderer>();
-        private readonly List<Renderer> _hidden = new List<Renderer>();
+        private readonly Dictionary<Renderer, Ghost> _ghosts = new Dictionary<Renderer, Ghost>();
+        private readonly HashSet<Renderer> _blocking = new HashSet<Renderer>();
+        private readonly List<Vector3> _sightPoints = new List<Vector3>();
+        private readonly List<Renderer> _sweep = new List<Renderer>();
         private float _envScanAt;
+        private float _blockScanAt;
 
         /// <summary>Static environment renderers tall enough to block the view (houses,
         /// walls, pillars). Ground/roads (flat bounds) and anything belonging to a
@@ -172,35 +196,186 @@ namespace RadiantPool.Game
             }
         }
 
+        /// <summary>Everything that must stay visible: the focus point out of combat, plus
+        /// every living unit on the board once a fight starts.</summary>
+        private void CollectSightPoints(Vector3 focus)
+        {
+            _sightPoints.Clear();
+            _sightPoints.Add(focus);
+
+            var combat = CombatManager.Instance;
+            if (combat == null || !combat.InCombat.Value) return;
+
+            foreach (var u in combat.ClientUnits)
+            {
+                if (u == null || u.Visual == null || u.Dead) continue;
+                // Chest height: the head can clear a low wall the body is buried in.
+                _sightPoints.Add(u.Visual.position + Vector3.up * 1.0f);
+            }
+        }
+
         private void UpdateOcclusion(Vector3 focus)
         {
-            foreach (var r in _hidden) if (r != null) r.enabled = true;
-            _hidden.Clear();
-
             if (Time.time >= _envScanAt)
             {
                 _envScanAt = Time.time + 5f;
                 RefreshEnvCache();
             }
 
+            // The blocking set only changes when things move — a 20 Hz sweep is plenty,
+            // and the alpha lerp below still runs every frame so the fade stays smooth.
+            if (Time.time >= _blockScanAt)
+            {
+                _blockScanAt = Time.time + 0.05f;
+                RecomputeBlockers(focus);
+            }
+
+            DriveFades();
+        }
+
+        private void RecomputeBlockers(Vector3 focus)
+        {
+            _blocking.Clear();
+            CollectSightPoints(focus);
             Vector3 camPos = transform.position;
-            Vector3 toFocus = focus - camPos;
-            float len = toFocus.magnitude;
-            if (len < 0.5f) return;
-            var ray = new Ray(camPos, toFocus / len);
 
             foreach (var r in _envRenderers)
             {
                 if (r == null || !r.enabled) continue;
                 var b = r.bounds;
-                bool blocks = b.Contains(focus)   // standing inside the building
-                    || (b.IntersectRay(ray, out float d) && d < len - 0.4f);
-                if (blocks)
+                foreach (var p in _sightPoints)
                 {
-                    r.enabled = false;
-                    _hidden.Add(r);
+                    Vector3 to = p - camPos;
+                    float len = to.magnitude;
+                    if (len < 0.5f) continue;
+                    // Contains() is the case that actually bit us: a monster spawned
+                    // *inside* a warehouse is not behind the wall, it is in the box.
+                    bool blocks = b.Contains(p)
+                        || (b.IntersectRay(new Ray(camPos, to / len), out float d)
+                            && d < len - 0.4f);
+                    if (!blocks) continue;
+                    _blocking.Add(r);
+                    break;
                 }
             }
+        }
+
+        /// <summary>Lerp every ghost toward its target alpha; swap the real materials back
+        /// in once a renderer is solid again so untouched geometry costs nothing.</summary>
+        private void DriveFades()
+        {
+            foreach (var r in _blocking)
+                Fade(r, GhostAlpha);
+
+            _sweep.Clear();
+            foreach (var kv in _ghosts)
+                if (kv.Key == null || !_blocking.Contains(kv.Key)) _sweep.Add(kv.Key);
+            foreach (var r in _sweep)
+            {
+                if (r == null)   // renderer destroyed under us — drop its clones
+                {
+                    if (_ghosts.TryGetValue(r, out var dead))
+                        foreach (var m in dead.Fade) if (m != null) Destroy(m);
+                    _ghosts.Remove(r);
+                    continue;
+                }
+                Fade(r, 1f);
+            }
+        }
+
+        private void Fade(Renderer r, float target)
+        {
+            var g = GhostFor(r);
+            if (g == null) return;
+
+            g.Alpha = Mathf.MoveTowards(g.Alpha, target, FadeSpeed * Time.deltaTime);
+
+            if (g.Alpha >= 0.999f)
+            {
+                if (g.FadeApplied)
+                {
+                    r.sharedMaterials = g.Solid;
+                    r.shadowCastingMode = g.Shadows;
+                    g.FadeApplied = false;
+                }
+                return;
+            }
+
+            if (!g.FadeApplied)
+            {
+                r.sharedMaterials = g.Fade;
+                // A ghosted roof still casting a hard shadow leaves the monster inside it
+                // sitting in a dark box — drop the shadow with the walls.
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                g.FadeApplied = true;
+            }
+            foreach (var m in g.Fade) SetAlpha(m, g.Alpha);
+        }
+
+        private Ghost GhostFor(Renderer r)
+        {
+            if (_ghosts.TryGetValue(r, out var g)) return g;
+
+            var solid = r.sharedMaterials;
+            var fade = new Material[solid.Length];
+            for (int i = 0; i < solid.Length; i++) fade[i] = MakeFade(solid[i]);
+            g = new Ghost { Solid = solid, Fade = fade, Shadows = r.shadowCastingMode };
+            _ghosts[r] = g;
+            return g;
+        }
+
+        /// <summary>Transparent twin of a material. Cloned from the scene material, so the
+        /// shader is already referenced by an asset — Shader.Find would return null in a
+        /// build for a shader nothing else uses.</summary>
+        private static Material MakeFade(Material src)
+        {
+            if (src == null) return null;
+            var m = new Material(src);
+            m.SetOverrideTag("RenderType", "Transparent");
+            m.SetFloat("_Surface", 1f);          // URP Lit/Unlit: transparent
+            m.SetFloat("_Blend", 0f);            // alpha blend
+            m.SetFloat("_AlphaClip", 0f);
+            m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            m.SetInt("_ZWrite", 0);
+            m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            m.DisableKeyword("_ALPHATEST_ON");
+            m.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            return m;
+        }
+
+        private static void SetAlpha(Material m, float a)
+        {
+            if (m == null) return;
+            if (m.HasProperty(BaseColorId))
+            {
+                var c = m.GetColor(BaseColorId);
+                c.a = a;
+                m.SetColor(BaseColorId, c);
+            }
+            if (m.HasProperty(ColorId))
+            {
+                var c = m.GetColor(ColorId);
+                c.a = a;
+                m.SetColor(ColorId, c);
+            }
+        }
+
+        private void OnDisable()
+        {
+            foreach (var kv in _ghosts)
+            {
+                var r = kv.Key;
+                var g = kv.Value;
+                if (r != null && g.FadeApplied)
+                {
+                    r.sharedMaterials = g.Solid;
+                    r.shadowCastingMode = g.Shadows;
+                }
+                foreach (var m in g.Fade) if (m != null) Destroy(m);
+            }
+            _ghosts.Clear();
+            _blocking.Clear();
         }
     }
 }
