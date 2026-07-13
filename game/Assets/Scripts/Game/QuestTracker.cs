@@ -222,6 +222,18 @@ namespace RadiantPool.Game
         /// <summary>Persistent quest card, top-left: the active quest and a checklist of
         /// what is still outstanding. It updates the instant a quest hands over, so
         /// finishing one immediately shows the next.</summary>
+        /// <summary>The card sits in the top-left corner itself now — the hosting strip that
+        /// used to hold that spot moved onto the hotbar (SessionPanel), so nothing is above it.</summary>
+        private const float CardTop = 12f;
+
+        /// <summary>Collapsed state, remembered like the minimap's size: a player who wants the
+        /// city rather than the checklist should not have to hide it again every session.</summary>
+        private static bool Collapsed
+        {
+            get => PlayerPrefs.GetInt("questCardCollapsed", 0) == 1;
+            set => PlayerPrefs.SetInt("questCardCollapsed", value ? 1 : 0);
+        }
+
         private void DrawObjectives()
         {
             var (title, steps) = Objectives();
@@ -237,16 +249,34 @@ namespace RadiantPool.Game
 
             float w = Mathf.Clamp(Ui.W * 0.24f, 200f, 250f);
             const float pad = 12f;
-            float h = pad * 2f + _questTitle.CalcHeight(new GUIContent(title), w - pad * 2f) + 4f;
+            const float btn = 46f;   // the Hide/Show button, reserved out of the title's width
+
+            // Collapsed: one slim bar with the quest's name, and the way back.
+            if (Collapsed)
+            {
+                var pill = new Rect(12, CardTop, w, 30f);
+                GUI.Box(pill, GUIContent.none, Theme.PanelStyle);
+                var nameStyle = new GUIStyle(Theme.Body) { fontSize = 12, wordWrap = false,
+                    clipping = TextClipping.Clip };
+                GUI.Label(new Rect(pill.x + 8f, pill.y + 6f, w - btn - 14f, 18f), title, nameStyle);
+                if (GUI.Button(new Rect(pill.xMax - btn - 5f, pill.y + 4f, btn, 22f), "Show"))
+                    Collapsed = false;
+                return;
+            }
+
+            float titleW = w - pad * 2f - btn;
+            float h = pad * 2f + _questTitle.CalcHeight(new GUIContent(title), titleW) + 4f;
             foreach (var (text, _) in steps)
                 h += _stepStyle.CalcHeight(new GUIContent(text), w - pad * 2f - 18f) + 2f;
 
-            var panel = new Rect(12, 118, w, Mathf.Min(h, Ui.H - 240f));
+            var panel = new Rect(12, CardTop, w, Mathf.Min(h, Ui.H - CardTop - 140f));
             GUI.Box(panel, GUIContent.none, Theme.PanelStyle);
 
             float y = panel.y + pad;
-            float tH = _questTitle.CalcHeight(new GUIContent(title), w - pad * 2f);
-            GUI.Label(new Rect(panel.x + pad, y, w - pad * 2f, tH), title, _questTitle);
+            float tH = _questTitle.CalcHeight(new GUIContent(title), titleW);
+            GUI.Label(new Rect(panel.x + pad, y, titleW, tH), title, _questTitle);
+            if (GUI.Button(new Rect(panel.xMax - btn - 5f, panel.y + 6f, btn, 22f), "Hide"))
+                Collapsed = true;
             y += tH + 4f;
 
             foreach (var (text, done) in steps)

@@ -18,10 +18,15 @@ namespace RadiantPool.Game
         private Tugboat _tugboat;
         private string _joinCode = "";
         private string _displayName = "";
-        private string _hostCode = "";
-        private string _status = "Not connected";
         private string _error = "";
         private bool _sessionStarted;
+
+        /// <summary>Session state, owned here and DRAWN elsewhere: SessionPanel (the hotbar's
+        /// session icon) shows it in-session, the title screen shows it before one starts. It
+        /// no longer squats in the corner of the play screen for the whole campaign.</summary>
+        public static string Status { get; private set; } = "Not connected";
+
+        public static string HostCode { get; private set; } = "";
 
         public static string LocalDisplayName { get; private set; } = "Adventurer";
 
@@ -94,13 +99,13 @@ namespace RadiantPool.Game
             if (args.ConnectionState == LocalConnectionState.Started)
             {
                 var ip = InviteCode.LocalAddress();
-                _hostCode = InviteCode.Encode(ip, _hostPort);
-                _status = $"Hosting — invite code: {_hostCode}";
-                Debug.Log($"[RadiantPool] server started, invite code {_hostCode}");
+                HostCode = InviteCode.Encode(ip, _hostPort);
+                Status = $"Hosting — invite code: {HostCode}";
+                Debug.Log($"[RadiantPool] server started, invite code {HostCode}");
             }
             else if (args.ConnectionState == LocalConnectionState.Stopped)
             {
-                _status = "Server stopped";
+                Status = "Server stopped";
                 _sessionStarted = false;
             }
         }
@@ -111,17 +116,17 @@ namespace RadiantPool.Game
             switch (args.ConnectionState)
             {
                 case LocalConnectionState.Starting:
-                    _status = "Connecting…";
+                    Status = "Connecting…";
                     break;
                 case LocalConnectionState.Started:
-                    _status = _hostCode.Length > 0
-                        ? $"Hosting — invite code: {_hostCode}"
+                    Status = HostCode.Length > 0
+                        ? $"Hosting — invite code: {HostCode}"
                         : "Connected";
                     _sessionStarted = true;
                     _error = "";
                     break;
                 case LocalConnectionState.Stopped:
-                    if (_sessionStarted) _status = "Disconnected from host";
+                    if (_sessionStarted) Status = "Disconnected from host";
                     else if (_error.Length == 0) _error = "Could not reach host. Check the code and that the host is running.";
                     _sessionStarted = false;
                     break;
@@ -188,27 +193,13 @@ namespace RadiantPool.Game
         private static readonly string[] ClassNames = { "Fighter", "Cleric", "Wizard", "Rogue" };
         private static readonly string[] RaceNames = { "Human", "Dwarf", "Elf", "Halfling" };
 
+        /// <summary>Only the title screen draws here now. Once a session is running, the
+        /// status and the invite code live behind the hotbar's session icon (SessionPanel) —
+        /// they are worth ten seconds when a friend joins, not a permanent box on the city.</summary>
         private void OnGUI()
         {
             Ui.Begin();
-            if (!_sessionStarted)
-            {
-                DrawTitleScreen();
-                return;
-            }
-
-            // In-session: compact status strip, top-left.
-            GUILayout.BeginArea(new Rect(12, 12, Mathf.Min(368f, Ui.W * 0.42f), 104),
-                Theme.PanelStyle);
-            GUILayout.Label($"<color=#f2ca50>{_status}</color>", Theme.Body);
-            if (_hostCode.Length > 0)
-            {
-                if (GUILayout.Button($"Copy invite code  {_hostCode}"))
-                    GUIUtility.systemCopyBuffer = _hostCode;
-            }
-            GUILayout.Label("<color=#d0c5af>WASD move · RMB camera · E talk · J journal · " +
-                "I bags · Esc settings</color>", Theme.Body);
-            GUILayout.EndArea();
+            if (!_sessionStarted) DrawTitleScreen();
         }
 
         private Vector2 _titleScroll;
@@ -229,7 +220,7 @@ namespace RadiantPool.Game
             var subtitle = new GUIStyle(Theme.Caps) { alignment = TextAnchor.MiddleCenter };
             GUILayout.Label("SELECT A CLASS TO BEGIN YOUR JOURNEY", subtitle);
             var statusStyle = new GUIStyle(Theme.Body) { alignment = TextAnchor.MiddleCenter };
-            GUILayout.Label($"<color=#d0c5af>{_status}</color>", statusStyle);
+            GUILayout.Label($"<color=#d0c5af>{Status}</color>", statusStyle);
             if (_error.Length > 0)
                 GUILayout.Label($"<color=#ff7a6b>{_error}</color>", statusStyle);
 

@@ -984,7 +984,8 @@ namespace RadiantPool.EditorTools
             systemsGo.AddComponent<QuestTracker>();
             systemsGo.AddComponent<InventoryUI>();
             systemsGo.AddComponent<HotBar>();
-            systemsGo.AddComponent<ProgressUI>();   // XP bar + level-up screen (L)
+            systemsGo.AddComponent<ProgressUI>();    // level-up screen (L)
+            systemsGo.AddComponent<SessionPanel>();  // invite code, behind the hotbar icon
 
             // FishNet scene NetworkObjects need SceneIds; the editor UI stamps them via
             // its own hooks, but a batchmode-generated scene must do it explicitly.

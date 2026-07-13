@@ -96,8 +96,13 @@ Player log (first place to look when the user reports bugs):
   stack dead centre); Esc = back (closes what is open, only then opens Settings). Guard
   every single-letter hotkey with `!Ui.Typing` — naming a character "Jim" used to open the
   journal, the bags and the map on the way through.
+- `SessionPanel.cs` — status + invite code, opened/closed from a **hotbar icon** (generated
+  texture, not a font glyph). `SessionLauncher` still OWNS that state (`Status`/`HostCode`
+  statics) and draws only the title screen; the old permanent top-left strip is gone, which
+  is what freed the corner for the quest card.
 - **Wayfinding** — the player must always know what to do and where. `QuestTracker` =
-  quest card top-left (active quest + `[x]/[ ]` checklist of what is left), centre banner,
+  quest card top-left, **collapsible to a title pill via Hide/Show (remembered in
+  PlayerPrefs)** (active quest + `[x]/[ ]` checklist of what is left), centre banner,
   big gold steering arrow above the hotbar (rotated into camera space: up = walk forward),
   and a world beacon. While >26 m from the active quarter it aims at the QUARTER and names
   it ("The Old Docks"); inside, it switches to the next fight. Bootstrap plants a lit

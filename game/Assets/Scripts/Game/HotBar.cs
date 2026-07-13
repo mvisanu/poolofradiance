@@ -44,7 +44,7 @@ namespace RadiantPool.Game
                 : System.Array.Empty<string>();
 
             int combatSlots = inCombat ? 3 + spells.Length : 0;   // attack, dodge, end
-            const int utilSlots = 4;                              // potion, bag, journal, cog
+            const int utilSlots = 5;                    // potion, bag, journal, session, cog
             int slots = combatSlots + utilSlots;
 
             // Fit the bar to the window: shrink the slots before ever overflowing the edge.
@@ -110,6 +110,11 @@ namespace RadiantPool.Game
 
             if (Btn("bag", "Inventory (I)")) Ui.Toggle(Ui.Panel.Inventory);
             if (Btn("journal", "Journal (J)")) Ui.Toggle(Ui.Panel.Journal);
+            // Session: the invite code and who you are connected to, on demand instead of
+            // parked in the corner of the screen for the whole campaign.
+            if (GUILayout.Button(new GUIContent(SessionPanel.Icon, "Session / invite code"),
+                    GUILayout.Width(_slot), GUILayout.Height(_slot)))
+                Ui.Toggle(Ui.Panel.Session);
             if (Btn("settings", "Settings (Esc)")) Ui.Toggle(Ui.Panel.Settings);
 
             GUILayout.EndHorizontal();
