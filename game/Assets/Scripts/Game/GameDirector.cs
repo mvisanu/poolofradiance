@@ -101,6 +101,8 @@ namespace RadiantPool.Game
                 StartCoroutine(ServerSellSelfTest());
             if (System.Array.IndexOf(args, "-leveltest") >= 0)
                 StartCoroutine(ServerLevelSelfTest());
+            if (System.Array.IndexOf(args, "-warpsmith") >= 0)
+                StartCoroutine(ServerWarpToSmith());
 
             if (!SaveSystem.Exists) return;
             var save = SaveSystem.Read();
@@ -513,6 +515,27 @@ namespace RadiantPool.Game
             Debug.Log($"[LevelTest] {(spent ? "PASS" : "FAIL")} - spending a point took Con " +
                       $"{before} to {sheet.Abilities[ability]}, " +
                       $"{sheet.PendingAbilityPoints} left of {pointsBefore}");
+        }
+
+        /// <summary>`RadiantPool.exe -autohost -warpsmith`: park the character at the smithy so
+        /// the shop UI can be opened (E) and LOOKED AT without walking there by hand. A shop
+        /// panel is only true on screen — the last one of these caught a button whose label the
+        /// skin's padding had eaten.</summary>
+        private System.Collections.IEnumerator ServerWarpToSmith()
+        {
+            yield return new WaitForSeconds(8f);
+            var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => !p.IsCompanion && p.Owner != null && p.Owner.IsValid);
+            var smith = FindFirstObjectByType<SmithInteract>();
+            if (holder == null || smith == null)
+            {
+                Debug.Log("[WarpSmith] FAIL - no player or no smith in the scene");
+                yield break;
+            }
+            Warp(holder.transform, new Vector3(smith.transform.position.x + 1.5f,
+                holder.transform.position.y, smith.transform.position.z));
+            Debug.Log($"[WarpSmith] parked at {smith.VendorName} " +
+                      $"({Vector3.Distance(holder.transform.position, smith.transform.position):0.0} m)");
         }
 
         /// <summary>A teleport that sticks. A CharacterController overwrites a direct

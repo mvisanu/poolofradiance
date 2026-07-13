@@ -83,10 +83,17 @@ namespace RadiantPool.Game
                 bool buys = GameDirector.SellValue.TryGetValue(g.Key, out int price) && price > 0;
 
                 GUILayout.BeginHorizontal();
-                ItemIcon.Draw(g.Key, 30f);
+                ItemIcon.Draw(g.Key, 34f);
                 GUILayout.Space(5);
+                GUILayout.BeginVertical();
                 GUILayout.Label($"<b>{label}</b> x{g.Count()}", new GUIStyle(Theme.BodyInk)
                     { fontSize = 12, richText = true, wordWrap = false });
+                // What you are about to part with — selling the better sword by mistake is
+                // exactly the thing a bare name lets you do.
+                if (item != null)
+                    GUILayout.Label(item.StatLine(), new GUIStyle(Theme.BodyInk)
+                        { fontSize = 11, wordWrap = false, normal = { textColor = Theme.InkMuted } });
+                GUILayout.EndVertical();
                 GUILayout.FlexibleSpace();
                 GUI.enabled = buys;
                 if (GUILayout.Button(buys ? $"Sell {price}g" : "No buyer", GUILayout.Width(88)))

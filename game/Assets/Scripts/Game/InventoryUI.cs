@@ -241,46 +241,21 @@ namespace RadiantPool.Game
             GUILayout.EndVertical();
         }
 
-        /// <summary>How this item stacks up against the equipped one — AC for armour,
-        /// average damage per hit for weapons. Spelled out in words, not just colour.</summary>
+        /// <summary>The comparison itself lives in ItemCompare — the smith asks the very same
+        /// question, and the two must never give different answers. Only the PAINT is local:
+        /// ink-green/crimson on the bag's parchment.</summary>
         private (string text, GUIStyle style) Comparison(GameItem item,
             PlayerCharacterHolder holder)
         {
-            int str = holder.StrModSynced.Value, dex = holder.DexModSynced.Value;
-
-            if (item.Slot == ItemSlot.Armor)
+            var (text, verdict) = ItemCompare.Versus(item, holder);
+            if (text == null) return (null, null);
+            return (text, verdict switch
             {
-                var worn = GameItem.Get(holder.ArmorId.Value);
-                bool shield = holder.ShieldEquipped.Value;
-                int now = worn != null
-                    ? worn.AcWith(dex, shield)
-                    : ArmorDefinition.Unarmored.BaseAc + dex + (shield ? GameItem.ShieldAcBonus : 0);
-                return Delta(item.AcWith(dex, shield) - now, "AC");
-            }
-            if (item.Slot == ItemSlot.Shield)
-                return holder.ShieldEquipped.Value
-                    ? ("already equipped", _itemStat)
-                    : Delta(GameItem.ShieldAcBonus, "AC");
-            if (item.Slot == ItemSlot.Weapon)
-            {
-                var worn = GameItem.Get(holder.WeaponId.Value);
-                float now = worn?.AverageDamage(str, dex) ?? 0f;
-                float diff = item.AverageDamage(str, dex) - now;
-                if (Mathf.Abs(diff) < 0.05f) return ("same damage as equipped", _itemStat);
-                return (diff > 0
-                    ? $"upgrade: +{diff:0.#} avg damage"
-                    : $"downgrade: {diff:0.#} avg damage",
-                    diff > 0 ? _better : _worse);
-            }
-            return (null, null);
+                ItemCompare.Verdict.Better => _better,
+                ItemCompare.Verdict.Worse => _worse,
+                _ => _itemStat
+            });
         }
-
-        private (string, GUIStyle) Delta(int diff, string unit) => diff switch
-        {
-            > 0 => ($"upgrade: +{diff} {unit}", _better),
-            < 0 => ($"downgrade: {diff} {unit}", _worse),
-            _ => ($"same {unit} as equipped", _itemStat)
-        };
 
         private static string Signed(int v) => v >= 0 ? $"+{v}" : v.ToString();
     }
