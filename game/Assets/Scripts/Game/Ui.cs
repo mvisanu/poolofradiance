@@ -95,6 +95,34 @@ namespace RadiantPool.Game
 
         public static Panel OpenPanel { get; private set; } = Panel.None;
 
+        /// <summary>A screen owns the display. The world HUD — hotbar, minimap, quest card,
+        /// steering arrow, interact prompts — draws NOTHING while one is up: the bags used to
+        /// open with the map, the bar and the quest checklist still bleeding through them.
+        /// Every HUD drawer checks this at the top of its OnGUI; nothing else is allowed to
+        /// decide for itself when it is in the way.</summary>
+        public static bool PanelOpen => OpenPanel != Panel.None;
+
+        /// <summary>The player has stowed the action bar itself (H, or its Hide button),
+        /// remembered across sessions like the map size and the quest card. Distinct from
+        /// PanelOpen: that one is "a screen is up", this one is "I want the city, not the
+        /// furniture". A slim SHOW BAR handle always remains, so it is never a one-way door.</summary>
+        private const string HudPref = "hud.barCollapsed";
+        private static int _barCollapsed = -1;
+
+        public static bool BarCollapsed
+        {
+            get
+            {
+                if (_barCollapsed < 0) _barCollapsed = PlayerPrefs.GetInt(HudPref, 0);
+                return _barCollapsed == 1;
+            }
+            set
+            {
+                _barCollapsed = value ? 1 : 0;
+                PlayerPrefs.SetInt(HudPref, _barCollapsed);
+            }
+        }
+
         public static bool IsOpen(Panel p) => OpenPanel == p;
 
         public static void Show(Panel p) => OpenPanel = p;

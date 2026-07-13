@@ -243,6 +243,10 @@ namespace RadiantPool.Game
         private void OnGUI()
         {
             Ui.Begin();
+            // A screen is up (journal, settings): it owns the display. The combat strip is
+            // still THERE — IsMouseOverHud already refuses clicks while a panel is open — it
+            // just doesn't draw through the panel.
+            if (Ui.PanelOpen) return;
             var combat = CombatManager.Instance;
             if (combat == null) return;
 

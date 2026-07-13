@@ -98,8 +98,11 @@ namespace RadiantPool.Game
                 : "YOUR CHARACTER", Theme.Caps);
             ProgressUI.XpBlock(holder);
 
-            GUILayout.Label("WORN", Theme.Caps);
             _wornScroll = GUILayout.BeginScrollView(_wornScroll);
+            DrawAbilities(holder);
+
+            GUILayout.Space(6);
+            GUILayout.Label("WORN", Theme.Caps);
             GUILayout.BeginVertical(Theme.ParchmentStyle);
             var weapon = GameItem.Get(holder.WeaponId.Value);
             var armor = GameItem.Get(holder.ArmorId.Value);
@@ -138,6 +141,41 @@ namespace RadiantPool.Game
             GUILayout.EndVertical();
             GUILayout.EndScrollView();
             GUILayout.EndVertical();
+        }
+
+        private static readonly Ability[] AbilityOrder =
+            { Ability.Str, Ability.Dex, Ability.Con, Ability.Int, Ability.Wis, Ability.Cha };
+
+        /// <summary>The six scores — the first thing a character sheet is supposed to say, and
+        /// the sheet used to jump straight from the name to the armour. Score AND modifier: the
+        /// modifier is the number that rolls, the score is the number a level-up point buys.
+        /// Two to a row, so all six fit the column without a scroll of their own.</summary>
+        private void DrawAbilities(PlayerCharacterHolder holder)
+        {
+            GUILayout.Label("ABILITIES", Theme.Caps);
+            GUILayout.BeginVertical(Theme.ParchmentStyle);
+            for (int i = 0; i < AbilityOrder.Length; i += 2)
+            {
+                GUILayout.BeginHorizontal();
+                AbilityCell(holder, AbilityOrder[i]);
+                AbilityCell(holder, AbilityOrder[i + 1]);
+                GUILayout.EndHorizontal();
+                GUILayout.Space(3);
+            }
+            GUILayout.EndVertical();
+        }
+
+        private void AbilityCell(PlayerCharacterHolder holder, Ability a)
+        {
+            int score = holder.ScoreOf(a);
+            GUILayout.BeginHorizontal(GUILayout.MinWidth(76));
+            GUILayout.Label(a.ToString().ToUpperInvariant(), _slotStat, GUILayout.Width(32));
+            GUILayout.Label(
+                $"<b>{score}</b>  <color=#6b6257>{Signed(holder.ModOf(a))}</color>",
+                new GUIStyle(Theme.BodyInk)
+                    { fontSize = 13, richText = true, wordWrap = false });
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
         }
 
         private void Slot(string label, GameItem item)

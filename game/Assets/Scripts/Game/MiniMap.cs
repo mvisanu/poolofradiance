@@ -150,7 +150,7 @@ namespace RadiantPool.Game
             // M cycles hidden -> normal -> maximized -> hidden. It has to come back round to
             // hidden: the map now STARTS that way, and a key that can only ever grow it would
             // be a one-way door out of the clear view the player asked for.
-            if (Input.GetKeyDown(KeyCode.M) && !Ui.Typing)
+            if (Input.GetKeyDown(KeyCode.M) && !Ui.Typing && !Ui.PanelOpen)
                 SetSize(_sizeMode == 0 ? 1 : _sizeMode == 1 ? 2 : 0);
 
             bool inCombat = CombatManager.Instance != null
@@ -235,6 +235,9 @@ namespace RadiantPool.Game
         private void OnGUI()
         {
             Ui.Begin();
+            // A screen is up (bags, journal, settings): it owns the display. MapRect keeps
+            // reporting where the map WOULD be, so the initiative list still docks off it.
+            if (Ui.PanelOpen) return;
             if (_player == null || _rt == null) return;
 
             if (EffectiveMode == 0)

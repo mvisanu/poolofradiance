@@ -99,6 +99,13 @@ Player log (first place to look when the user reports bugs):
   stack dead centre); Esc = back (closes what is open, only then opens Settings). Guard
   every single-letter hotkey with `!Ui.Typing` — naming a character "Jim" used to open the
   journal, the bags and the map on the way through.
+  **An open panel OWNS the screen (`Ui.PanelOpen`)**: hotbar, minimap, quest card, banner,
+  steering arrow, combat strip and the shop/NPC prompts all draw NOTHING while one is up —
+  the bags used to open with the whole HUD bleeding through them. Every HUD drawer checks
+  `Ui.PanelOpen` at the top of its `OnGUI`; nothing decides for itself when it is in the way.
+  **The hotbar itself stows (`Ui.BarCollapsed`, H or its chevron button, PlayerPrefs)** down
+  to a `SHOW BAR (H)` handle — never a one-way door, same rule as the map pill and the quest
+  card. `BarRect` still reports the handle, so combat clicks can't fall through it.
 - `SessionPanel.cs` — status + invite code, opened/closed from a **hotbar icon** (generated
   texture, not a font glyph). `SessionLauncher` still OWNS that state (`Status`/`HostCode`
   statics) and draws only the title screen; the old permanent top-left strip is gone, which
@@ -124,7 +131,9 @@ Player log (first place to look when the user reports bugs):
   locked gate = hollow square, party = teal circles); legend when maximized. All icons are
   **generated textures, not font glyphs** — the body font has no box/tick/arrow glyphs and
   a missing glyph renders as tofu (this is why the old `-`/`+` buttons were unreadable).
-- `InventoryUI.cs` (I) — left column = what the character is WEARING (slot rows + each
+- `InventoryUI.cs` (I) — left column = the character sheet: **the six ABILITY SCORES first**
+  (score and modifier, from the `*Synced` SyncVars via `PlayerCharacterHolder.ModOf` — the one
+  definition the level-up screen also uses), then what they are WEARING (slot rows + each
   piece's stat line + totals: AC with its breakdown, HP, attack, damage); right column =
   stash, every item showing damage/protection and compared against what is equipped
   ("upgrade: +2 AC"). Client display needs the derived stats, which the sheet cannot give

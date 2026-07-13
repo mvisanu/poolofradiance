@@ -51,6 +51,10 @@ namespace RadiantPool.Game
             _ => ChaSynced.Value
         };
 
+        /// <summary>SRD modifier for a score, on the client. The sheet and the level-up screen
+        /// both print it — they must never disagree, so it is derived here and nowhere else.</summary>
+        public int ModOf(Ability a) => Mathf.FloorToInt((ScoreOf(a) - 10) / 2f);
+
         private float _nextStatSync;
 
         /// <summary>Server: push the sheet's derived stats out to clients. Cheap — FishNet

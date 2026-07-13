@@ -197,6 +197,9 @@ namespace RadiantPool.Game
         private void OnGUI()
         {
             Ui.Begin();
+            // A screen is up: the card, the banner and the steering arrow all step aside —
+            // the banner used to land right on the top edge of the open panel.
+            if (Ui.PanelOpen) return;
             var player = LocalPlayer();
             bool inCombat = CombatManager.Instance != null && CombatManager.Instance.InCombat.Value;
             if (player == null || inCombat) return;

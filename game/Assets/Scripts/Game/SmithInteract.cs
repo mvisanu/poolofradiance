@@ -48,7 +48,7 @@ namespace RadiantPool.Game
         {
             bool combat = CombatManager.Instance != null && CombatManager.Instance.InCombat.Value;
             if (combat) { _open = false; return; }
-            if (Input.GetKeyDown(KeyCode.E) && InRange()) _open = !_open;
+            if (Input.GetKeyDown(KeyCode.E) && InRange() && !Ui.PanelOpen) _open = !_open;
             if (_open && !InRange()) _open = false;
         }
 
@@ -56,6 +56,7 @@ namespace RadiantPool.Game
         {
             Ui.Begin();
             if (CombatManager.Instance != null && CombatManager.Instance.InCombat.Value) return;
+            if (Ui.PanelOpen) return;   // a screen is up: the smithy waits behind it
             var director = GameDirector.Instance;
             if (director == null) return;
 

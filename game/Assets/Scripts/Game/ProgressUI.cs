@@ -66,8 +66,10 @@ namespace RadiantPool.Game
             if (points > 0)
             {
                 GUILayout.Space(4);
+                // 24 px cropped the label's descenders clean off at this font — the button has
+                // to be as tall as the words it carries.
                 if (GUILayout.Button($"Level up: spend {points} point{(points == 1 ? "" : "s")} (L)",
-                        Theme.BtnPrimary, GUILayout.Height(24)))
+                        Theme.BtnPrimary, GUILayout.Height(30)))
                     Ui.Show(Ui.Panel.LevelUp);
             }
             GUILayout.Space(6);
@@ -100,7 +102,7 @@ namespace RadiantPool.Game
             foreach (var a in Order)
             {
                 int score = me.ScoreOf(a);
-                int mod = Mathf.FloorToInt((score - 10) / 2f);
+                int mod = me.ModOf(a);
                 bool capped = score >= Progression.MaxAbilityScore;
 
                 GUILayout.BeginHorizontal();
