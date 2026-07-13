@@ -91,9 +91,14 @@ namespace RadiantPool.Game
         private void DrawEquipped(PlayerCharacterHolder holder, float width)
         {
             GUILayout.BeginVertical(GUILayout.Width(width));
-            GUILayout.Label("WORN BY " + (holder.CharacterName.Value.Length > 0
-                ? holder.CharacterName.Value.ToUpperInvariant() : "YOU"), Theme.Caps);
 
+            // Who you are — level and XP live HERE, not on the main screen.
+            GUILayout.Label(holder.CharacterName.Value.Length > 0
+                ? $"{holder.CharacterName.Value.ToUpperInvariant()}, {holder.Class}".ToUpperInvariant()
+                : "YOUR CHARACTER", Theme.Caps);
+            ProgressUI.XpBlock(holder);
+
+            GUILayout.Label("WORN", Theme.Caps);
             _wornScroll = GUILayout.BeginScrollView(_wornScroll);
             GUILayout.BeginVertical(Theme.ParchmentStyle);
             var weapon = GameItem.Get(holder.WeaponId.Value);

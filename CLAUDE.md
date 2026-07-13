@@ -116,8 +116,10 @@ Player log (first place to look when the user reports bugs):
   stash, every item showing damage/protection and compared against what is equipped
   ("upgrade: +2 AC"). Client display needs the derived stats, which the sheet cannot give
   it (server-only) — `PlayerCharacterHolder` mirrors them as SyncVars on a slow poll.
-- `ProgressUI.cs` — **XP bar** above the hotbar (level, fraction to next, XP either side, MAX
-  at the cap) and the **level-up screen (L)** that spends ability points; each row says what
+- `ProgressUI.cs` — **level and XP live on the CHARACTER SHEET (I), never on the main screen**
+  (`ProgressUI.XpBlock`, drawn by `InventoryUI`: level, bar, XP either side, MAX at the cap —
+  one definition, so sheet and screen cannot disagree) plus the
+  **level-up screen (L)** that spends ability points; each row says what
   the ability buys *this* character, including that an odd score buys nothing until the next
   point completes the modifier. Client asks (`CmdSpendAbilityPoint`), rules lib decides.
 - **Item icons** — `Editor/ItemIconBaker.cs` renders each item's OWN model

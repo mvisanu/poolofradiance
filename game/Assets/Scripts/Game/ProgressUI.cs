@@ -6,20 +6,17 @@ namespace RadiantPool.Game
 {
     /// <summary>The character's progress, in two pieces.
     ///
-    /// The XP BAR sits just above the hotbar and is always up: level, the fraction of the way
-    /// to the next one, and the XP either side of it — so a kill or a quest visibly moves
-    /// something. At level 5 (the campaign cap) it reads MAX rather than pretending.
+    /// LEVEL AND XP live on the CHARACTER SHEET (I), not on the main screen: they say who you
+    /// are, not what is happening, and the battlefield is what the main screen is for. The
+    /// sheet's block is drawn by XpBlock below, so there is one definition of it — the level,
+    /// the bar, the XP either side, MAX at the campaign cap.
     ///
-    /// The LEVEL-UP SCREEN (L, or the button on the bar) spends the points a level-up granted:
-    /// one per level, two at 4th (Progression's house rule). Each row says what the ability
-    /// actually does for THIS character, because "+1 CHA" means nothing to a player deciding.
-    /// The client only asks — GameDirector.CmdSpendAbilityPoint and the rules lib decide.</summary>
+    /// The LEVEL-UP SCREEN (L, or the button on the sheet) spends the points a level-up
+    /// granted: one per level, two at 4th (Progression's house rule). Each row says what the
+    /// ability actually does for THIS character, because "+1 CHA" means nothing to a player
+    /// deciding. The client only asks — CmdSpendAbilityPoint and the rules lib decide.</summary>
     public class ProgressUI : MonoBehaviour
     {
-        /// <summary>The XP strip's rect this frame — CombatClientUI excludes it from
-        /// click-to-move, the same way it does the hotbar and the minimap.</summary>
-        public static Rect XpRect { get; private set; }
-
         private static readonly Ability[] Order =
             { Ability.Str, Ability.Dex, Ability.Con, Ability.Int, Ability.Wis, Ability.Cha };
 
@@ -38,51 +35,42 @@ namespace RadiantPool.Game
         {
             Ui.Begin();
             var me = Me();
-            if (me == null || me.ClassIndex.Value < 0) { XpRect = default; return; }
-
-            DrawXpBar(me);
+            if (me == null || me.ClassIndex.Value < 0) return;
             if (Ui.IsOpen(Ui.Panel.LevelUp)) DrawLevelUpPanel(me);
         }
 
-        private void DrawXpBar(PlayerCharacterHolder me)
+        /// <summary>Level + XP, drawn wherever the character sheet wants it (InventoryUI calls
+        /// this). Kept here next to the level-up screen it feeds: one owner of what "progress"
+        /// looks like, so the sheet and the screen can never disagree about it.</summary>
+        public static void XpBlock(PlayerCharacterHolder me)
         {
             int level = Mathf.Clamp(me.LevelSynced.Value, 1, Progression.MaxLevel);
-            int xp = me.XpSynced.Value;
             int points = me.PendingPointsSynced.Value;
-            var (into, span, fraction) = Progression.Progress(level, xp);
+            var (into, span, fraction) = Progression.Progress(level, me.XpSynced.Value);
             bool capped = level >= Progression.MaxLevel;
 
-            // Docked to the hotbar, which moves with the window — never to a screen literal.
-            var bar = HotBar.BarRect;
-            float w = Mathf.Min(Mathf.Max(bar.width, 300f), Ui.W - 24f);
-            float h = 34f;
-            float y = (bar.height > 0f ? bar.y : Ui.H - 48f) - h - 4f;
-            var rect = new Rect(Ui.W / 2f - w / 2f, y, w, h);
-            XpRect = rect;
-
-            GUILayout.BeginArea(rect, Theme.PanelStyle);
             GUILayout.BeginHorizontal();
-            GUILayout.Label($"<color=#f2ca50><b>LV {level}</b></color>",
-                new GUIStyle(Theme.Body) { richText = true, fontSize = 12 },
-                GUILayout.Width(46));
-
-            var track = GUILayoutUtility.GetRect(60f, 13f, GUILayout.ExpandWidth(true));
-            track.y += 3f;
-            Theme.Bar(track, capped ? 1f : fraction, Theme.Gold);
-
-            GUILayout.Space(6);
+            GUILayout.Label($"<color=#f2ca50><b>LEVEL {level}</b></color>",
+                new GUIStyle(Theme.Body) { richText = true, fontSize = 13 });
+            GUILayout.FlexibleSpace();
             GUILayout.Label(capped
                     ? "<color=#cbbb9c>MAX</color>"
-                    : $"<color=#cbbb9c>{into}/{span} ({Mathf.FloorToInt(fraction * 100f)}%)</color>",
-                new GUIStyle(Theme.Body) { richText = true, fontSize = 11, wordWrap = false },
-                GUILayout.Width(112));
-
-            if (points > 0 && GUILayout.Button($"Level up! ({points})",
-                    Theme.BtnPrimary, GUILayout.Width(96), GUILayout.Height(22)))
-                Ui.Show(Ui.Panel.LevelUp);
-
+                    : $"<color=#cbbb9c>{into}/{span} XP " +
+                      $"({Mathf.FloorToInt(fraction * 100f)}% to {level + 1})</color>",
+                new GUIStyle(Theme.Body) { richText = true, fontSize = 11, wordWrap = false });
             GUILayout.EndHorizontal();
-            GUILayout.EndArea();
+
+            var track = GUILayoutUtility.GetRect(60f, 12f, GUILayout.ExpandWidth(true));
+            Theme.Bar(track, capped ? 1f : fraction, Theme.Gold);
+
+            if (points > 0)
+            {
+                GUILayout.Space(4);
+                if (GUILayout.Button($"Level up: spend {points} point{(points == 1 ? "" : "s")} (L)",
+                        Theme.BtnPrimary, GUILayout.Height(24)))
+                    Ui.Show(Ui.Panel.LevelUp);
+            }
+            GUILayout.Space(6);
         }
 
         private void DrawLevelUpPanel(PlayerCharacterHolder me)
