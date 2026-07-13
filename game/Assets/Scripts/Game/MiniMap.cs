@@ -4,9 +4,11 @@ using UnityEngine;
 
 namespace RadiantPool.Game
 {
-    /// <summary>Top-right minimap: an orthographic camera renders the world straight
-    /// down into a RenderTexture. North-fixed. Three sizes — collapsed pill / normal /
-    /// maximized ([-]/[+] buttons or M key), remembered in PlayerPrefs. Drag inside the
+    /// <summary>Minimap, docked in the TOP-RIGHT CORNER itself. An orthographic camera renders
+    /// the world straight down into a RenderTexture. North-fixed. It starts COLLAPSED — the
+    /// city is what the screen is for, and the map is one keypress (M) or one icon away when
+    /// it is wanted. Three sizes — collapsed pill / normal /
+    /// maximized (header icons or M key), remembered in PlayerPrefs. Drag inside the
     /// map to pan away from the player and go looking for the objective; the RECENTER
     /// button (or releasing after a pan idles out) snaps back. World objects get distinct
     /// shape+color markers (never color alone): enemies red triangle, quest gold X, NPCs
@@ -22,7 +24,9 @@ namespace RadiantPool.Game
         private const float MinRadius = 20f;    // world meters shown from center to edge
         private const float MaxRadius = 220f;   // wide enough to bring any zone objective in view
         private const float MaxPan = 500f;      // metres the view may stray from the player
-        private const string SizePref = "minimap.size";
+        // Renamed key, so the new default (collapsed) actually reaches players who already
+        // have the old one stored — a preference nobody set is not worth honouring forever.
+        private const string SizePref = "minimap.size2";
 
         private float _viewRadius = 42f;
 
@@ -32,7 +36,7 @@ namespace RadiantPool.Game
 
         // 0 = collapsed pill, 1 = normal, 2 = maximized. Static so MapRect can stay a
         // static property (CombatClientUI/OrbitCamera hit-test it without an instance).
-        private static int _sizeMode = 1;
+        private static int _sizeMode;   // starts collapsed: M (or the icon) brings it back
 
         // A maximized map would cover the battlefield and swallow combat clicks
         // (MapRect gates click-to-move), so combat caps it at normal; the stored
@@ -69,13 +73,17 @@ namespace RadiantPool.Game
 
         /// <summary>Full interactive frame (header buttons + map) in Ui-scaled space;
         /// this is the rect HUD hit-tests block clicks against.</summary>
+        /// <summary>The corner itself: the hosting strip that used to hold the top of the HUD
+        /// is now a hotbar icon (SessionPanel), so nothing sits above the map any more.</summary>
+        private const float MapTop = 12f;
+
         public static Rect MapRect
         {
             get
             {
-                if (EffectiveMode == 0) return new Rect(Ui.W - 74 - 12, 118, 74, Header);
+                if (EffectiveMode == 0) return new Rect(Ui.W - 74 - 12, MapTop, 74, Header);
                 float s = Side;
-                return new Rect(Ui.W - s - 12, 118, s, s + Header);
+                return new Rect(Ui.W - s - 12, MapTop, s, s + Header);
             }
         }
 
@@ -94,7 +102,7 @@ namespace RadiantPool.Game
 
         private void Start()
         {
-            _sizeMode = Mathf.Clamp(PlayerPrefs.GetInt(SizePref, 1), 0, 2);
+            _sizeMode = Mathf.Clamp(PlayerPrefs.GetInt(SizePref, 0), 0, 2);   // hidden until asked for
 
             _rt = new RenderTexture(512, 512, 16);
             var go = new GameObject("MiniMapCamera");
@@ -139,8 +147,11 @@ namespace RadiantPool.Game
 
             if (_player == null) { _mapCam.enabled = false; return; }
 
-            // M toggles between normal and maximized (restores if collapsed).
-            if (Input.GetKeyDown(KeyCode.M) && !Ui.Typing) SetSize(_sizeMode == 2 ? 1 : 2);
+            // M cycles hidden -> normal -> maximized -> hidden. It has to come back round to
+            // hidden: the map now STARTS that way, and a key that can only ever grow it would
+            // be a one-way door out of the clear view the player asked for.
+            if (Input.GetKeyDown(KeyCode.M) && !Ui.Typing)
+                SetSize(_sizeMode == 0 ? 1 : _sizeMode == 1 ? 2 : 0);
 
             bool inCombat = CombatManager.Instance != null
                             && CombatManager.Instance.InCombat.Value;

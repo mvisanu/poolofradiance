@@ -109,8 +109,13 @@ Player log (first place to look when the user reports bugs):
   **district sign** over each quarter; `MiniMap` paints the quarter names on the map (gold
   = active quest). After the campaign ends the tracker issues standing orders against any
   encounters still standing, so there is never a questless state.
-- `MiniMap.cs` — three sizes (collapsed pill / normal / maximized) via header **icon**
-  buttons or `M`, remembered in PlayerPrefs; **left-drag pans** the view with a RECENTER
+- `MiniMap.cs` — docked in the **top-right corner itself** (`MapTop`) and **starts collapsed**
+  (pref key `minimap.size2` — renamed so the new default reaches players who stored the old
+  one). Three sizes (collapsed pill / normal / maximized) via header **icon**
+  buttons or `M`, which **cycles hidden → normal → maximized → hidden** (a key that could only
+  grow it would be a one-way door out of the clear view), remembered in PlayerPrefs;
+  the initiative panel still docks off `MapRect.yMax`, so it follows the map up.
+  **left-drag pans** the view with a RECENTER
   button; scroll zooms. Markers are shape+colour, never colour alone (enemy = red
   triangle, quest = gold X with distance, NPC = green diamond, vendor/smith = squares,
   locked gate = hollow square, party = teal circles); legend when maximized. All icons are
