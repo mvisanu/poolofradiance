@@ -17,6 +17,11 @@ namespace RadiantPool.Game
         private Vector2 _scroll, _wornScroll;
         private GUIStyle _slotName, _slotStat, _itemStat, _better, _worse;
 
+        // Who will buy, if anyone. Resolved once a frame in Update (OnGUI runs several times
+        // a frame, and this searches the scene); the server re-checks it on every sale.
+        private bool _traderNear;
+        private string _traderName;
+
         private void Awake() => Instance = this;
         private void OnDestroy() { if (Instance == this) Instance = null; }
 
@@ -31,6 +36,11 @@ namespace RadiantPool.Game
             if (Input.GetKeyDown(KeyCode.I) && !Ui.Typing) Ui.Toggle(Ui.Panel.Inventory);
             if (CombatManager.Instance != null && CombatManager.Instance.InCombat.Value)
                 Ui.Close(Ui.Panel.Inventory);
+
+            if (!Ui.IsOpen(Ui.Panel.Inventory)) return;
+            var holder = LocalHolder();
+            _traderNear = holder != null
+                && GameDirector.TraderNear(holder.transform.position, out _traderName);
         }
 
         private void EnsureStyles()
@@ -160,6 +170,12 @@ namespace RadiantPool.Game
                 Theme.Body);
             GUILayout.EndHorizontal();
 
+            // Selling needs a buyer in front of you — say which one, or where to find one.
+            GUILayout.Label(_traderNear
+                ? $"<color=#d0c5af>Trading with {_traderName}.</color>"
+                : "<color=#d0c5af>Stand by a trader to sell what you don't need.</color>",
+                new GUIStyle(Theme.Body) { fontSize = 11, wordWrap = false });
+
             _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.ExpandHeight(true));
             GUILayout.BeginVertical(Theme.ParchmentStyle);
             var groups = director.Stash.GroupBy(id => id).OrderBy(g => g.Key).ToList();
@@ -191,15 +207,22 @@ namespace RadiantPool.Game
                         ? item.UsableBy((CharacterClass)holder.ClassIndex.Value)
                         : item.UsableBy(holder.Sheet.Class);
                     GUI.enabled = usable;
-                    if (GUILayout.Button(usable ? "Equip" : "Can't use", GUILayout.Width(90)))
+                    if (GUILayout.Button(usable ? "Equip" : "Can't use", GUILayout.Width(80)))
                         director.CmdEquipItem(g.Key);
                     GUI.enabled = true;
                 }
                 else if (g.Key == "potion_healing")
                 {
-                    if (GUILayout.Button("Drink", GUILayout.Width(90)))
+                    if (GUILayout.Button("Drink", GUILayout.Width(80)))
                         director.CmdUsePotion();
                 }
+
+                // Sell it where you find it: no need to reopen the vendor's own panel.
+                bool buys = GameDirector.SellValue.TryGetValue(g.Key, out int price) && price > 0;
+                GUI.enabled = buys && _traderNear;
+                if (GUILayout.Button(buys ? $"Sell {price}g" : "No buyer", GUILayout.Width(80)))
+                    director.CmdSellItem(g.Key);
+                GUI.enabled = true;
                 GUILayout.EndHorizontal();
                 GUILayout.Space(6);
             }

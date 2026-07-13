@@ -91,6 +91,9 @@ namespace RadiantPool.Game
                 ZoneClearedCounts.Add(0);
             }
 
+            if (System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-selltest") >= 0)
+                StartCoroutine(ServerSellSelfTest());
+
             if (!SaveSystem.Exists) return;
             var save = SaveSystem.Read();
             if (save == null) return;
@@ -359,6 +362,114 @@ namespace RadiantPool.Game
             RpcNotice($"Bought {item?.Name ?? itemId} for {price}g — equip it from the inventory (I).");
         }
 
+        /// <summary>Is a trader (the Exchange or the smithy) within talking distance of this
+        /// point? The inventory greys its Sell buttons with this and the server re-checks the
+        /// sale with it, so the button and the RPC can never disagree. The server allows
+        /// <see cref="ServerRangeSlack"/> of extra reach: the seller's position it sees lags
+        /// the client's by a tick or two, and a legitimate sale must not bounce.</summary>
+        public const float ServerRangeSlack = 1.5f;
+
+        public static bool TraderNear(Vector3 pos, out string traderName, float slack = 0f)
+        {
+            foreach (var v in FindObjectsByType<VendorInteract>(FindObjectsSortMode.None))
+                if (Vector3.Distance(pos, v.transform.position) <= v.InteractRange + slack)
+                { traderName = v.VendorName; return true; }
+            foreach (var s in FindObjectsByType<SmithInteract>(FindObjectsSortMode.None))
+                if (Vector3.Distance(pos, s.transform.position) <= s.InteractRange + slack)
+                { traderName = s.VendorName; return true; }
+            traderName = null;
+            return false;
+        }
+
+        /// <summary>Sell ONE item out of the party stash to the trader the seller is standing
+        /// next to — the way to turn gear the party will never wear into gold without dumping
+        /// the whole pile. Gold and stash are party-shared, so every condition is checked
+        /// server-side: out of combat, next to a trader, item really in the stash, and
+        /// something that has a buyer. CmdSellAll remains for clearing out salvage wholesale
+        /// (it keeps potions; sell those one at a time if you truly mean to).</summary>
+        [ServerRpc(RequireOwnership = false)]
+        public void CmdSellItem(string itemId, NetworkConnection conn = null)
+        {
+            if (CombatManager.Instance != null && CombatManager.Instance.InCombat.Value)
+            { RpcNotice("Not during combat."); return; }
+
+            var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => p.Owner == conn);
+            if (holder == null) return;
+            if (!TraderNear(holder.transform.position, out string trader, ServerRangeSlack))
+            { RpcNotice("No trader here to buy that."); return; }
+
+            string label = GameItem.Get(itemId)?.Name ?? itemId.Replace('_', ' ');
+            if (!SellValue.TryGetValue(itemId, out int gold) || gold <= 0)
+            { RpcNotice($"Nobody buys {label}."); return; }
+            int idx = Stash.IndexOf(itemId);
+            if (idx < 0) { RpcNotice("That item is not in the stash."); return; }
+
+            Stash.RemoveAt(idx);
+            PartyGold.Value += gold;
+            RpcNotice($"Sold {label} to {trader} for {gold} gold.");
+        }
+
+        /// <summary>Unattended shop check (`RadiantPool.exe -autohost -selltest`, asserted by
+        /// scripts/smoke-test.ps1). It drives the sale the way a player does — put a sword in
+        /// the bag, walk up to the trader, press Sell — instead of poking the stash directly,
+        /// so the log line proves the whole path works: proximity, bag, purse. Never runs
+        /// without the flag.</summary>
+        private System.Collections.IEnumerator ServerSellSelfTest()
+        {
+            yield return new WaitForSeconds(8f);   // a character has to spawn first
+
+            var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => !p.IsCompanion && p.Owner != null && p.Owner.IsValid);
+            var vendor = FindFirstObjectByType<VendorInteract>();
+            if (holder == null || vendor == null)
+            {
+                Debug.Log("[SellTest] FAIL - no player character or no vendor in the scene");
+                yield break;
+            }
+
+            const string itemId = "longsword";
+            Stash.Add(itemId);
+            int goldBefore = PartyGold.Value, bagBefore = Stash.Count;
+
+            Warp(holder.transform, new Vector3(vendor.transform.position.x + 1.5f,
+                holder.transform.position.y, vendor.transform.position.z));
+            yield return null;
+            Debug.Log($"[SellTest] seller {Vector3.Distance(holder.transform.position, vendor.transform.position):0.0}m " +
+                      $"from {vendor.VendorName}");
+            CmdSellItem(itemId);   // host: runs the same ServerRpc a client would send
+            yield return new WaitForSeconds(0.5f);
+
+            int expected = goldBefore + SellValue[itemId];
+            bool sold = PartyGold.Value == expected && Stash.Count == bagBefore - 1;
+            Debug.Log($"[SellTest] {(sold ? "PASS" : "FAIL")} - gold {goldBefore} to " +
+                      $"{PartyGold.Value} (expected {expected}), bag {bagBefore} to {Stash.Count}");
+
+            // ...and out of a trader's reach, the same sale must be refused.
+            Stash.Add(itemId);
+            int goldAway = PartyGold.Value, bagAway = Stash.Count;
+            Warp(holder.transform, holder.transform.position + new Vector3(60f, 0f, 0f));
+            yield return null;
+            CmdSellItem(itemId);
+            yield return new WaitForSeconds(0.5f);
+
+            bool refused = PartyGold.Value == goldAway && Stash.Count == bagAway;
+            Debug.Log($"[SellTest] {(refused ? "PASS" : "FAIL")} - away from any trader the " +
+                      $"sale was {(refused ? "refused" : "ALLOWED")}");
+        }
+
+        /// <summary>A teleport that sticks. A CharacterController overwrites a direct
+        /// transform write on the very next frame (CombatFx parks it to glide for the same
+        /// reason) — so park it here too, or the body simply stays where it was.</summary>
+        private static void Warp(Transform body, Vector3 pos)
+        {
+            var cc = body.GetComponent<CharacterController>();
+            bool parked = cc != null && cc.enabled;
+            if (parked) cc.enabled = false;
+            body.position = pos;
+            if (parked) cc.enabled = true;
+        }
+
         [ServerRpc(RequireOwnership = false)]
         public void CmdSellAll(NetworkConnection conn = null)
         {
@@ -461,6 +572,9 @@ namespace RadiantPool.Game
         {
             LocalNotice = text;
             _noticeUntil = Time.time + 6f;
+            // Player.log is the first place we look when a bug is reported — a notice that
+            // only ever existed on screen for six seconds is exactly what we end up missing.
+            Debug.Log($"[RadiantPool] notice: {text}");
         }
 
         private Vector2 _journalScroll;

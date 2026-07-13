@@ -3,14 +3,16 @@ using UnityEngine;
 
 namespace RadiantPool.Game
 {
-    /// <summary>The Salvage Exchange: buy healing potions, sell battlefield salvage.
-    /// All transactions resolve on the server via GameDirector.</summary>
+    /// <summary>The Salvage Exchange: buy healing potions, sell the bag — item by item at
+    /// its own price, or the whole salvage pile in one go. All transactions resolve on the
+    /// server via GameDirector (CmdSellItem re-checks that the seller is standing here).</summary>
     public class VendorInteract : MonoBehaviour
     {
         public string VendorName = "The Salvage Exchange";
         public float InteractRange = 3.5f;
 
         private bool _open;
+        private Vector2 _scroll;
 
         private Transform LocalPlayer()
         {
@@ -48,7 +50,7 @@ namespace RadiantPool.Game
             }
             if (!_open) return;
 
-            GUILayout.BeginArea(Ui.Fit(400f, 210f), Theme.PanelStyle);
+            GUILayout.BeginArea(Ui.Fit(440f, 400f), Theme.PanelStyle);
             GUILayout.Label(VendorName, Theme.Header);
             GUILayout.Label($"<color=#f2ca50><b>{director.PartyGold.Value}</b> gold</color>",
                 Theme.Body);
@@ -62,6 +64,37 @@ namespace RadiantPool.Game
             if (GUILayout.Button($"Buy Potion of Healing — {GameDirector.PotionBuyPrice}g " +
                                  $"(have {potions})"))
                 director.CmdBuyPotion();
+            GUI.enabled = true;
+
+            // Sell one piece at a time — the bag is grouped by item, and each row shows what
+            // the Exchange pays for one of them. Sell-all below still dumps the whole pile.
+            GUILayout.Space(6);
+            GUILayout.Label("SELL FROM THE BAG", Theme.Caps);
+            _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.ExpandHeight(true));
+            GUILayout.BeginVertical(Theme.ParchmentStyle);
+            var groups = director.Stash.GroupBy(id => id).OrderBy(g => g.Key).ToList();
+            if (groups.Count == 0)
+                GUILayout.Label("(nothing in the bag — loot the docks!)", Theme.BodyInk);
+
+            foreach (var g in groups)
+            {
+                var item = GameItem.Get(g.Key);
+                string label = item != null ? item.Name : g.Key.Replace('_', ' ');
+                bool buys = GameDirector.SellValue.TryGetValue(g.Key, out int price) && price > 0;
+
+                GUILayout.BeginHorizontal();
+                GUILayout.Label($"<b>{label}</b> x{g.Count()}", new GUIStyle(Theme.BodyInk)
+                    { fontSize = 12, richText = true, wordWrap = false });
+                GUILayout.FlexibleSpace();
+                GUI.enabled = buys;
+                if (GUILayout.Button(buys ? $"Sell {price}g" : "No buyer", GUILayout.Width(88)))
+                    director.CmdSellItem(g.Key);
+                GUI.enabled = true;
+                GUILayout.EndHorizontal();
+            }
+            GUILayout.EndVertical();
+            GUILayout.EndScrollView();
+
             GUI.enabled = salvage > 0;
             if (GUILayout.Button($"Sell all salvage ({salvage} items) — {salvageValue}g"))
                 director.CmdSellAll();

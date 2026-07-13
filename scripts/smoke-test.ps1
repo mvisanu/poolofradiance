@@ -13,7 +13,8 @@ $clientLog = Join-Path $logDir "client.log"
 Remove-Item $hostLog, $clientLog -ErrorAction SilentlyContinue
 
 Write-Host "Starting host instance..."
-$hostProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Anna","-autohost","-logFile",$hostLog -PassThru
+# -selltest: the host drives one real shop sale (bag -> trader -> purse) and asserts below.
+$hostProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Anna","-autohost","-selltest","-logFile",$hostLog -PassThru
 Start-Sleep -Seconds 12
 
 Write-Host "Starting client instance..."
@@ -33,7 +34,10 @@ $checks = @(
     @{ Name = "client connected and host spawned it"; Ok = $hostText -match "character ready: Ben" },
     @{ Name = "client attempted autojoin";         Ok = $clientText -match "\[RadiantPool\] autojoin" },
     @{ Name = "no NullReference in host log";      Ok = $hostText -notmatch "NullReferenceException" },
-    @{ Name = "no NullReference in client log";    Ok = $clientText -notmatch "NullReferenceException" }
+    @{ Name = "no NullReference in client log";    Ok = $clientText -notmatch "NullReferenceException" },
+    @{ Name = "selling an item at a trader pays gold"; Ok = $hostText -match "\[SellTest\] PASS - gold" },
+    @{ Name = "selling away from a trader is refused"; Ok = $hostText -match "\[SellTest\] PASS - away" },
+    @{ Name = "no failed sell assertion";          Ok = $hostText -notmatch "\[SellTest\] FAIL" }
 )
 
 $failed = 0

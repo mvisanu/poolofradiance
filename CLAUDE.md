@@ -107,6 +107,14 @@ Player log (first place to look when the user reports bugs):
   stash, every item showing damage/protection and compared against what is equipped
   ("upgrade: +2 AC"). Client display needs the derived stats, which the sheet cannot give
   it (server-only) — `PlayerCharacterHolder` mirrors them as SyncVars on a slow poll.
+- **Selling** — `CmdSellItem` sells ONE stash item at its `GameDirector.SellValue` (half
+  list price); `CmdSellAll` still dumps the salvage pile (and keeps potions). The Sell
+  buttons appear both in the vendor panel and on every bag row, and they need a buyer in
+  reach: `GameDirector.TraderNear` is the ONE definition of that (the UI greys the button
+  with it, the ServerRpc re-checks it with a little slack, so button and server cannot
+  disagree). `RadiantPool.exe -autohost -selltest` drives a real sale (bag → trader →
+  purse) and `smoke-test.ps1` asserts it — that is what caught the CharacterController
+  teleport trap below. Every `RpcNotice` is also written to Player.log.
 - `theme/` — Stitch design mockups, **gitignored**: they contain WotC placeholder
   names. Copy visuals only, never text.
 - Asset Store packs can't be fetched headlessly (editor sign-in required). Drop-in
@@ -205,6 +213,11 @@ Player log (first place to look when the user reports bugs):
 - **The initiative panel sits BELOW the minimap** (`MiniMap.MapRect.yMax`), not in the
   top-right corner — pinned to the corner it drew straight through the map. Any new
   top-right HUD must dock off the same anchor, and cap its height with a scroll view.
+- **A `CharacterController` eats direct `transform.position` writes** — the body is back
+  where it started on the next frame. Park it (`cc.enabled = false`), move, re-enable
+  (`CombatFx.GlideRoutine`, `GameDirector.Warp`). A "teleport" that silently does nothing
+  looks exactly like a broken feature: the sell self-test failed with "no trader here"
+  until the seller actually arrived at the shop.
 - Combat-end must clear the Animator `Dead` flag (`CharacterVisuals.SetDead(v,false)`),
   not just rotation — revived characters otherwise walk around in the death pose.
 - Victory revives dead PCs at 1 HP (no permanent death); party wipe revives all at
