@@ -52,7 +52,7 @@ namespace RadiantPool.Game
 
             GUILayout.BeginArea(Ui.Fit(420f, 420f), Theme.PanelStyle);
             GUILayout.Label($"{VendorName} — arms & armor", Theme.Header);
-            GUILayout.Label($"<color=#f2ca50><b>{director.PartyGold.Value}</b> gold</color>" +
+            GUILayout.Label($"<color=#f2ca50><b>{director.PartyGold.Value:N0}</b> gold</color>" +
                 "   <color=#d0c5af>(bought gear goes to the stash — equip with I)</color>",
                 Theme.Body);
 

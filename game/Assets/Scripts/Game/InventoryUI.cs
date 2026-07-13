@@ -173,8 +173,9 @@ namespace RadiantPool.Game
             GUILayout.BeginHorizontal();
             GUILayout.Label("PARTY STASH", Theme.Caps);
             GUILayout.FlexibleSpace();
-            GUILayout.Label($"<color=#f2ca50><b>{director.PartyGold.Value}</b> gold</color>",
-                Theme.Body);
+            GUILayout.Label(
+                $"<color=#f2ca50><b>{director.PartyGold.Value:N0}</b> gold</color>",
+                new GUIStyle(Theme.Body) { richText = true, wordWrap = false });
             GUILayout.EndHorizontal();
 
             // Selling needs a buyer in front of you — say which one, or where to find one.

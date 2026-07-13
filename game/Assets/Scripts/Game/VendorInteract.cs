@@ -52,7 +52,7 @@ namespace RadiantPool.Game
 
             GUILayout.BeginArea(Ui.Fit(440f, 400f), Theme.PanelStyle);
             GUILayout.Label(VendorName, Theme.Header);
-            GUILayout.Label($"<color=#f2ca50><b>{director.PartyGold.Value}</b> gold</color>",
+            GUILayout.Label($"<color=#f2ca50><b>{director.PartyGold.Value:N0}</b> gold</color>",
                 Theme.Body);
 
             int potions = director.Stash.Count(s => s == "potion_healing");

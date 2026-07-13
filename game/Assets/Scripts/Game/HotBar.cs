@@ -47,9 +47,15 @@ namespace RadiantPool.Game
             const int utilSlots = 5;                    // potion, bag, journal, session, cog
             int slots = combatSlots + utilSlots;
 
+            // The purse rides on the bar. Gold used to exist only inside the bags and the
+            // shops, so it never visibly MOVED — loot landed, the number changed behind a
+            // closed panel, and the total read like a placeholder someone had typed in.
+            string gold = director.PartyGold.Value.ToString("N0");   // 1,234 — not "1234"
+            float goldW = Mathf.Min(96f, Mathf.Max(64f, 26f + gold.Length * 9f));
+
             // Fit the bar to the window: shrink the slots before ever overflowing the edge.
             float gap = inCombat ? 14f : 0f;
-            float chrome = gap + 28f;
+            float chrome = gap + 28f + goldW;
             float avail = Ui.W - 24f;
             _slot = Mathf.Clamp((avail - chrome) / slots - 4f, MinSlot, MaxSlot);
 
@@ -59,6 +65,15 @@ namespace RadiantPool.Game
 
             GUILayout.BeginArea(rect, Theme.PanelStyle);
             GUILayout.BeginHorizontal();
+
+            GUILayout.Label(new GUIContent($"<color=#f2ca50><b>{gold}</b>g</color>",
+                    $"{gold} gold — the party's purse"),
+                new GUIStyle(Theme.Body)
+                {
+                    richText = true, fontSize = 13, wordWrap = false,
+                    alignment = TextAnchor.MiddleCenter
+                },
+                GUILayout.Width(goldW), GUILayout.Height(_slot));
 
             if (inCombat)
             {

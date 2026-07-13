@@ -73,6 +73,9 @@ Player log (first place to look when the user reports bugs):
   brass borders, parchment; bright gold = active states only; text contrast ≥4.5:1;
   MedievalSharp headers / Inter body, OFL, under `Resources/Fonts`). All IMGUI styling
   flows through `Ui.Begin()` → `Theme.Apply()`; tune look there, never inline styles.
+  **Gold lives on the HotBar** (`{PartyGold:N0}g`, always visible): it used to exist only
+  inside the bags and the shops, so the purse never visibly moved and the total read like a
+  placeholder. Format gold `:N0` everywhere — "1,234", never "1234".
   `HotBar.cs` = persistent bottom action bar (combat slots delegate to
   `CombatClientUI.Instance.PickAttack/PickSpell`); its slots SHRINK to fit rather than
   overflow (a cleric in combat needs 12). Combat HUD is a slim strip docked above it so
