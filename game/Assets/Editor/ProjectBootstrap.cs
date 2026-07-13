@@ -32,6 +32,8 @@ namespace RadiantPool.EditorTools
             EnsureFolders();
             SetupPlayerSettings();
             SetupUrp();
+            PolyPackArt.Invalidate();      // re-scan: the pack may have just been imported
+            PolyPackArt.SetupMaterials();  // Asset Store packs ship Standard mats: magenta in URP
             KenneyArt.SetupMaterials();
             KayKitArt.Setup();
             QuaterniusArt.Setup();
@@ -168,10 +170,16 @@ namespace RadiantPool.EditorTools
             return prefab.GetComponent<NetworkObject>();
         }
 
-        /// <summary>Vibrant open-world dressing from the CC0 Kenney Nature + Survival
-        /// kits: forest bands around the map, scatter (grass/flowers/stones), themed
-        /// wilds encounter sites, and a proper orc warcamp. Deterministic (fixed seed)
-        /// so every bootstrap produces the same world.</summary>
+        /// <summary>Vibrant open-world dressing: forest bands around the map, scatter
+        /// (grass/flowers/stones), themed wilds encounter sites, and a proper orc warcamp.
+        /// Deterministic (fixed seed) so every bootstrap produces the same world.
+        ///
+        /// Art comes from the Asset Store RPG Poly Pack when it is imported, and the CC0
+        /// Kenney kits when it is not — the LAYOUT below is the same either way, so the
+        /// world reads the same and only the models change. Composition rules that survive
+        /// both: big silhouettes ring the map and frame the play space, density falls off
+        /// toward the quarters so fights stay readable, and nothing is planted inside the
+        /// hub or on a grid where combat happens.</summary>
         private static void DressWorld()
         {
             var rnd = new System.Random(1177);
@@ -181,17 +189,67 @@ namespace RadiantPool.EditorTools
             void Nature(string model, Vector3 pos, float size, bool byHeight = true) =>
                 KenneyArt.Place("Nature", model, pos, Rot(), size, byHeight);
 
-            // Forest bands along the map edges (leave zone interiors playable).
+            // --- pack-or-fallback dispatchers -------------------------------------------
+            // Each takes the ROLE the object plays in the composition, not a model name.
+
             string[] bigTrees = { "tree_default", "tree_oak", "tree_pineTallA",
                 "tree_pineRoundB", "tree_detailed", "tree_fat", "tree_tall" };
+            string[] darkTrees = { "tree_default_dark", "tree_thin_dark", "tree_small_dark" };
+            string[] scatter = { "grass_large", "grass", "flower_redA", "flower_yellowA",
+                "flower_purpleA", "plant_bush", "plant_bushLarge", "stone_smallA",
+                "stone_smallD", "rock_smallB", "stump_round", "log" };
+
+            int pick = 0;   // walks the pack buckets so a stand of trees isn't all one model
+
+            void Tree(Vector3 pos, float size)
+            {
+                pick++;
+                // Mix conifers and broadleaf when the pack has both — a stand of one model
+                // repeated reads as wallpaper.
+                var kind = (pick % 3 == 0 && PolyPackArt.Count(PolyPackArt.Kind.Pine) > 0)
+                    ? PolyPackArt.Kind.Pine : PolyPackArt.Kind.Tree;
+                if (PolyPackArt.Place(kind, pick, pos, Rot(), size) != null) return;
+                Nature(bigTrees[rnd.Next(bigTrees.Length)], pos, size);
+            }
+
+            void DeadTree(Vector3 pos, float size)
+            {
+                pick++;
+                if (PolyPackArt.Place(PolyPackArt.Kind.Pine, pick, pos, Rot(), size) != null) return;
+                Nature(darkTrees[rnd.Next(darkTrees.Length)], pos, size);
+            }
+
+            void Rock(Vector3 pos, float size, bool big = false)
+            {
+                pick++;
+                var kind = big ? PolyPackArt.Kind.Cliff : PolyPackArt.Kind.Rock;
+                if (PolyPackArt.Place(kind, pick, pos, Rot(), size, byHeight: false) != null) return;
+                Nature(big ? "cliff_block_rock" : "rock_largeA", pos, size, false);
+            }
+
+            void Ground(Vector3 pos, float size)
+            {
+                pick++;
+                // Grass / flowers / bushes / mushrooms — whatever the pack actually has.
+                var kinds = new[] { PolyPackArt.Kind.Grass, PolyPackArt.Kind.Flower,
+                    PolyPackArt.Kind.Bush, PolyPackArt.Kind.Rock, PolyPackArt.Kind.Mushroom,
+                    PolyPackArt.Kind.Log };
+                for (int i = 0; i < kinds.Length; i++)
+                {
+                    var kind = kinds[(pick + i) % kinds.Length];
+                    if (PolyPackArt.Place(kind, pick, pos, Rot(), size) != null) return;
+                }
+                Nature(scatter[rnd.Next(scatter.Length)], pos, size);
+            }
+
+            // Forest bands along the map edges (leave zone interiors playable).
             foreach (var (cx, cz, count) in new (float, float, int)[]
             {
                 (-52, 30, 8), (-52, -12, 7), (-30, 52, 7), (8, 55, 6),
                 (55, 40, 6), (58, -38, 7), (28, -55, 7), (-14, -52, 7), (-55, -44, 6)
             })
                 for (int i = 0; i < count; i++)
-                    Nature(bigTrees[rnd.Next(bigTrees.Length)],
-                        new Vector3(cx + Jit(7f), 0, cz + Jit(7f)),
+                    Tree(new Vector3(cx + Jit(7f), 0, cz + Jit(7f)),
                         4.2f + (float)rnd.NextDouble() * 2.6f);
 
             // Mid-map accent trees along the roads between quarters.
@@ -200,44 +258,42 @@ namespace RadiantPool.EditorTools
                 (-16, 14), (-20, -6), (14, 16), (22, 10), (-8, 26),
                 (18, -22), (-26, -18), (34, -6), (-34, 24), (12, 34)
             })
-                Nature(bigTrees[rnd.Next(bigTrees.Length)],
-                    new Vector3(x + Jit(2f), 0, z + Jit(2f)),
+                Tree(new Vector3(x + Jit(2f), 0, z + Jit(2f)),
                     3.6f + (float)rnd.NextDouble() * 1.8f);
 
             // Ground scatter: grass, flowers, small stones, bushes, stumps.
-            string[] scatter = { "grass_large", "grass", "flower_redA", "flower_yellowA",
-                "flower_purpleA", "plant_bush", "plant_bushLarge", "stone_smallA",
-                "stone_smallD", "rock_smallB", "stump_round", "log" };
             for (int i = 0; i < 90; i++)
             {
                 var pos = new Vector3(Jit(56f), 0, Jit(56f));
                 if (Mathf.Abs(pos.x) < 14f && Mathf.Abs(pos.z) < 18f) continue;   // hub
-                Nature(scatter[rnd.Next(scatter.Length)], pos,
-                    0.5f + (float)rnd.NextDouble() * 0.9f);
+                Ground(pos, 0.5f + (float)rnd.NextDouble() * 0.9f);
             }
 
             // Wilds sites. Spider hollows: dead trees + moss. Bear dens: cliff + logs.
             foreach (var (x, z) in new (float, float)[] { (-12, 24), (30, 26) })
             {
-                Nature("tree_default_dark", new Vector3(x - 3 + Jit(1f), 0, z + Jit(1f)), 4.5f);
-                Nature("tree_thin_dark", new Vector3(x + 3 + Jit(1f), 0, z - 2 + Jit(1f)), 4f);
-                Nature("tree_small_dark", new Vector3(x + Jit(2f), 0, z + 3 + Jit(1f)), 3f);
-                Nature("mushroom_redGroup", new Vector3(x + Jit(3f), 0, z + Jit(3f)), 0.7f);
+                DeadTree(new Vector3(x - 3 + Jit(1f), 0, z + Jit(1f)), 4.5f);
+                DeadTree(new Vector3(x + 3 + Jit(1f), 0, z - 2 + Jit(1f)), 4f);
+                DeadTree(new Vector3(x + Jit(2f), 0, z + 3 + Jit(1f)), 3f);
+                Ground(new Vector3(x + Jit(3f), 0, z + Jit(3f)), 0.7f);
             }
             foreach (var (x, z) in new (float, float)[] { (-24, -28), (26, -12) })
             {
-                Nature("cliff_block_rock", new Vector3(x - 2, 0, z - 2), 3.5f, false);
-                Nature("rock_largeA", new Vector3(x + 3 + Jit(1f), 0, z + Jit(1f)), 2.2f, false);
-                Nature("log_large", new Vector3(x + Jit(3f), 0, z + 3 + Jit(1f)), 2f, false);
-                Nature("mushroom_tanGroup", new Vector3(x + Jit(3f), 0, z + Jit(3f)), 0.6f);
+                Rock(new Vector3(x - 2, 0, z - 2), 3.5f, big: true);
+                Rock(new Vector3(x + 3 + Jit(1f), 0, z + Jit(1f)), 2.2f);
+                Ground(new Vector3(x + Jit(3f), 0, z + 3 + Jit(1f)), 1.2f);
+                Ground(new Vector3(x + Jit(3f), 0, z + Jit(3f)), 0.6f);
             }
 
             // Goblin ambush spots: small raider tents + a stone campfire.
             foreach (var (x, z) in new (float, float)[] { (-16, 8), (34, 4) })
             {
-                Nature("tent_smallOpen", new Vector3(x - 2, 0, z + 2), 1.6f);
+                pick++;
+                if (PolyPackArt.Place(PolyPackArt.Kind.Tent, pick,
+                        new Vector3(x - 2, 0, z + 2), Rot(), 2.4f) == null)
+                    Nature("tent_smallOpen", new Vector3(x - 2, 0, z + 2), 1.6f);
                 Nature("campfire_stones", new Vector3(x + 1, 0, z), 0.9f, false);
-                Nature("log", new Vector3(x + 2.5f + Jit(0.5f), 0, z + 1.5f), 1.2f, false);
+                Ground(new Vector3(x + 2.5f + Jit(0.5f), 0, z + 1.5f), 1.2f);
             }
 
             // The Sunken Warcamp (south): fortified orc camp from the Survival kit.
@@ -411,9 +467,30 @@ namespace RadiantPool.EditorTools
             var templeStone = Mat("M_TempleStone", new Color(0.78f, 0.68f, 0.5f)); // warm sandstone
             var templeEmber = Mat("M_TempleEmber", new Color(0.75f, 0.3f, 0.18f)); // cult ember
 
+            // A building is a COLLIDER plus a look. The collider is gameplay (it blocks
+            // movement, and the combat x-ray fades whatever hides a creature), so it is
+            // always a box; only the look changes when the pack is present. Same trick the
+            // zone gates use: box with its renderer off, real model parented inside it.
+            int houseSeed = 0;
+
             void Roofed(string name, Vector3 pos, Vector3 scale, Material body, Material roof)
             {
-                Box(name, pos, scale, body);
+                var b = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                b.name = name;
+                b.transform.position = pos;
+                b.transform.localScale = scale;
+
+                var visual = PolyPackArt.Place(PolyPackArt.Kind.House, houseSeed++,
+                    new Vector3(pos.x, 0f, pos.z), 0f,
+                    Mathf.Max(scale.x, scale.z), byHeight: false);
+                if (visual != null)
+                {
+                    b.GetComponent<Renderer>().enabled = false;   // collider only
+                    visual.transform.SetParent(b.transform, worldPositionStays: true);
+                    return;
+                }
+
+                b.GetComponent<Renderer>().sharedMaterial = body;
                 Box(name + "_Roof",
                     new Vector3(pos.x, pos.y + scale.y / 2f + 0.35f, pos.z),
                     new Vector3(scale.x + 1.2f, 0.7f, scale.z + 1.2f), roof);
@@ -421,6 +498,21 @@ namespace RadiantPool.EditorTools
 
             Roofed("Docks_Warehouse_A", new Vector3(-40, 3, 8), new Vector3(14, 6, 10), docksWood, docksRoof);
             Roofed("Docks_Warehouse_B", new Vector3(-25, 2.5f, -25), new Vector3(10, 5, 12), docksWood, docksRoof);
+
+            // The town itself: houses ringing the hub plaza and the market road, so the
+            // quarters read as a settlement instead of props on a lawn. Only when the pack
+            // actually ships buildings — the Kenney kits have none, and a row of grey
+            // boxes here would look worse than the open plaza does.
+            if (PolyPackArt.Count(PolyPackArt.Kind.House) > 0)
+                foreach (var (x, z, rot, size) in new (float, float, float, float)[]
+                {
+                    (-18, -4, 90f, 8f), (-18, 6, 90f, 7f),          // west side of the hub
+                    (16, -6, 270f, 8f), (17, 5, 270f, 7f),          // east side
+                    (-14, 30, 160f, 7f), (13, 30, 200f, 7f),        // the road up to the market
+                    (-6, 56, 180f, 8f), (9, 58, 180f, 7f),          // market far side
+                })
+                    PolyPackArt.Place(PolyPackArt.Kind.House, houseSeed++,
+                        new Vector3(x, 0f, z), rot, size, byHeight: false);
 
             // --- CC0 Kenney set dressing (see Assets/Art/Kenney; CREDITS in README) ---
             void Lantern(Vector3 pos)
@@ -499,6 +591,15 @@ namespace RadiantPool.EditorTools
             KenneyArt.Place("Pirate", "flag-pirate-high", new Vector3(45, 0, 15), 0, 5f, true);
             Box("Temple_Brazier_1", new Vector3(46, 1f, -18), new Vector3(1, 2, 1), templeEmber);
             Box("Temple_Brazier_2", new Vector3(54, 1f, 4), new Vector3(1, 2, 1), templeEmber);
+
+            // Broken stone around the temple approach — the quarter should look like
+            // something that FELL, not a clean park with braziers in it.
+            foreach (var (x, z, size) in new (float, float, float)[]
+            {
+                (44, -14, 3f), (50, -3, 2.6f), (57, -9, 3.2f), (47, 8, 2.8f),
+            })
+                PolyPackArt.Place(PolyPackArt.Kind.Ruin, houseSeed++,
+                    new Vector3(x, 0f, z), (x * 37f) % 360f, size, byHeight: false);
 
             // Nature + survival dressing (Kenney Nature/Survival kits, CC0): forests,
             // scatter, dressed wilds encounter sites, and the orc warcamp.

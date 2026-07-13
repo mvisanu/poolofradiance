@@ -108,6 +108,22 @@ Player log (first place to look when the user reports bugs):
   slots instead: `Resources/SpellIcons/<id>.png`, `Resources/Music/{explore,combat,
   zone_<zoneId>}`, `Resources/Characters/<Name>.prefab` (pipe-separated fallbacks in
   `CombatManager.MonsterModels`). Import steps: `docs/asset-store-import.md`.
+  **The download is the only manual step**: once the editor has downloaded a pack it is
+  cached as a `.unitypackage` under `%APPDATA%\Unity\Asset Store-5.x\`, and
+  `scripts/import-assetstore.ps1` imports it in batchmode (`-importPackage`), converts it
+  to URP and re-bootstraps — no editor clicking to import.
+- `PolyPackArt.cs` — **environment art from the Asset Store RPG Poly Pack**, wired
+  DISCOVERY-first, not by prefab name: it finds the pack wherever it imported, sorts every
+  prefab into buckets by the words in its name (`Tree/Pine/Rock/Cliff/Bush/Grass/Flower/
+  Mushroom/Log/House/Ruin/Fence/Tent/Prop`) and `DressWorld` composes from BUCKETS, never
+  from model names. That is what lets it work against a pack whose contents can't be read
+  until it is imported — and any similar low-poly pack drops into the same slots. Absent
+  ⇒ `Available == false` ⇒ Kenney fallback, so the world always builds. Asset Store packs
+  ship **Standard-shader materials that render MAGENTA under URP** — `SetupMaterials()`
+  converts them (`_MainTex`→`_BaseMap`, `_Color`→`_BaseColor`) on every bootstrap.
+  Buildings stay a **collider box with the model parented inside** (renderer off): the box
+  is gameplay (blocks movement, and the combat x-ray fades what hides a creature), the
+  model is only the look.
 - `game/Assets/Editor` — `ProjectBootstrap` regenerates the ENTIRE scene, prefabs, URP
   config, and materials from code (scene is disposable; never hand-edit it). Includes
   `DressWorld()` (seeded forests/scatter/wilds sites, sunny lighting) and the district
