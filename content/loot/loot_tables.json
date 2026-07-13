@@ -6,18 +6,18 @@
     { "id": "lt_vermin", "gold": "1d4", "rolls": 1,
       "entries": [ { "weight": 90, "item": null }, { "weight": 10, "item": "torch" } ] },
     { "id": "lt_undead", "gold": "2d8", "rolls": 1,
-      "entries": [ { "weight": 60, "item": null }, { "weight": 20, "item": "shortsword" }, { "weight": 15, "item": "shortbow" }, { "weight": 5, "item": "potion_healing" } ] },
+      "entries": [ { "weight": 58, "item": null }, { "weight": 20, "item": "shortsword" }, { "weight": 15, "item": "shortbow" }, { "weight": 2, "item": "warhammer" }, { "weight": 5, "item": "potion_healing" } ] },
     { "id": "lt_kindled", "gold": "3d6", "rolls": 1,
-      "entries": [ { "weight": 55, "item": null }, { "weight": 25, "item": "mace" }, { "weight": 15, "item": "potion_healing" }, { "weight": 5, "item": "scale_mail" } ] },
+      "entries": [ { "weight": 52, "item": null }, { "weight": 25, "item": "mace" }, { "weight": 15, "item": "potion_healing" }, { "weight": 5, "item": "scale_mail" }, { "weight": 3, "item": "studded_leather" } ] },
     { "id": "lt_warehouse_cache", "gold": "6d6", "rolls": 2,
-      "entries": [ { "weight": 30, "item": "potion_healing" }, { "weight": 30, "item": "scale_mail" }, { "weight": 25, "item": "longsword" }, { "weight": 15, "item": "light_crossbow" } ] },
+      "entries": [ { "weight": 25, "item": "potion_healing" }, { "weight": 22, "item": "scale_mail" }, { "weight": 20, "item": "longsword" }, { "weight": 13, "item": "light_crossbow" }, { "weight": 12, "item": "rapier" }, { "weight": 8, "item": "studded_leather" } ] },
     { "id": "lt_sunken_vault", "gold": "10d6", "rolls": 2,
-      "entries": [ { "weight": 40, "item": "potion_healing" }, { "weight": 30, "item": "chain_mail" }, { "weight": 30, "item": "longsword" } ] },
+      "entries": [ { "weight": 28, "item": "potion_healing" }, { "weight": 20, "item": "chain_mail" }, { "weight": 18, "item": "longsword" }, { "weight": 14, "item": "greatsword" }, { "weight": 12, "item": "longbow" }, { "weight": 8, "item": "splint" } ] },
     { "id": "lt_beast_den", "gold": "1d6", "rolls": 1,
       "entries": [ { "weight": 80, "item": null }, { "weight": 20, "item": "potion_healing" } ] },
     { "id": "lt_goblin", "gold": "2d6", "rolls": 1,
-      "entries": [ { "weight": 65, "item": null }, { "weight": 20, "item": "shortbow" }, { "weight": 10, "item": "leather_armor" }, { "weight": 5, "item": "potion_healing" } ] },
+      "entries": [ { "weight": 63, "item": null }, { "weight": 20, "item": "shortbow" }, { "weight": 10, "item": "leather_armor" }, { "weight": 2, "item": "studded_leather" }, { "weight": 5, "item": "potion_healing" } ] },
     { "id": "lt_warcamp", "gold": "8d6", "rolls": 2,
-      "entries": [ { "weight": 35, "item": "potion_healing" }, { "weight": 30, "item": "longsword" }, { "weight": 20, "item": "scale_mail" }, { "weight": 15, "item": "chain_mail" } ] }
+      "entries": [ { "weight": 26, "item": "potion_healing" }, { "weight": 20, "item": "longsword" }, { "weight": 16, "item": "scale_mail" }, { "weight": 14, "item": "chain_mail" }, { "weight": 12, "item": "greataxe" }, { "weight": 7, "item": "warhammer" }, { "weight": 5, "item": "half_plate" } ] }
   ]
 }

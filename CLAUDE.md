@@ -45,6 +45,15 @@ Player log (first place to look when the user reports bugs):
   and attack at −1 to hit; PCs stay pure SRD, XP is untouched. Stat blocks in
   `Monsters.cs` stay canonical (ContentValidationTests pins them to the JSON) — retune
   the knobs, never the blocks. `DifficultyTests` pins the current values.
+  **Levelling lives in `Progression.cs`** (the PC-side counterpart to `Difficulty.cs`): the
+  XP table, hit dice and the 20 cap stay pure SRD, but the ability-point grant is a house
+  rule — **one point per level, two at 4th** — because SRD's single ASI at 4th is one
+  choice in a 1–5 campaign. `ProgressionTests` pins it. XP enters a character through
+  **`GameDirector.ServerGrantXp` and nowhere else** (quests AND kills; combat used to call
+  `Sheet.GainXp` directly and never level anyone). Companions auto-spend their points on
+  `Progression.PrimaryAbility`. **Loot gets better as the campaign deepens** (`LootLibrary`,
+  mirrored in `content/loot`): rapier/studded leather mid-campaign, greatsword/splint in the
+  vault, greataxe/half plate in the warcamp — `LootProgressionTests` pins that gradient.
   **Party roles live in `PartyComposition.cs`**: the sellswords Veresk musters are picked
   by ROLE, never by class order — a healer first, then damage dealers of two *different*
   classes, counting whoever is already being played (so nobody is handed a second cleric
@@ -107,6 +116,16 @@ Player log (first place to look when the user reports bugs):
   stash, every item showing damage/protection and compared against what is equipped
   ("upgrade: +2 AC"). Client display needs the derived stats, which the sheet cannot give
   it (server-only) — `PlayerCharacterHolder` mirrors them as SyncVars on a slow poll.
+- `ProgressUI.cs` — **XP bar** above the hotbar (level, fraction to next, XP either side, MAX
+  at the cap) and the **level-up screen (L)** that spends ability points; each row says what
+  the ability buys *this* character, including that an odd score buys nothing until the next
+  point completes the modifier. Client asks (`CmdSpendAbilityPoint`), rules lib decides.
+- **Item icons** — `Editor/ItemIconBaker.cs` renders each item's OWN model
+  (`GameItem.HandModel` → `Resources/Weapons`) to `Resources/ItemIcons/<id>.png` during
+  bootstrap; armour has no model in any CC0 pack, so it is drawn in code **from the armour
+  KIND** (light/medium/heavy + AC), which means new gear needs no new art. `ItemIcon.Get`
+  caches and returns null when art is missing (rows fall back to text). The mace shows an axe
+  because the pack has no mace — the icon is honest about what the hand actually holds.
 - **Selling** — `CmdSellItem` sells ONE stash item at its `GameDirector.SellValue` (half
   list price); `CmdSellAll` still dumps the salvage pile (and keeps potions). The Sell
   buttons appear both in the vendor panel and on every bag row, and they need a buyer in
@@ -213,6 +232,13 @@ Player log (first place to look when the user reports bugs):
 - **The initiative panel sits BELOW the minimap** (`MiniMap.MapRect.yMax`), not in the
   top-right corner — pinned to the corner it drew straight through the map. Any new
   top-right HUD must dock off the same anchor, and cap its height with a scroll view.
+- **`compile-check.ps1` does NOT compile `Assets/Editor`** — only the runtime scripts. An
+  editor-only error (a missing `using RadiantPool.Rules`) sails past it and only surfaces as
+  a failed bootstrap. After editing anything under `Assets/Editor`, run the bootstrap.
+- **Run Unity with an ABSOLUTE `-projectPath`**: the shell's working directory persists
+  between tool calls, so a stray `cd` turns `-projectPath game` into `<cwd>/game` and Unity
+  exits 1 ("Couldn't set project path") — or worse, writes `boot.log` into `Assets/` where it
+  gets imported as an asset.
 - **A `CharacterController` eats direct `transform.position` writes** — the body is back
   where it started on the next frame. Park it (`cc.enabled = false`), move, re-enable
   (`CombatFx.GlideRoutine`, `GameDirector.Warp`). A "teleport" that silently does nothing

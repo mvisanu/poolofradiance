@@ -1,5 +1,6 @@
 using System.IO;
 using RadiantPool.Game;
+using RadiantPool.Rules;   // ArmorKind: armour icons are drawn from the kind, not the id
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
@@ -128,18 +129,43 @@ namespace RadiantPool.EditorTools
 
         // ---------------- code-drawn icons (no model exists for these) ----------------
 
-        private static Texture2D DrawIcon(GameItem item) => item.Id switch
+        /// <summary>Armour is drawn from its KIND, not its id, so a new suit added to the loot
+        /// tables gets an icon with no new code: light is stitched leather, medium is scale,
+        /// heavy is mail, and the better the AC within a kind, the finer the metal (studded
+        /// leather reads darker than leather, splint brighter than chain).</summary>
+        private static Texture2D DrawIcon(GameItem item)
         {
-            "leather_armor" => Armor(new Color32(0x8A, 0x5A, 0x33, 0xFF),
-                                     new Color32(0x53, 0x33, 0x1B, 0xFF), Weave.Stitched),
-            "scale_mail" => Armor(new Color32(0xA8, 0xB0, 0xB8, 0xFF),
-                                  new Color32(0x5D, 0x66, 0x70, 0xFF), Weave.Scaled),
-            "chain_mail" => Armor(new Color32(0x8E, 0x96, 0xA0, 0xFF),
-                                  new Color32(0x4C, 0x53, 0x5B, 0xFF), Weave.Ringed),
-            "torch" => Torch(),
-            "potion_healing" => Potion(),
-            _ => null
-        };
+            if (item.Id == "torch") return Torch();
+            if (item.Id == "potion_healing") return Potion();
+            if (item.Slot != ItemSlot.Armor || item.Armor == null) return null;
+
+            switch (item.Armor.Kind)
+            {
+                case ArmorKind.Light:
+                {
+                    float t = Mathf.InverseLerp(11f, 12f, item.Armor.BaseAc);
+                    var hide = Color.Lerp(new Color32(0x8A, 0x5A, 0x33, 0xFF),
+                                          new Color32(0x6A, 0x42, 0x26, 0xFF), t);
+                    return Armor(hide, new Color32(0x45, 0x2A, 0x16, 0xFF), Weave.Stitched);
+                }
+                case ArmorKind.Medium:
+                {
+                    float t = Mathf.InverseLerp(14f, 15f, item.Armor.BaseAc);
+                    var plate = Color.Lerp(new Color32(0xA8, 0xB0, 0xB8, 0xFF),
+                                           new Color32(0xC6, 0xCD, 0xD4, 0xFF), t);
+                    return Armor(plate, new Color32(0x5D, 0x66, 0x70, 0xFF), Weave.Scaled);
+                }
+                case ArmorKind.Heavy:
+                {
+                    float t = Mathf.InverseLerp(16f, 17f, item.Armor.BaseAc);
+                    var steel = Color.Lerp(new Color32(0x8E, 0x96, 0xA0, 0xFF),
+                                           new Color32(0xB2, 0xBA, 0xC4, 0xFF), t);
+                    return Armor(steel, new Color32(0x4C, 0x53, 0x5B, 0xFF), Weave.Ringed);
+                }
+                default:
+                    return null;
+            }
+        }
 
         private enum Weave { Stitched, Scaled, Ringed }
 

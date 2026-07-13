@@ -62,12 +62,15 @@ namespace RadiantPool.Game
 
         public bool UsableBy(CharacterClass c) => Slot switch
         {
+            // SRD proficiencies: the wizard's two, the rogue's finesse-and-bows, and the
+            // cleric's simple/blunt list — a warhammer is a cleric's upgrade over the mace,
+            // a rapier is the rogue's over the shortsword. A fighter uses anything.
             ItemSlot.Weapon => c switch
             {
                 CharacterClass.Wizard => Id is "dagger" or "quarterstaff",
                 CharacterClass.Rogue => Finesse || Id is "shortbow" or "light_crossbow",
-                CharacterClass.Cleric => Id is "mace" or "quarterstaff" or "light_crossbow"
-                                          or "dagger",
+                CharacterClass.Cleric => Id is "mace" or "warhammer" or "quarterstaff"
+                                          or "light_crossbow" or "dagger",
                 _ => true
             },
             ItemSlot.Armor => c switch
@@ -109,12 +112,35 @@ namespace RadiantPool.Game
                 new GameItem { Id = "shortbow", Name = "Shortbow", Slot = ItemSlot.Weapon,
                     Damage = "1d6", DamageType = DamageType.Piercing, RangeFeet = 80,
                     HandModel = "bow" },
+                // The gear the deeper zones pay out (see LootLibrary): a rogue's rapier, a
+                // cleric's hammer, the two-handers, and the armour that beats chain.
+                new GameItem { Id = "rapier", Name = "Rapier", Slot = ItemSlot.Weapon,
+                    Damage = "1d8", DamageType = DamageType.Piercing, Finesse = true,
+                    HandModel = "sword_1handed" },
+                new GameItem { Id = "warhammer", Name = "Warhammer", Slot = ItemSlot.Weapon,
+                    Damage = "1d8", DamageType = DamageType.Bludgeoning,
+                    HandModel = "axe_1handed" },
+                new GameItem { Id = "greatsword", Name = "Greatsword", Slot = ItemSlot.Weapon,
+                    Damage = "2d6", DamageType = DamageType.Slashing,
+                    HandModel = "sword_2handed" },
+                new GameItem { Id = "greataxe", Name = "Greataxe", Slot = ItemSlot.Weapon,
+                    Damage = "1d12", DamageType = DamageType.Slashing,
+                    HandModel = "axe_2handed" },
+                new GameItem { Id = "longbow", Name = "Longbow", Slot = ItemSlot.Weapon,
+                    Damage = "1d8", DamageType = DamageType.Piercing, RangeFeet = 150,
+                    HandModel = "bow" },
                 new GameItem { Id = "leather_armor", Name = "Leather Armor", Slot = ItemSlot.Armor,
                     Armor = ArmorDefinition.Leather },
+                new GameItem { Id = "studded_leather", Name = "Studded Leather", Slot = ItemSlot.Armor,
+                    Armor = ArmorDefinition.StuddedLeather },
                 new GameItem { Id = "scale_mail", Name = "Scale Mail", Slot = ItemSlot.Armor,
                     Armor = ArmorDefinition.ScaleMail },
+                new GameItem { Id = "half_plate", Name = "Half Plate", Slot = ItemSlot.Armor,
+                    Armor = ArmorDefinition.HalfPlate },
                 new GameItem { Id = "chain_mail", Name = "Chain Mail", Slot = ItemSlot.Armor,
                     Armor = ArmorDefinition.ChainMail },
+                new GameItem { Id = "splint", Name = "Splint", Slot = ItemSlot.Armor,
+                    Armor = ArmorDefinition.Splint },
                 new GameItem { Id = "shield", Name = "Shield", Slot = ItemSlot.Shield },
                 new GameItem { Id = "potion_healing", Name = "Potion of Healing",
                     Slot = ItemSlot.Consumable },

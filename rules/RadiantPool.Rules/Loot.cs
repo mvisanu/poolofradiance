@@ -60,7 +60,13 @@ namespace RadiantPool.Rules
     }
 
     /// <summary>In-code copies of the v1 tables (content JSON is the authoring source;
-    /// ContentValidationTests keeps them aligned by id).</summary>
+    /// ContentValidationTests keeps them aligned by id).
+    ///
+    /// The tables get BETTER as the campaign deepens, so levelling pays out in gear you can
+    /// actually equip and not just a bigger number: the roadside fights hand out the starting
+    /// kit, the mid caches carry rapiers and studded leather, and the vault and the warcamp —
+    /// the last places you reach — are where a greatsword, half plate or splint comes from.
+    /// LootTests pins that gradient; if a table is retuned, the ceiling must not fall.</summary>
     public static class LootLibrary
     {
         public static readonly IReadOnlyDictionary<string, LootTable> All = Build();
@@ -76,19 +82,25 @@ namespace RadiantPool.Rules
                 new LootTable("lt_vermin", "1d4", 1, new (int, string?)[]
                     { (90, null), (10, "torch") }),
                 new LootTable("lt_undead", "2d8", 1, new (int, string?)[]
-                    { (60, null), (20, "shortsword"), (15, "shortbow"), (5, "potion_healing") }),
+                    { (58, null), (20, "shortsword"), (15, "shortbow"), (2, "warhammer"),
+                      (5, "potion_healing") }),
                 new LootTable("lt_kindled", "3d6", 1, new (int, string?)[]
-                    { (55, null), (25, "mace"), (15, "potion_healing"), (5, "scale_mail") }),
+                    { (52, null), (25, "mace"), (15, "potion_healing"), (5, "scale_mail"),
+                      (3, "studded_leather") }),
                 new LootTable("lt_warehouse_cache", "6d6", 2, new (int, string?)[]
-                    { (30, "potion_healing"), (30, "scale_mail"), (25, "longsword"), (15, "light_crossbow") }),
+                    { (25, "potion_healing"), (22, "scale_mail"), (20, "longsword"),
+                      (13, "light_crossbow"), (12, "rapier"), (8, "studded_leather") }),
                 new LootTable("lt_sunken_vault", "10d6", 2, new (int, string?)[]
-                    { (40, "potion_healing"), (30, "chain_mail"), (30, "longsword") }),
+                    { (28, "potion_healing"), (20, "chain_mail"), (18, "longsword"),
+                      (14, "greatsword"), (12, "longbow"), (8, "splint") }),
                 new LootTable("lt_beast_den", "1d6", 1, new (int, string?)[]
                     { (80, null), (20, "potion_healing") }),
                 new LootTable("lt_goblin", "2d6", 1, new (int, string?)[]
-                    { (65, null), (20, "shortbow"), (10, "leather_armor"), (5, "potion_healing") }),
+                    { (63, null), (20, "shortbow"), (10, "leather_armor"), (2, "studded_leather"),
+                      (5, "potion_healing") }),
                 new LootTable("lt_warcamp", "8d6", 2, new (int, string?)[]
-                    { (35, "potion_healing"), (30, "longsword"), (20, "scale_mail"), (15, "chain_mail") }),
+                    { (26, "potion_healing"), (20, "longsword"), (16, "scale_mail"),
+                      (14, "chain_mail"), (12, "greataxe"), (7, "warhammer"), (5, "half_plate") }),
             };
             return tables.ToDictionary(t => t.Id);
         }

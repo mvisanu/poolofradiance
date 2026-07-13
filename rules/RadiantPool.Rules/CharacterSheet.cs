@@ -23,10 +23,16 @@ namespace RadiantPool.Rules
             new ArmorDefinition("unarmored", "Unarmored", ArmorKind.None, 10, int.MaxValue);
         public static readonly ArmorDefinition Leather =
             new ArmorDefinition("leather", "Leather", ArmorKind.Light, 11, int.MaxValue);
+        public static readonly ArmorDefinition StuddedLeather =
+            new ArmorDefinition("studded_leather", "Studded Leather", ArmorKind.Light, 12, int.MaxValue);
         public static readonly ArmorDefinition ScaleMail =
             new ArmorDefinition("scale_mail", "Scale Mail", ArmorKind.Medium, 14, 2);
+        public static readonly ArmorDefinition HalfPlate =
+            new ArmorDefinition("half_plate", "Half Plate", ArmorKind.Medium, 15, 2);
         public static readonly ArmorDefinition ChainMail =
             new ArmorDefinition("chain_mail", "Chain Mail", ArmorKind.Heavy, 16, 0);
+        public static readonly ArmorDefinition Splint =
+            new ArmorDefinition("splint", "Splint", ArmorKind.Heavy, 17, 0);
     }
 
     /// <summary>A player character: identity + build + derived stats. Extends Creature with

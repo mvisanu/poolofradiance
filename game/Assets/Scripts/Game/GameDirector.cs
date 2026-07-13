@@ -47,7 +47,10 @@ namespace RadiantPool.Game
         {
             { "dagger", 1 }, { "shortsword", 5 }, { "longsword", 7 }, { "mace", 2 },
             { "quarterstaff", 1 }, { "light_crossbow", 12 }, { "shortbow", 12 },
-            { "leather_armor", 5 }, { "scale_mail", 25 }, { "chain_mail", 37 },
+            { "rapier", 12 }, { "warhammer", 7 }, { "greatsword", 25 }, { "greataxe", 15 },
+            { "longbow", 25 },
+            { "leather_armor", 5 }, { "studded_leather", 22 }, { "scale_mail", 25 },
+            { "half_plate", 375 }, { "chain_mail", 37 }, { "splint", 100 },
             { "shield", 5 }, { "potion_healing", 25 }, { "torch", 1 }
         };
         public const int PotionBuyPrice = 50;
@@ -58,8 +61,10 @@ namespace RadiantPool.Game
             new System.Collections.Generic.List<(string, int)>
         {
             ("dagger", 2), ("mace", 5), ("shortsword", 10), ("longsword", 15),
-            ("shortbow", 25), ("light_crossbow", 25),
-            ("leather_armor", 10), ("scale_mail", 50), ("chain_mail", 75), ("shield", 10)
+            ("warhammer", 15), ("rapier", 25), ("greataxe", 30), ("greatsword", 50),
+            ("shortbow", 25), ("light_crossbow", 25), ("longbow", 50),
+            ("leather_armor", 10), ("studded_leather", 45), ("scale_mail", 50),
+            ("chain_mail", 75), ("splint", 200), ("half_plate", 750), ("shield", 10)
         };
 
         public string LocalNotice { get; private set; } = "";
