@@ -64,6 +64,11 @@ Player log (first place to look when the user reports bugs):
   above it so the battlefield stays visible. In combat: click enemy = attack (walks
   into range first), click ground = move, Space = end turn, **WASD/middle-drag pans the
   camera and F recentres** (the grid owns movement, so those keys are free).
+  `OrbitCamera` **x-rays whatever hides a combatant**: every unit on the board gets a
+  sight line in combat (just the player out of it), and any environment renderer blocking
+  one fades to a transparent clone of its own materials, shadows off. Kenney props have no
+  colliders, so this tests renderer BOUNDS, not raycasts — and `bounds.Contains` is what
+  catches a monster spawned *inside* a warehouse (encounter boxes overlap the buildings).
 - **Wayfinding** — the player must always know what to do and where. `QuestTracker` =
   quest card top-left (active quest + `[x]/[ ]` checklist of what is left), centre banner,
   big gold steering arrow above the hotbar (rotated into camera space: up = walk forward),
