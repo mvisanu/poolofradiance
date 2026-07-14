@@ -32,6 +32,20 @@ Stop-Process -Id $clientProc.Id -Force -ErrorAction SilentlyContinue
 Stop-Process -Id $hostProc.Id -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 
+# Solo recruitment gets its own fresh session: it reproduces a completed campaign after
+# session-owned companions have disappeared, then proves Veresk still offers and spawns 3.
+Write-Host "Starting solo recruitment instance (-recruittest)..."
+$recruitLog = Join-Path $logDir "recruit.log"
+Remove-Item $recruitLog -ErrorAction SilentlyContinue
+$recruitSave = Join-Path $logDir "recruitsave"
+Remove-Item -Recurse -Force $recruitSave -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $recruitSave | Out-Null
+$recruitProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Dara","-autohost","-recruittest","-savedir",$recruitSave,"-logFile",$recruitLog -PassThru
+Start-Sleep -Seconds 14
+Stop-Process -Id $recruitProc.Id -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+$recruitText = Get-Content $recruitLog -Raw
+
 # -attacktest gets its OWN host: it starts a real encounter, and a fight running underneath
 # the sell/level checks would fight them for the turn clock. One click on the FURTHEST enemy
 # must both close the distance and land the blow.
@@ -67,6 +81,8 @@ $checks = @(
     @{ Name = "no failed weapon visual assertion"; Ok = $hostText -notmatch "\[WeaponTest\] FAIL" },
     @{ Name = "armed combat NPC weapons are visible"; Ok = $fightText -match "\[WeaponTest\] PASS - combat NPCs" },
     @{ Name = "no failed combat weapon assertion"; Ok = $fightText -notmatch "\[WeaponTest\] FAIL" },
+    @{ Name = "post-campaign solo player can hire three NPC helpers"; Ok = $recruitText -match "\[RecruitTest\] PASS" },
+    @{ Name = "no failed solo recruitment assertion"; Ok = $recruitText -notmatch "\[RecruitTest\] FAIL" },
     @{ Name = "one click on a distant enemy closes in and attacks"; Ok = $fightText -match "\[AttackTest\] PASS" },
     @{ Name = "no failed attack assertion";        Ok = $fightText -notmatch "\[AttackTest\] FAIL" },
     @{ Name = "no NullReference in combat log";    Ok = $fightText -notmatch "NullReferenceException" }
@@ -77,6 +93,6 @@ foreach ($c in $checks) {
     if ($c.Ok) { Write-Host "  PASS  $($c.Name)" -ForegroundColor Green }
     else { Write-Host "  FAIL  $($c.Name)" -ForegroundColor Red; $failed++ }
 }
-Write-Host "Logs: $hostLog | $clientLog | $fightLog"
+Write-Host "Logs: $hostLog | $clientLog | $recruitLog | $fightLog"
 if ($failed -gt 0) { exit 1 }
 Write-Host "Smoke test passed - two instances hosted, joined, and spawned characters." -ForegroundColor Green

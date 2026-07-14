@@ -38,6 +38,17 @@ namespace RadiantPool.Game
 
         private bool _open;
 
+        /// <summary>How many sellswords Veresk can add to the party right now. This is
+        /// deliberately independent of quest/muster state: companions are session-owned,
+        /// so a solo player loading any campaign state must be able to refill the party.</summary>
+        public static int AvailableRecruitSlots()
+        {
+            int partySize = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .Count(p => p.ClassIndex.Value >= 0);
+            return Mathf.Max(0,
+                RadiantPool.Rules.PartyComposition.MaxPartySize - partySize);
+        }
+
         private Transform LocalPlayer()
         {
             var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
@@ -84,15 +95,24 @@ namespace RadiantPool.Game
             // Sellswords: offered whenever the party is short of four. The roster they
             // bring is PartyComposition's (a healer, then two damage classes) — say so, so
             // the player knows the hire covers what the party is missing.
-            int partySize = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
-                .Count(p => p.ClassIndex.Value >= 0);
-            int free = RadiantPool.Rules.PartyComposition.MaxPartySize - partySize;
-            void RecruitButton()
+            int free = AvailableRecruitSlots();
+            bool RecruitButton()
             {
                 if (free > 0 && GUILayout.Button(
-                        $"We could use sellswords. (hire {free}: a healer and swords)"))
-                { director.CmdRecruitCompanions(); _open = false; }
+                        $"We could use sellswords. (hire {free}: support and damage)"))
+                {
+                    director.CmdRecruitCompanions();
+                    _open = false;
+                    return true;
+                }
+                return false;
             }
+
+            // Always available while there is room — before the quest-state branches.
+            // Previously this was only called from Muster and Active, so it vanished at
+            // turn-in and forever after campaign completion even though companions vanish
+            // between sessions and the player was solo again.
+            if (RecruitButton()) { GUILayout.EndArea(); return; }
 
             if ((QuestState)director.MusterState.Value == QuestState.Active)
             {
@@ -101,7 +121,6 @@ namespace RadiantPool.Game
                     "Prove yourselves at the Old Docks and the Council will pay in gold and gratitude.\"");
                 if (GUILayout.Button("We'll clear the docks.", Theme.BtnPrimary))
                 { director.CmdDialogueChoice("muster_accept"); _open = false; }
-                RecruitButton();
                 GUILayout.EndArea();
                 return;
             }
@@ -115,7 +134,6 @@ namespace RadiantPool.Game
                     Say(i < ZoneBriefs.Length ? ZoneBriefs[i]
                         : $"\"Clear {director.Zones[i].DisplayName}, then return to me.\"");
                     if (GUILayout.Button("We're on it.")) _open = false;
-                    RecruitButton();
                     GUILayout.EndArea();
                     return;
                 }

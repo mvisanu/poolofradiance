@@ -107,6 +107,8 @@ namespace RadiantPool.Game
                 StartCoroutine(AttackSelfTest());
             if (System.Array.IndexOf(args, "-weapontest") >= 0)
                 StartCoroutine(WeaponVisualSelfTest());
+            if (System.Array.IndexOf(args, "-recruittest") >= 0)
+                StartCoroutine(SoloRecruitmentSelfTest());
 
             if (!SaveSystem.Exists) return;
             var save = SaveSystem.Read();
@@ -566,6 +568,44 @@ namespace RadiantPool.Game
                       $"{visibleNpcs}/{armedNpcs.Length} visible");
         }
 
+        /// <summary>Regression for Veresk's disappearing solo-help option. Reproduces the
+        /// loaded post-campaign state where companions from the previous session are gone,
+        /// verifies three slots are still offered, and hires exactly three helpers.</summary>
+        private System.Collections.IEnumerator SoloRecruitmentSelfTest()
+        {
+            yield return new WaitForSeconds(8f);
+
+            var players = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .Where(p => !p.IsCompanion && p.Sheet != null).ToArray();
+            if (players.Length != 1)
+            {
+                Debug.Log($"[RecruitTest] FAIL - expected one solo player, found {players.Length}");
+                yield break;
+            }
+
+            // Match the user's save: muster and every quest are complete, but the player
+            // keeps clearing optional encounters under standing orders.
+            MusterState.Value = (int)QuestState.Completed;
+            CampaignComplete.Value = true;
+            for (int i = 0; i < ZoneStates.Count; i++)
+                ZoneStates[i] = (int)QuestState.Completed;
+
+            int offered = NpcInteract.AvailableRecruitSlots();
+            CmdRecruitCompanions();
+            yield return new WaitForSeconds(0.75f);
+
+            int companions = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .Count(p => p.IsCompanion && p.Sheet != null);
+            int party = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .Count(p => p.Sheet != null);
+            bool pass = offered == 3 && companions == 3
+                        && party == RadiantPool.Rules.PartyComposition.MaxPartySize
+                        && NpcInteract.AvailableRecruitSlots() == 0;
+            Debug.Log($"[RecruitTest] {(pass ? "PASS" : "FAIL")} - post-campaign solo " +
+                      $"offer {offered} slot(s), spawned {companions} companion(s), " +
+                      $"party {party}/{RadiantPool.Rules.PartyComposition.MaxPartySize}");
+        }
+
         /// <summary>Unattended combat check (`RadiantPool.exe -autohost -attacktest`, asserted
         /// by scripts/smoke-test.ps1): start a real encounter, then drive ONE left-click on the
         /// enemy standing FURTHEST away and prove the fighter closes the distance and swings —
@@ -581,6 +621,11 @@ namespace RadiantPool.Game
                 .Where(t => !t.Consumed && t.MonsterIds.Length > 0
                             && !ConsumedEncounterIds.Contains(t.EncounterId))
                 .OrderByDescending(t => t.MonsterIds.Any(CombatManager.HasWeaponLoadout))
+                // Deterministic, compact fight: two armed skulkers plus one rat. Scene
+                // enumeration order is undefined and sometimes picked a five-enemy temple
+                // group whose AI turns consumed the test's entire timeout.
+                .ThenBy(t => t.EncounterId == "enc_docks_01" ? 0 : 1)
+                .ThenBy(t => t.MonsterIds.Length)
                 .FirstOrDefault();
             var combat = CombatManager.Instance;
             if (holder == null || fight == null || combat == null

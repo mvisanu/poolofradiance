@@ -634,6 +634,13 @@ namespace RadiantPool.Game
         {
             error = "";
             if (!InCombat.Value || _engine == null) { error = "No combat in progress."; return null; }
+            // A listen-server may execute its own ServerRpc locally; FishNet does not
+            // consistently inject the sender connection on that direct host path. Remote
+            // RPCs always carry their connection, so only a genuinely local null is
+            // resolved here and the same owner check below remains authoritative.
+            if (conn == null && IsClientStarted && LocalConnection != null
+                && LocalConnection.IsValid)
+                conn = LocalConnection;
             var active = _engine.ActiveCreature;
             var unit = _server[active.Id];
             if (unit.Player == null || unit.Player.Owner != conn)
