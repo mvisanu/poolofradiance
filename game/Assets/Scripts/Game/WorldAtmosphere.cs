@@ -17,6 +17,10 @@ namespace RadiantPool.Game
         // slow enough that a district does not visibly strobe between moods.
         public const float DayLengthRealSeconds = 24f * 60f;
         public const float HoursPerRealSecond = 24f / DayLengthRealSeconds;
+        // A carried torch should make the party readable without flattening the night.
+        // Unity point lights have a hard physical range, so this is also the visibility
+        // circle's authoritative radius (nine 5-foot combat cells).
+        public const float PartyTorchRadius = 13.5f;
 
         public static float NightWeight => Instance != null ? Instance._nightWeight : 0f;
         public static string ClockLabel => Instance != null
@@ -30,9 +34,24 @@ namespace RadiantPool.Game
         public float FogDensity => RenderSettings.fogDensity;
         public float AverageLampIntensity => _lamps.Count == 0
             ? 0f : _lamps.Keys.Where(l => l != null).Select(l => l.intensity).DefaultIfEmpty().Average();
+        public float PartyTorchIntensity => _partyTorch != null && _partyTorch.enabled
+            ? _partyTorch.intensity : 0f;
+        public float PartyTorchRange => _partyTorch != null ? _partyTorch.range : 0f;
+        public float PartyTorchHorizontalOffset
+        {
+            get
+            {
+                if (_partyTorch == null || _partyAnchor == null) return float.PositiveInfinity;
+                Vector3 delta = _partyTorch.transform.position - _partyAnchor.position;
+                delta.y = 0f;
+                return delta.magnitude;
+            }
+        }
 
         private Light _sun;
         private Light _moon;
+        private Light _partyTorch;
+        private Transform _partyAnchor;
         private Material _sky;
         private ParticleSystem _motes;
         private readonly Dictionary<Light, float> _lamps = new Dictionary<Light, float>();
@@ -40,6 +59,7 @@ namespace RadiantPool.Game
         private float _nightWeight;
         private float _nextReferenceScan;
         private bool _ready;
+        private float _nextPartyScan;
 
         private static readonly Color DaySky = new Color(0.26f, 0.30f, 0.34f);
         private static readonly Color NightSky = new Color(0.050f, 0.068f, 0.115f);
@@ -91,6 +111,7 @@ namespace RadiantPool.Game
                     + hourDelta * Mathf.Min(1f, Time.unscaledDeltaTime * 2f), 24f);
             _ready = true;
             ApplyAtmosphere(_visualHour);
+            UpdatePartyTorch();
 
             if (!_syncLogged && GameDirector.Instance != null
                 && GameDirector.Instance.IsClientStarted)
@@ -134,6 +155,53 @@ namespace RadiantPool.Game
                     _lamps[light] = Mathf.Max(1.6f, light.intensity);
 
             if (_lamps.Count == 0) CreateFallbackLanterns();
+        }
+
+        private void CreatePartyTorch()
+        {
+            var root = new GameObject("Party Torch Light");
+            _partyTorch = root.AddComponent<Light>();
+            _partyTorch.type = LightType.Point;
+            _partyTorch.color = new Color(1f, 0.50f, 0.22f);
+            _partyTorch.range = PartyTorchRadius;
+            _partyTorch.intensity = 0f;
+            _partyTorch.shadows = LightShadows.Soft;
+            _partyTorch.shadowStrength = 0.48f;
+            _partyTorch.shadowBias = 0.06f;
+            _partyTorch.renderMode = LightRenderMode.ForcePixel;
+            _partyTorch.enabled = false;
+        }
+
+        /// <summary>The torch is client-local: each player sees a visibility circle around
+        /// their own party leader. Companions already cluster around that leader, while
+        /// co-op players who split up retain their own useful pool of light.</summary>
+        private void UpdatePartyTorch()
+        {
+            if (_partyTorch == null) CreatePartyTorch();
+            if (_partyAnchor == null || Time.unscaledTime >= _nextPartyScan)
+            {
+                _nextPartyScan = Time.unscaledTime + 0.4f;
+                var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                    .FirstOrDefault(p => p.IsOwner);
+                _partyAnchor = holder != null ? holder.transform : null;
+            }
+
+            if (_partyAnchor == null)
+            {
+                _partyTorch.enabled = false;
+                return;
+            }
+
+            // Slightly above shoulder height spreads carried fire into a broad circular
+            // pool instead of overexposing the character's head. The quick exponential
+            // follow avoids lag without snapping during network correction.
+            Vector3 desired = _partyAnchor.position + Vector3.up * 2.35f;
+            float follow = 1f - Mathf.Exp(-14f * Time.unscaledDeltaTime);
+            if (!_partyTorch.enabled)
+                _partyTorch.transform.position = desired;
+            else
+                _partyTorch.transform.position = Vector3.Lerp(
+                    _partyTorch.transform.position, desired, follow);
         }
 
         private void CreateFallbackLanterns()
@@ -252,6 +320,19 @@ namespace RadiantPool.Game
                 lamp.color = Color.Lerp(Amber, new Color(1f, 0.33f, 0.18f), combatWeight * 0.35f);
             }
 
+            if (_partyTorch != null)
+            {
+                // Off in full daylight; increasingly useful through dusk; warm and bright
+                // at night. Range never changes, preserving the promised visibility circle.
+                float torchWeight = Mathf.SmoothStep(0f, 1f,
+                    Mathf.InverseLerp(0.08f, 0.72f, _nightWeight));
+                _partyTorch.enabled = _partyAnchor != null && torchWeight > 0.01f;
+                _partyTorch.range = PartyTorchRadius;
+                _partyTorch.intensity = Mathf.Lerp(0f, combat ? 5.50f : 5.00f, torchWeight);
+                _partyTorch.color = Color.Lerp(new Color(1f, 0.64f, 0.32f),
+                    new Color(1f, 0.44f, 0.18f), combatWeight * 0.55f);
+            }
+
             if (_motes != null)
             {
                 var main = _motes.main;
@@ -281,6 +362,7 @@ namespace RadiantPool.Game
             float dayMoon = MoonIntensity;
             float dayFog = FogDensity;
             float dayLamps = AverageLampIntensity;
+            float dayTorch = PartyTorchIntensity;
 
             director.ServerSetWorldHour(0f);
             yield return new WaitForSeconds(1.5f);
@@ -288,6 +370,9 @@ namespace RadiantPool.Game
             float nightMoon = MoonIntensity;
             float nightFog = FogDensity;
             float nightLamps = AverageLampIntensity;
+            float nightTorch = PartyTorchIntensity;
+            float torchRange = PartyTorchRange;
+            float torchOffset = PartyTorchHorizontalOffset;
             float nightAudio = GameAudio.Instance != null ? GameAudio.Instance.NightAmbienceLevel : 0f;
             director.ServerSaveCampaign();
             var persisted = SaveSystem.Read();
@@ -298,10 +383,14 @@ namespace RadiantPool.Game
                         && nightSun < 0.05f && nightMoon > 0.25f
                         && nightFog > dayFog + 0.01f
                         && dayLamps > 0f && nightLamps > dayLamps * 4f
+                        && dayTorch < 0.05f && nightTorch > 4.5f
+                        && Mathf.Abs(torchRange - PartyTorchRadius) < 0.05f
+                        && torchOffset < 0.35f
                         && nightAudio > 0.12f && PhaseLabel == "NIGHT" && timePersisted;
             Debug.Log($"[AtmosphereTest] {(pass ? "PASS" : "FAIL")} - " +
-                      $"noon sun {daySun:0.00}/moon {dayMoon:0.00}/fog {dayFog:0.000}/lamps {dayLamps:0.00}; " +
-                      $"midnight sun {nightSun:0.00}/moon {nightMoon:0.00}/fog {nightFog:0.000}/lamps {nightLamps:0.00}, " +
+                      $"noon sun {daySun:0.00}/moon {dayMoon:0.00}/fog {dayFog:0.000}/lamps {dayLamps:0.00}/torch {dayTorch:0.00}; " +
+                      $"midnight sun {nightSun:0.00}/moon {nightMoon:0.00}/fog {nightFog:0.000}/lamps {nightLamps:0.00}/" +
+                      $"torch {nightTorch:0.00} at {torchRange:0.0}m radius ({torchOffset:0.00}m offset), " +
                       $"night audio {nightAudio:0.00}, clock {ClockLabel} {PhaseLabel}, " +
                       $"save {(timePersisted ? "persisted" : "MISSING")}");
         }
