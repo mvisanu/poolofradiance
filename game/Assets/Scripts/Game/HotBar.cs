@@ -24,6 +24,7 @@ namespace RadiantPool.Game
 
         private float _slot = MaxSlot;
         private Texture2D _hideIcon;
+        private GUIStyle _hpLabel;
 
         private static GUIContent IconOnly(string id, string fallback)
         {
@@ -50,7 +51,7 @@ namespace RadiantPool.Game
             var director = GameDirector.Instance;
             if (holder == null || director == null) { BarRect = default; return; }
 
-            if (Ui.BarCollapsed) { DrawHandle(); return; }
+            if (Ui.BarCollapsed) { DrawHandle(holder); return; }
 
             var combat = CombatManager.Instance;
             bool inCombat = combat != null && combat.InCombat.Value;
@@ -77,7 +78,7 @@ namespace RadiantPool.Game
 
             float w = slots * (_slot + 4f) + chrome;
             var rect = new Rect(Ui.W / 2f - w / 2f, Ui.H - _slot - 38f, w, _slot + 16f);
-            BarRect = rect;
+            BarRect = DrawHealth(holder, rect);
 
             GUILayout.BeginArea(rect, Theme.PanelStyle);
             GUILayout.BeginHorizontal();
@@ -169,11 +170,14 @@ namespace RadiantPool.Game
                         rect.y + potionRect.yMax - 16f, 24f, 16f),
                     $"<b><color=#f2ca50>{potions}</color></b>", Theme.Caps);
 
-            if (GUI.tooltip.Length > 0)
+            // Only the BAR's own hints, and only above the health strip. GUI.tooltip is global
+            // to the frame — the bar was printing the MINIMAP's "Show map (M)" whenever that
+            // was the last control hovered, straight across the health readout.
+            if (GUI.tooltip.Length > 0 && rect.Contains(Ui.Mouse))
             {
                 var tipStyle = new GUIStyle(Theme.Caps)
                     { alignment = TextAnchor.MiddleCenter, wordWrap = false };
-                GUI.Label(new Rect(rect.x, rect.y - 20f, rect.width, 18f),
+                GUI.Label(new Rect(BarRect.x, BarRect.y - 20f, BarRect.width, 18f),
                     GUI.tooltip, tipStyle);
             }
         }
@@ -182,14 +186,59 @@ namespace RadiantPool.Game
             GUILayout.Button(IconOnly(icon, tooltip),
                 GUILayout.Width(_slot), GUILayout.Height(_slot));
 
+        /// <summary>Your health, right where your hands are: a slim strip directly above the
+        /// bar — hit points and the percentage, both, because "18/28" and "64%" answer
+        /// different questions ("can I survive that hit" vs "how close am I to the floor").
+        /// It reads the combat unit while a fight is on (RpcHpSync updates it the instant a
+        /// blow lands) and the character's own SyncVar between fights. Kept short and slim:
+        /// it sits under the steering arrow and must not become a second panel.
+        ///
+        /// Returns the HUD rect the caller should publish as BarRect — the strip and the bar
+        /// together, so a click on either can never fall through onto the battlefield.</summary>
+        private Rect DrawHealth(PlayerCharacterHolder holder, Rect bar)
+        {
+            var combat = CombatManager.Instance;
+            var unit = combat != null && combat.InCombat.Value ? combat.MyUnit : null;
+            int max = unit != null ? unit.MaxHp : holder.MaxHpSynced.Value;
+            if (max <= 0) return bar;   // sheet hasn't reached this client yet
+
+            int hp = Mathf.Clamp(unit != null ? unit.Hp : holder.CurrentHpSynced.Value, 0, max);
+            float fraction = (float)hp / max;
+            int percent = Mathf.RoundToInt(fraction * 100f);
+
+            const float h = 16f;
+            float w = Mathf.Min(bar.width, 250f);
+            var strip = new Rect(bar.center.x - w / 2f, bar.y - h - 6f, w, h);
+            GUI.Box(new Rect(strip.x - 5f, strip.y - 3f, strip.width + 10f, strip.height + 6f),
+                GUIContent.none);
+
+            if (_hpLabel == null)
+                _hpLabel = new GUIStyle(Theme.Caps)
+                    { alignment = TextAnchor.MiddleRight, wordWrap = false };
+
+            // Bar left, numbers right — text laid OVER a red bar is the one place this HUD
+            // cannot hold its 4.5:1 contrast.
+            const float readout = 96f;
+            Theme.Bar(new Rect(strip.x, strip.y + 4f, strip.width - readout - 6f, 9f),
+                fraction, Theme.HpRed);
+            _hpLabel.normal.textColor = hp == 0 ? Theme.Crimson
+                : fraction <= 0.34f ? Theme.Gold : Theme.OnSurface;
+            GUI.Label(new Rect(strip.xMax - readout, strip.y, readout, h),
+                hp == 0 ? "DOWN" : $"{hp}/{max}  {percent}%", _hpLabel);
+
+            return Rect.MinMaxRect(Mathf.Min(bar.x, strip.x - 5f), strip.y - 3f,
+                Mathf.Max(bar.xMax, strip.xMax + 5f), bar.yMax);
+        }
+
         /// <summary>Stowed: one slim handle where the bar was, so hiding it is never a one-way
         /// door — the same rule the minimap's collapsed pill follows. BarRect still reports the
         /// handle, so combat click-to-move can't fire through it, and the steering arrow keeps
-        /// docking off the bar's top edge (it just gets more room).</summary>
-        private void DrawHandle()
+        /// docking off the bar's top edge (it just gets more room). The health strip STAYS: the
+        /// bar is furniture, your hit points are not.</summary>
+        private void DrawHandle(PlayerCharacterHolder holder)
         {
             var rect = new Rect(Ui.W / 2f - 62f, Ui.H - 34f, 124f, 26f);
-            BarRect = rect;
+            BarRect = DrawHealth(holder, rect);
             var style = new GUIStyle(GUI.skin.button)
                 { fontSize = 11, wordWrap = false, clipping = TextClipping.Overflow };
             if (GUI.Button(rect, "SHOW BAR (H)", style)) Ui.BarCollapsed = false;

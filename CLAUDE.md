@@ -79,9 +79,21 @@ Player log (first place to look when the user reports bugs):
   `HotBar.cs` = persistent bottom action bar (combat slots delegate to
   `CombatClientUI.Instance.PickAttack/PickSpell`); its slots SHRINK to fit rather than
   overflow (a cleric in combat needs 12). Combat HUD is a slim strip docked above it so
-  the battlefield stays visible. In combat: click enemy = attack (walks
-  into range first), click ground = move, Space = end turn, **WASD/middle-drag pans the
+  the battlefield stays visible. **Your HEALTH rides above the bar** (`HotBar.DrawHealth`):
+  a slim strip with the bar, `hp/max` AND the percentage — the combat unit's HP while a fight
+  is on (instant, via `RpcHpSync`) and `PlayerCharacterHolder.CurrentHpSynced` between fights
+  (nothing used to tell the client how hurt it was out of combat). It stays when the bar is
+  stowed: the bar is furniture, hit points are not.
+  In combat: **click enemy = close in AND attack, one click, however far away**
+  (`CombatClientUI.ClickCell` is the ONE definition of what a click on the board means: in
+  reach it swings, out of reach it orders the walk and REMEMBERS the target, and
+  `TickAutoAttack` lands the blow the moment the body settles on its new cell. It used to
+  take two clicks — walk, then swing — and the second was the easiest thing in the game to
+  forget). Click ground = move, Space = end turn, **WASD/middle-drag pans the
   camera and F recentres** (the grid owns movement, so those keys are free).
+  `RadiantPool.exe -autohost -attacktest` drives that click on the FURTHEST enemy and asserts
+  both the walk and the blow; `smoke-test.ps1` runs it in its OWN instance — a live fight
+  under the sell/level self-tests would fight them for the turn clock.
   `OrbitCamera` **x-rays whatever hides a combatant**: every unit on the board gets a
   sight line in combat (just the player out of it), and any environment renderer blocking
   one fades to a transparent clone of its own materials, shadows off. Kenney props have no

@@ -22,6 +22,10 @@ namespace RadiantPool.Game
         // the inventory/equipment screen must show AC, HP and to-hit on every client.
         public readonly SyncVar<int> LevelSynced = new SyncVar<int>(1);
         public readonly SyncVar<int> MaxHpSynced = new SyncVar<int>(0);
+        // Current HP, so the HUD can show a health bar OUT of combat too: the combat units
+        // carry their own Hp (RpcHpSync, instantly), but between fights nothing told the
+        // client how hurt it was — the bar would have read full all the way to the next fight.
+        public readonly SyncVar<int> CurrentHpSynced = new SyncVar<int>(0);
         public readonly SyncVar<int> ArmorClassSynced = new SyncVar<int>(10);
         public readonly SyncVar<int> ProficiencySynced = new SyncVar<int>(2);
         public readonly SyncVar<int> StrModSynced = new SyncVar<int>(0);
@@ -66,6 +70,7 @@ namespace RadiantPool.Game
             _nextStatSync = Time.time + 0.5f;
             LevelSynced.Value = Sheet.Level;
             MaxHpSynced.Value = Sheet.MaxHp;
+            CurrentHpSynced.Value = Sheet.CurrentHp;
             ArmorClassSynced.Value = Sheet.ArmorClass;
             ProficiencySynced.Value = Sheet.ProficiencyBonus;
             StrModSynced.Value = Sheet.Abilities.Modifier(Ability.Str);

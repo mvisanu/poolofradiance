@@ -18,14 +18,28 @@ namespace RadiantPool.Game
         private Vector2 _logScroll;
         private GameObject _hoverMarker;
 
+        // Approach and strike: one left-click on an enemy is the whole attack, however far
+        // away it stands. The click remembers the target, the walk happens, and the blow
+        // lands the moment the fighter arrives. It used to take TWO clicks — one to walk
+        // into reach, one to swing — and the second was the easiest thing in the game to
+        // forget, so a turn ended having done nothing but shuffle a square.
+        private string _autoTarget = "";
+        private Vector2Int _autoFrom;    // where we stood when the walk was ordered
+        private float _autoUntil;        // give up if the walk never resolves (blocked path)
+
         private void Awake() => Instance = this;
         private void OnDestroy() { if (Instance == this) Instance = null; }
 
         /// <summary>HotBar hooks: begin target picking for the basic attack / a spell.</summary>
-        public void PickAttack() => _mode = Mode.PickAttackTarget;
+        public void PickAttack()
+        {
+            _autoTarget = "";
+            _mode = Mode.PickAttackTarget;
+        }
 
         public void PickSpell(string spellId)
         {
+            _autoTarget = "";
             _pendingSpell = spellId;
             _mode = Mode.PickSpellTarget;
         }
@@ -73,15 +87,22 @@ namespace RadiantPool.Game
         {
             var combat = CombatManager.Instance;
             var mine = combat?.MyUnit;
-            bool interactive = combat != null && combat.IsMyTurn && _mode == Mode.Root
-                               && mine is { Down: false, Dead: false }
-                               && Camera.main != null;
+            bool acting = combat != null && combat.IsMyTurn && _mode == Mode.Root
+                          && mine is { Down: false, Dead: false };
+
+            // A walk ordered by an earlier click may have arrived: swing. This is deliberately
+            // OUTSIDE the camera check below — the blow has to land in a headless run too
+            // (-attacktest), where there is nothing to raycast against.
+            if (acting) TickAutoAttack(combat, mine); else _autoTarget = "";
+
+            bool interactive = acting && Camera.main != null;
             UpdateRangeOverlay(combat, interactive && combat.MoveLeft >= 5);
             if (!interactive) { ShowHover(false); return; }
 
             // Space / Enter: end the turn without touching the mouse.
             if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return))
             {
+                _autoTarget = "";
                 combat.CmdEndTurn();
                 return;
             }
@@ -106,21 +127,85 @@ namespace RadiantPool.Game
             _hoverMarker.transform.position = combat.GridOrigin + new Vector3(
                 cell.x * CombatManager.CellSize, 0.05f, cell.y * CombatManager.CellSize);
 
-            if (Input.GetMouseButtonDown(0) && cell != mine.Cell)
+            if (Input.GetMouseButtonDown(0)) ClickCell(cell);
+        }
+
+        /// <summary>What a left-click on a square of the board MEANS — the one definition of
+        /// it. Update calls it with the cell under the mouse; the `-attacktest` self-check
+        /// calls it with an enemy's cell, so the test drives the very code the mouse does and
+        /// cannot pass on a path the player never takes.</summary>
+        public void ClickCell(Vector2Int cell)
+        {
+            var combat = CombatManager.Instance;
+            var mine = combat?.MyUnit;
+            if (combat == null || mine == null || !combat.IsMyTurn || cell == mine.Cell) return;
+
+            var enemy = combat.ClientUnits.FirstOrDefault(
+                u => !u.IsPc && !u.Dead && u.Cell == cell);
+
+            // Click an enemy in reach: swing now. Out of reach: walk in (CmdMoveTo stops
+            // adjacent to occupied cells) and REMEMBER it — TickAutoAttack lands the blow the
+            // moment the walk arrives, so one click is the whole attack.
+            if (enemy != null && combat.ActionLeft && InWeaponRange(mine.Cell, cell))
             {
-                // Click an enemy: attack when the weapon reaches, otherwise walk into
-                // reach (CmdMoveTo stops adjacent to occupied cells).
-                if (enemy != null && combat.ActionLeft && InWeaponRange(mine.Cell, cell))
+                _autoTarget = "";
+                CombatFx.Instance?.ShowTargetMarker(enemy.Visual);
+                combat.CmdAttack(enemy.Id);
+            }
+            else if (combat.MoveLeft >= 5)
+            {
+                if (enemy != null)
                 {
                     CombatFx.Instance?.ShowTargetMarker(enemy.Visual);
-                    combat.CmdAttack(enemy.Id);
+                    _autoTarget = combat.ActionLeft ? enemy.Id : "";
+                    _autoFrom = mine.Cell;
+                    _autoUntil = Time.time + 10f;
                 }
-                else if (combat.MoveLeft >= 5)
-                {
-                    if (enemy != null) CombatFx.Instance?.ShowTargetMarker(enemy.Visual);
-                    combat.CmdMoveTo(cell.x, cell.y);
-                }
+                else _autoTarget = "";   // a ground click is a move order, nothing more
+                combat.CmdMoveTo(cell.x, cell.y);
             }
+        }
+
+        /// <summary>The second half of a click on a distant enemy: once the walk the click
+        /// ordered has actually landed us in reach, swing — without a second click.
+        ///
+        /// The unit's Cell updates the instant the server confirms the move, but the BODY is
+        /// still gliding to it (CombatFx.GlideRoutine), so it waits for the visual to settle:
+        /// attacking mid-stride reads as the sword swinging at empty air.</summary>
+        private void TickAutoAttack(CombatManager combat, CombatManager.UnitView mine)
+        {
+            if (_autoTarget.Length == 0) return;
+
+            var enemy = combat.ClientUnits.FirstOrDefault(
+                u => u.Id == _autoTarget && !u.Dead);
+            // It died on the way in (a companion got there first), we have no action left,
+            // or the walk never resolved at all — a blocked path leaves the cell unchanged.
+            if (enemy == null || !combat.ActionLeft || Time.time > _autoUntil)
+            { _autoTarget = ""; return; }
+
+            if (!InWeaponRange(mine.Cell, enemy.Cell))
+            {
+                // The move resolved and we are STILL short: this turn's movement was not
+                // enough to reach it. Drop the order rather than leave it hanging.
+                if (mine.Cell != _autoFrom) _autoTarget = "";
+                return;
+            }
+            if (StillGliding(combat, mine)) return;
+
+            _autoTarget = "";
+            CombatFx.Instance?.ShowTargetMarker(enemy.Visual);
+            combat.CmdAttack(enemy.Id);
+        }
+
+        /// <summary>True while the body is still catching up with the cell it already
+        /// occupies on the server's board.</summary>
+        private static bool StillGliding(CombatManager combat, CombatManager.UnitView u)
+        {
+            if (u.Visual == null) return false;
+            Vector3 seat = combat.GridOrigin + new Vector3(
+                u.Cell.x * CombatManager.CellSize, 0f, u.Cell.y * CombatManager.CellSize);
+            Vector3 at = u.Visual.position;
+            return new Vector2(at.x - seat.x, at.z - seat.z).sqrMagnitude > 0.25f;
         }
 
         private bool InWeaponRange(Vector2Int from, Vector2Int to)
@@ -452,7 +537,7 @@ namespace RadiantPool.Game
             string info = combat.LastRejection.Length > 0
                 ? $"<color=#f2ca50>{combat.LastRejection}</color>"
                 : $"<color=#d0c5af>move <b>{combat.MoveLeft} ft</b> · click square = walk · " +
-                  "enemy = attack · Space = end turn"
+                  "click enemy = close in and attack · Space = end turn"
                   + (roomy ? " · WASD/middle-drag = pan, F = recenter" : "")
                   + $" · action {Theme.Ready(combat.ActionLeft)}"
                   + $" · bonus {Theme.Ready(combat.BonusLeft)}</color>";

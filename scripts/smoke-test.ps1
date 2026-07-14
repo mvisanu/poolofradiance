@@ -32,6 +32,21 @@ Stop-Process -Id $clientProc.Id -Force -ErrorAction SilentlyContinue
 Stop-Process -Id $hostProc.Id -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 
+# -attacktest gets its OWN host: it starts a real encounter, and a fight running underneath
+# the sell/level checks would fight them for the turn clock. One click on the FURTHEST enemy
+# must both close the distance and land the blow.
+Write-Host "Starting combat instance (-attacktest)..."
+$fightLog = Join-Path $logDir "fight.log"
+Remove-Item $fightLog -ErrorAction SilentlyContinue
+$fightSave = Join-Path $logDir "fightsave"
+Remove-Item -Recurse -Force $fightSave -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $fightSave | Out-Null
+$fightProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Cara","-autohost","-attacktest","-savedir",$fightSave,"-logFile",$fightLog -PassThru
+Start-Sleep -Seconds 45
+Stop-Process -Id $fightProc.Id -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+$fightText = Get-Content $fightLog -Raw
+
 $hostText = Get-Content $hostLog -Raw
 $clientText = Get-Content $clientLog -Raw
 
@@ -47,7 +62,10 @@ $checks = @(
     @{ Name = "no failed sell assertion";          Ok = $hostText -notmatch "\[SellTest\] FAIL" },
     @{ Name = "earned XP levels the character up"; Ok = $hostText -match "\[LevelTest\] PASS - \d+ XP took" },
     @{ Name = "an ability point can be spent";     Ok = $hostText -match "\[LevelTest\] PASS - spending" },
-    @{ Name = "no failed level assertion";         Ok = $hostText -notmatch "\[LevelTest\] FAIL" }
+    @{ Name = "no failed level assertion";         Ok = $hostText -notmatch "\[LevelTest\] FAIL" },
+    @{ Name = "one click on a distant enemy closes in and attacks"; Ok = $fightText -match "\[AttackTest\] PASS" },
+    @{ Name = "no failed attack assertion";        Ok = $fightText -notmatch "\[AttackTest\] FAIL" },
+    @{ Name = "no NullReference in combat log";    Ok = $fightText -notmatch "NullReferenceException" }
 )
 
 $failed = 0
@@ -55,6 +73,6 @@ foreach ($c in $checks) {
     if ($c.Ok) { Write-Host "  PASS  $($c.Name)" -ForegroundColor Green }
     else { Write-Host "  FAIL  $($c.Name)" -ForegroundColor Red; $failed++ }
 }
-Write-Host "Logs: $hostLog | $clientLog"
+Write-Host "Logs: $hostLog | $clientLog | $fightLog"
 if ($failed -gt 0) { exit 1 }
 Write-Host "Smoke test passed - two instances hosted, joined, and spawned characters." -ForegroundColor Green

@@ -103,6 +103,8 @@ namespace RadiantPool.Game
                 StartCoroutine(ServerLevelSelfTest());
             if (System.Array.IndexOf(args, "-warpsmith") >= 0)
                 StartCoroutine(ServerWarpToSmith());
+            if (System.Array.IndexOf(args, "-attacktest") >= 0)
+                StartCoroutine(AttackSelfTest());
 
             if (!SaveSystem.Exists) return;
             var save = SaveSystem.Read();
@@ -516,6 +518,82 @@ namespace RadiantPool.Game
                       $"{before} to {sheet.Abilities[ability]}, " +
                       $"{sheet.PendingAbilityPoints} left of {pointsBefore}");
         }
+
+        /// <summary>Unattended combat check (`RadiantPool.exe -autohost -attacktest`, asserted
+        /// by scripts/smoke-test.ps1): start a real encounter, then drive ONE left-click on the
+        /// enemy standing FURTHEST away and prove the fighter closes the distance and swings —
+        /// no second click. It calls CombatClientUI.ClickCell, the same method the mouse calls,
+        /// so it cannot pass on a path the player never takes.</summary>
+        private System.Collections.IEnumerator AttackSelfTest()
+        {
+            yield return new WaitForSeconds(9f);   // spawn, then muster
+
+            var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => !p.IsCompanion && p.Owner != null && p.Owner.IsValid);
+            var fight = FindObjectsByType<EncounterTrigger>(FindObjectsSortMode.None)
+                .FirstOrDefault(t => !t.Consumed && t.MonsterIds.Length > 0
+                                     && !ConsumedEncounterIds.Contains(t.EncounterId));
+            var combat = CombatManager.Instance;
+            if (holder == null || fight == null || combat == null
+                || CombatClientUI.Instance == null)
+            {
+                Debug.Log("[AttackTest] FAIL - no character, no encounter, or no combat UI");
+                yield break;
+            }
+
+            Warp(holder.transform, fight.transform.position);
+            yield return null;
+            combat.StartEncounter(fight);
+
+            float deadline = Time.time + 30f;
+            while ((!combat.InCombat.Value || !combat.IsMyTurn) && Time.time < deadline)
+                yield return new WaitForSeconds(0.2f);
+            var mine = combat.MyUnit;
+            if (!combat.InCombat.Value || !combat.IsMyTurn || mine == null)
+            {
+                Debug.Log("[AttackTest] FAIL - the fight never reached my turn");
+                yield break;
+            }
+
+            // The FURTHEST enemy, so the click has to buy a walk as well as a swing.
+            var enemy = combat.ClientUnits
+                .Where(u => !u.IsPc && !u.Dead)
+                .OrderByDescending(u => Chebyshev(mine.Cell, u.Cell))
+                .FirstOrDefault();
+            if (enemy == null)
+            {
+                Debug.Log("[AttackTest] FAIL - no enemy on the board");
+                yield break;
+            }
+
+            var from = mine.Cell;
+            int feet = Chebyshev(from, enemy.Cell) * 5;
+            Debug.Log($"[AttackTest] one click on {enemy.Name} at {feet} ft " +
+                      $"(move {combat.MoveLeft} ft, action {combat.ActionLeft})");
+            CombatClientUI.Instance.ClickCell(enemy.Cell);
+
+            float until = Time.time + 15f;
+            while (combat.ActionLeft && combat.IsMyTurn && combat.InCombat.Value
+                   && Time.time < until)
+                yield return null;
+
+            var now = combat.MyUnit;
+            bool walked = now != null && now.Cell != from;
+            // The blow itself, in the combat log's own words — a spent action alone would
+            // only prove that SOMETHING was done with it.
+            string blow = combat.Log.LastOrDefault(
+                l => l.Contains(mine.Name) && l.Contains(enemy.Name)) ?? "";
+            bool struck = !combat.ActionLeft && blow.Length > 0;
+            bool pass = struck && (feet <= 5 || walked);   // in reach already? then no walk owed
+            Debug.Log($"[AttackTest] {(pass ? "PASS" : "FAIL")} - one click at {feet} ft: " +
+                      $"walked {(walked ? "into reach" : "NOWHERE")} " +
+                      $"({from} to {(now != null ? now.Cell.ToString() : "?")}), attack " +
+                      $"{(struck ? "resolved" : "NEVER LANDED")}");
+            Debug.Log($"[AttackTest] the blow: {(blow.Length > 0 ? blow : "(no log line!)")}");
+        }
+
+        private static int Chebyshev(Vector2Int a, Vector2Int b) =>
+            Mathf.Max(Mathf.Abs(a.x - b.x), Mathf.Abs(a.y - b.y));
 
         /// <summary>`RadiantPool.exe -autohost -warpsmith`: park the character at the smithy so
         /// the shop UI can be opened (E) and LOOKED AT without walking there by hand. A shop
