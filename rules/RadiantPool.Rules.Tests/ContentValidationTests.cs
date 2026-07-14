@@ -214,6 +214,54 @@ namespace RadiantPool.Rules.Tests
         }
 
         [Fact]
+        public void FullCampaignCatalog_CoversEveryPlannedPlaceAndCommissionStructure()
+        {
+            using var doc = Load(Path.Combine("campaign", "full_campaign.json"));
+            var root = doc.RootElement;
+            var locations = root.GetProperty("locations").EnumerateArray().ToList();
+            var commissions = root.GetProperty("commissions").EnumerateArray().ToList();
+            var sideQuests = root.GetProperty("sideQuests").EnumerateArray().ToList();
+
+            // Multi-level strongholds are separate playable map spaces, not one journal
+            // label pretending that an approach, underworks, maze, and tower all exist.
+            Assert.Equal(28, locations.Count);
+            Assert.Equal(15, commissions.Count);
+            Assert.True(sideQuests.Count >= 9);
+
+            var locationIds = locations.Select(l => l.GetProperty("id").GetString()!)
+                .ToList();
+            Assert.Equal(locationIds.Count, locationIds.Distinct().Count());
+            Assert.Contains(locations, l => l.GetProperty("kind").GetString() == "hub");
+            Assert.Contains(locations, l => l.GetProperty("kind").GetString() == "catacombs");
+            Assert.Contains(locations, l => l.GetProperty("kind").GetString() == "wilderness");
+            Assert.Contains(locations, l => l.GetProperty("kind").GetString() == "scaling_graveyard");
+            Assert.Contains(locations, l => l.GetProperty("kind").GetString() == "final_castle");
+            Assert.Contains(locations, l => l.GetProperty("kind").GetString() == "castle_maze");
+            Assert.Contains(locations, l => l.GetProperty("kind").GetString() == "final_tower");
+
+            Assert.Equal(Enumerable.Range(1, 15),
+                commissions.Select(q => q.GetProperty("order").GetInt32()));
+            var mainIds = commissions.Select(q => q.GetProperty("id").GetString()!).ToList();
+            Assert.Equal(mainIds.Count, mainIds.Distinct().Count());
+            var allQuestIds = mainIds.Concat(sideQuests.Select(q =>
+                q.GetProperty("id").GetString()!)).ToHashSet();
+
+            foreach (var quest in commissions.Concat(sideQuests))
+            {
+                Assert.False(string.IsNullOrWhiteSpace(
+                    quest.GetProperty("objectiveKind").GetString()));
+                foreach (var location in quest.GetProperty("locationIds").EnumerateArray())
+                    Assert.Contains(location.GetString()!, locationIds);
+                foreach (var prerequisite in quest.GetProperty("prerequisites").EnumerateArray())
+                    Assert.Contains(prerequisite.GetString()!, allQuestIds);
+            }
+
+            Assert.True(commissions.Select(q => q.GetProperty("objectiveKind").GetString())
+                .Distinct().Count() >= 8, "campaign needs more than repeated clear-zone quests");
+            Assert.Contains(commissions, q => q.GetProperty("locationIds").GetArrayLength() >= 3);
+        }
+
+        [Fact]
         public void NoBannedIpTerms_AnywhereInContent()
         {
             // Per IP-CHECKLIST.md hard bans.

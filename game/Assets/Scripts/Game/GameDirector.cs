@@ -2,6 +2,7 @@ using System.Linq;
 using FishNet.Connection;
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
+using RadiantPool.Rules;
 using UnityEngine;
 
 namespace RadiantPool.Game
@@ -27,6 +28,11 @@ namespace RadiantPool.Game
             public int RequiredEncounters = 3;
             public int XpEach = 300;
             public int Gold = 100;
+            /// <summary>Location ids that must be turned in before this commission can
+            /// activate. Empty is valid only for an explicitly available opening quest.</summary>
+            public string[] PrerequisiteZoneIds = System.Array.Empty<string>();
+            public bool StartsAvailable;
+            public bool FinalQuest;
         }
 
         [Header("Zone chain (from content JSON, wired by bootstrap)")]
@@ -178,27 +184,55 @@ namespace RadiantPool.Game
             ServerSaveCampaign();   // persist the repair so it happens once
         }
 
-        /// <summary>Content updates may append chapters after a save's old finale. A party
-        /// that truly completed every zone present in that save gets the first appended
-        /// quest immediately; incomplete or malformed saves are never advanced. This is
-        /// derived from the saved zone count so later appended chapters use the same path.</summary>
+        private CampaignNode[] CampaignNodes() => Zones.Select(z => new CampaignNode(
+            z.ZoneId, z.PrerequisiteZoneIds, z.StartsAvailable, z.FinalQuest)).ToArray();
+
+        /// <summary>Activate every newly eligible commission. Multiple quests can open at
+        /// once; the old N-to-N+1 array assumption could not represent council choices,
+        /// optional branches, or sites requiring more than one prior success.</summary>
+        [Server]
+        private System.Collections.Generic.List<int> ServerActivateEligibleZones()
+        {
+            if ((QuestState)MusterState.Value != QuestState.Completed)
+                return new System.Collections.Generic.List<int>();
+
+            var completed = new System.Collections.Generic.List<string>();
+            var started = new System.Collections.Generic.List<string>();
+            for (int i = 0; i < Zones.Length; i++)
+            {
+                var state = GetZoneState(i);
+                if (state == QuestState.Completed) completed.Add(Zones[i].ZoneId);
+                if (state != QuestState.Locked) started.Add(Zones[i].ZoneId);
+            }
+
+            var eligible = new System.Collections.Generic.HashSet<string>(
+                CampaignGraph.Eligible(CampaignNodes(), completed, started));
+            var activated = new System.Collections.Generic.List<int>();
+            for (int i = 0; i < Zones.Length; i++)
+            {
+                if (!eligible.Contains(Zones[i].ZoneId)) continue;
+                ZoneStates[i] = (int)QuestState.Active;
+                activated.Add(i);
+            }
+            if (activated.Count > 0) CampaignComplete.Value = false;
+            return activated;
+        }
+
+        /// <summary>Content updates may append branches after a save's former finale.
+        /// Re-evaluate the graph on every load so a completed campaign receives every new
+        /// eligible commission without assuming its position in the serialized array.</summary>
         [Server]
         private void ServerUnlockAppendedCampaign(CampaignSave save)
         {
-            int savedZones = save.ZoneStates.Count;
-            if (!save.CampaignComplete || savedZones < 4 || savedZones >= Zones.Length)
-                return;
-            for (int i = 0; i < savedZones; i++)
-                if ((QuestState)save.ZoneStates[i] != QuestState.Completed)
-                    return;
-
-            CampaignComplete.Value = false;
-            ZoneStates[savedZones] = (int)QuestState.Active;
-            string quest = Zones[savedZones].QuestName;
-            Debug.Log($"[CampaignMigration] PASS - completed {savedZones}-zone save unlocked " +
-                      $"appended quest '{quest}'");
-            RpcNotice($"A new Council commission is ready: {quest}. Follow the gold " +
-                      "waypoint beyond the Lightwell.");
+            var activated = ServerActivateEligibleZones();
+            if (activated.Count == 0) return;
+            string quests = string.Join(", ", activated.Select(i => Zones[i].QuestName));
+            if (save.CampaignComplete)
+                Debug.Log($"[CampaignMigration] PASS - completed {save.ZoneStates.Count}-zone " +
+                          $"save unlocked appended quest '{quests}'");
+            RpcNotice(activated.Count == 1
+                ? $"A new Council commission is ready: {quests}. Follow the gold waypoint."
+                : $"New Council commissions are ready: {quests}. Check the journal and gold waypoint.");
         }
 
         [Server]
@@ -397,10 +431,14 @@ namespace RadiantPool.Game
             if (action == "muster_accept" && MusterState.Value == (int)QuestState.Active)
             {
                 MusterState.Value = (int)QuestState.Completed;
-                if (Zones.Length > 0) ZoneStates[0] = (int)QuestState.Active;
+                var activated = ServerActivateEligibleZones();
                 AwardXpToAll(50);
-                RpcNotice($"New quest: {Zones[0].QuestName} (journal: J).");
-                ServerRecheckZone(0);   // encounters may have been cleared pre-accept
+                string quests = string.Join(", ", activated.Select(i => Zones[i].QuestName));
+                RpcNotice(activated.Count == 1
+                    ? $"New quest: {quests} (journal: J)."
+                    : $"New quests: {quests} (journal: J). Choose a gold waypoint.");
+                foreach (int opened in activated)
+                    ServerRecheckZone(opened);   // may have been cleared pre-accept
                 ServerSaveCampaign();
                 return;
             }
@@ -413,19 +451,27 @@ namespace RadiantPool.Game
                 ZoneStates[zone] = (int)QuestState.Completed;
                 PartyGold.Value += cfg.Gold;
                 AwardXpToAll(cfg.XpEach);
-                if (zone + 1 < Zones.Length)
+                var activated = ServerActivateEligibleZones();
+                if (activated.Count > 0)
                 {
-                    ZoneStates[zone + 1] = (int)QuestState.Active;
+                    string quests = string.Join(", ", activated.Select(i => Zones[i].QuestName));
                     RpcNotice($"Quest complete! +{cfg.XpEach} XP each, +{cfg.Gold} gold. " +
-                              $"New quest: {Zones[zone + 1].QuestName}.");
-                    ServerRecheckZone(zone + 1);   // may already be cleared from wandering
+                              (activated.Count == 1 ? $"New quest: {quests}." : $"New quests: {quests}."));
+                    foreach (int opened in activated)
+                        ServerRecheckZone(opened);   // may already be cleared from wandering
                 }
-                else
+                else if (CampaignGraph.FinaleComplete(CampaignNodes(),
+                    Enumerable.Range(0, Zones.Length)
+                        .Where(i => GetZoneState(i) == QuestState.Completed)
+                        .Select(i => Zones[i].ZoneId)))
                 {
                     CampaignComplete.Value = true;
                     RpcNotice($"Quest complete! +{cfg.XpEach} XP each, +{cfg.Gold} gold. " +
                               "The Hollow Flame is sealed. Aldenmere stands free!");
                 }
+                else
+                    RpcNotice($"Quest complete! +{cfg.XpEach} XP each, +{cfg.Gold} gold. " +
+                              "Other Council commissions remain open.");
                 ServerSaveCampaign();
             }
         }
@@ -1135,7 +1181,7 @@ namespace RadiantPool.Game
                     + $"<b>Cleared {done}/{cfg.RequiredEncounters}</b> — the red X on the " +
                     "minimap marks the nearest fight.";
                 DrawQuest(cfg.QuestName, GetZoneState(i), detail,
-                    (float)done / cfg.RequiredEncounters);
+                    (float)done / cfg.RequiredEncounters, i);
             }
             if (CampaignComplete.Value)
                 GUILayout.Label("<color=#8a6d1f><b>Aldenmere stands free.</b> The campaign is " +
@@ -1164,7 +1210,8 @@ namespace RadiantPool.Game
 
         /// <summary>One journal entry, mock-style: active quests sit in a gold-wash card
         /// with a progress bar; completed quests are muted; ready-to-turn-in glows.</summary>
-        private void DrawQuest(string title, QuestState state, string detail, float progress)
+        private void DrawQuest(string title, QuestState state, string detail, float progress,
+            int zoneIndex = -1)
         {
             if (state == QuestState.Locked) return;
             if (state == QuestState.Completed)
@@ -1187,6 +1234,15 @@ namespace RadiantPool.Game
             {
                 var r = GUILayoutUtility.GetRect(240, 9);
                 Theme.Bar(new Rect(r.x + 2, r.y + 1, 220, 7), progress, Theme.MpBlue);
+                bool tracked = zoneIndex >= 0 && QuestTracker.IsTrackedZone(zoneIndex);
+                GUILayout.BeginHorizontal();
+                GUILayout.FlexibleSpace();
+                if (tracked)
+                    GUILayout.Label("TRACKED", Theme.Caps, GUILayout.Width(76f));
+                else if (zoneIndex >= 0 && GUILayout.Button("Track waypoint",
+                             GUILayout.Width(126f), GUILayout.Height(24f)))
+                    QuestTracker.Instance?.TrackZone(zoneIndex);
+                GUILayout.EndHorizontal();
             }
             GUILayout.EndVertical();
             GUILayout.Space(3);

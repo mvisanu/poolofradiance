@@ -24,6 +24,7 @@ namespace RadiantPool.Game
         private float _nextScan;
         private Texture2D _steerArrow;
         private GUIStyle _distStyle, _questTitle, _stepStyle, _stepDone, _cardBtn;
+        private const string TrackedQuestPref = "questTracker.zoneId";
 
         private void Awake() => Instance = this;
         private void Start()
@@ -64,6 +65,41 @@ namespace RadiantPool.Game
             return sum / triggers.Count;
         }
 
+        /// <summary>The one active commission shown on the compact HUD. A ready turn-in
+        /// takes priority; otherwise the player's journal choice is remembered by stable
+        /// zone id, with the first active quest as a safe fallback after content updates.</summary>
+        public static int TrackedZoneIndex(GameDirector director)
+        {
+            for (int i = 0; i < director.Zones.Length; i++)
+                if (director.GetZoneState(i) == QuestState.ObjectivesMet) return i;
+
+            string wanted = PlayerPrefs.GetString(TrackedQuestPref, "");
+            for (int i = 0; i < director.Zones.Length; i++)
+                if (director.Zones[i].ZoneId == wanted
+                    && director.GetZoneState(i) == QuestState.Active) return i;
+            for (int i = 0; i < director.Zones.Length; i++)
+                if (director.GetZoneState(i) == QuestState.Active) return i;
+            return -1;
+        }
+
+        public static bool IsTrackedZone(int zone)
+        {
+            var director = GameDirector.Instance;
+            return director != null && TrackedZoneIndex(director) == zone;
+        }
+
+        public void TrackZone(int zone)
+        {
+            var director = GameDirector.Instance;
+            if (director == null || zone < 0 || zone >= director.Zones.Length
+                || director.GetZoneState(zone) != QuestState.Active) return;
+            PlayerPrefs.SetString(TrackedQuestPref, director.Zones[zone].ZoneId);
+            PlayerPrefs.Save();
+            _nextScan = 0f;
+            Scan();
+            UpdateBeacon();
+        }
+
         private void Scan()
         {
             HasTarget = false;
@@ -76,7 +112,7 @@ namespace RadiantPool.Game
 
             // Talking to Veresk: muster, any turn-in, or campaign done.
             bool needVeresk = (QuestState)director.MusterState.Value == QuestState.Active;
-            int activeZone = -1;
+            int activeZone = TrackedZoneIndex(director);
             int turnInZone = -1;
             for (int i = 0; i < director.Zones.Length; i++)
             {
@@ -86,8 +122,9 @@ namespace RadiantPool.Game
                     needVeresk = true;
                     if (turnInZone < 0) turnInZone = i;
                 }
-                if (state == QuestState.Active && activeZone < 0) activeZone = i;
             }
+            if (activeZone >= 0 && director.GetZoneState(activeZone) != QuestState.Active)
+                activeZone = -1;
 
             if (needVeresk)
             {
@@ -160,13 +197,13 @@ namespace RadiantPool.Game
                 return ("Report to the Council", steps);
             }
 
-            for (int i = 0; i < d.Zones.Length; i++)
+            int tracked = TrackedZoneIndex(d);
+            if (tracked >= 0)
             {
-                var state = d.GetZoneState(i);
-                if (state != QuestState.Active && state != QuestState.ObjectivesMet) continue;
+                var state = d.GetZoneState(tracked);
 
-                var cfg = d.Zones[i];
-                int done = i < d.ZoneClearedCounts.Count ? d.ZoneClearedCounts[i] : 0;
+                var cfg = d.Zones[tracked];
+                int done = tracked < d.ZoneClearedCounts.Count ? d.ZoneClearedCounts[tracked] : 0;
                 int need = cfg.RequiredEncounters;
                 bool cleared = state == QuestState.ObjectivesMet || done >= need;
 

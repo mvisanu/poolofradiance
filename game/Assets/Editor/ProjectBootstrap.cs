@@ -1209,7 +1209,8 @@ namespace RadiantPool.EditorTools
                     Description = "Squatter gangs hold three yards along the waterfront " +
                         "WEST of the hub. Break all three, then follow the gold marker " +
                         "back to Council Hall to turn in the commission.",
-                    RequiredEncounters = 3, XpEach = 300, Gold = 100
+                    RequiredEncounters = 3, XpEach = 300, Gold = 100,
+                    StartsAvailable = true
                 },
                 new GameDirector.ZoneConfig
                 {
@@ -1217,7 +1218,8 @@ namespace RadiantPool.EditorTools
                     QuestName = "Silence the Drowned Market",
                     Description = "The drowned dead haunt the flooded market NORTH of the " +
                         "hub. Lay all four hauntings to rest, then return SOUTH to Council Hall.",
-                    RequiredEncounters = 4, XpEach = 900, Gold = 250
+                    RequiredEncounters = 4, XpEach = 900, Gold = 250,
+                    PrerequisiteZoneIds = new[] { "old_docks" }
                 },
                 new GameDirector.ZoneConfig
                 {
@@ -1226,7 +1228,8 @@ namespace RadiantPool.EditorTools
                     Description = "Karg Splitjaw's orc warband holds the sunken quarter " +
                         "SOUTH of the walls. Break both picket bands, then storm the " +
                         "war-tent and slay the Warchief before returning to Council Hall.",
-                    RequiredEncounters = 3, XpEach = 1200, Gold = 400
+                    RequiredEncounters = 3, XpEach = 1200, Gold = 400,
+                    PrerequisiteZoneIds = new[] { "drowned_market" }
                 },
                 new GameDirector.ZoneConfig
                 {
@@ -1235,7 +1238,8 @@ namespace RadiantPool.EditorTools
                     Description = "The Kindled cult holds the Glasslit Temple EAST of the " +
                         "hub. Break their five circles, face what wears the Warden, then " +
                         "return WEST to Council Hall.",
-                    RequiredEncounters = 5, XpEach = 3400, Gold = 600
+                    RequiredEncounters = 5, XpEach = 3400, Gold = 600,
+                    PrerequisiteZoneIds = new[] { "sunken_warcamp" }
                 },
                 new GameDirector.ZoneConfig
                 {
@@ -1245,7 +1249,9 @@ namespace RadiantPool.EditorTools
                         "NORTHEAST of the Lightwell. Follow the gold waypoint through the " +
                         "newly opened gate, seal all three breaches, then return SOUTHWEST " +
                         "to Council Hall.",
-                    RequiredEncounters = 3, XpEach = 1200, Gold = 750
+                    RequiredEncounters = 3, XpEach = 1200, Gold = 750,
+                    PrerequisiteZoneIds = new[] { "glasslit_temple" },
+                    FinalQuest = true
                 }
             };
             director.CompanionPrefab = playerPrefab;
