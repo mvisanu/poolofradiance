@@ -14,9 +14,6 @@ namespace RadiantPool.Game
         public int SchemaVersion = 1;
         public string SavedAtUtc = "";
         public int MusterState, PartyGold;
-        // Missing from old schema-1 saves means the field initializer survives JSON load,
-        // placing those campaigns in the intended threatening evening instead of 00:00.
-        public float GameHour = 20.5f;
         public List<int> ZoneStates = new List<int>();
         public List<int> ZoneClearedCounts = new List<int>();
         public bool CampaignComplete;

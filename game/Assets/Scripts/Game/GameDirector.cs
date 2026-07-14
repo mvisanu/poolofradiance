@@ -37,8 +37,9 @@ namespace RadiantPool.Game
         public readonly SyncList<int> ZoneClearedCounts = new SyncList<int>();
         public readonly SyncVar<bool> CampaignComplete = new SyncVar<bool>(false);
         public readonly SyncVar<int> PartyGold = new SyncVar<int>(0);
-        /// <summary>Authoritative 24-hour campaign clock. Clients only derive presentation
-        /// from this value; the host advances and saves it.</summary>
+        /// <summary>Authoritative host-computer local time as a fractional 24-hour clock.
+        /// Clients derive presentation from this value so every co-op player sees the
+        /// same sunlight, even if their own computers use different time zones.</summary>
         public readonly SyncVar<float> WorldHour = new SyncVar<float>(20.5f);
 
         /// <summary>Party-shared loot stash (item ids from content/items).</summary>
@@ -88,6 +89,9 @@ namespace RadiantPool.Game
             _builds = new System.Collections.Generic.Dictionary<string, CharacterBuild>();
         private float _serverWorldHour = 20.5f;
         private float _nextWorldTimeSync;
+        private bool _allowWorldTimeOverride;
+        private bool _worldTimeOverride;
+        public bool ComputerClockActive => !_worldTimeOverride;
         /// <summary>Cleared encounter ids, replicated so clients can point quest markers
         /// at the nearest block that still needs fighting.</summary>
         public readonly SyncList<string> ConsumedEncounterIds = new SyncList<string>();
@@ -95,14 +99,18 @@ namespace RadiantPool.Game
         public override void OnStartServer()
         {
             base.OnStartServer();
-            _serverWorldHour = WorldHour.Value;
+            var args = System.Environment.GetCommandLineArgs();
+            _allowWorldTimeOverride = System.Array.IndexOf(args, "-atmospheretest") >= 0
+                                      || System.Array.IndexOf(args, "-atmospherecapture") >= 0;
+            SyncFromComputerClock();
+            Debug.Log($"[Atmosphere] host computer clock " +
+                      $"{System.DateTime.Now:HH:mm:ss} ({System.TimeZoneInfo.Local.Id})");
             for (int i = 0; i < Zones.Length; i++)
             {
                 ZoneStates.Add((int)QuestState.Locked);
                 ZoneClearedCounts.Add(0);
             }
 
-            var args = System.Environment.GetCommandLineArgs();
             if (System.Array.IndexOf(args, "-selltest") >= 0)
                 StartCoroutine(ServerSellSelfTest());
             if (System.Array.IndexOf(args, "-leveltest") >= 0)
@@ -130,7 +138,6 @@ namespace RadiantPool.Game
             }
             CampaignComplete.Value = save.CampaignComplete;
             PartyGold.Value = save.PartyGold;
-            ServerSetWorldHour(save.GameHour);
             Stash.Clear();
             foreach (var s in save.Stash) Stash.Add(s);
             foreach (var saved in save.Roster)
@@ -164,9 +171,37 @@ namespace RadiantPool.Game
         }
 
         [Server]
-        public void ServerSetWorldHour(float hour)
+        public void ServerSetWorldHourForTest(float hour)
         {
+            if (!_allowWorldTimeOverride)
+            {
+                Debug.LogWarning("[Atmosphere] refused time override outside an atmosphere test");
+                return;
+            }
+            _worldTimeOverride = true;
             _serverWorldHour = Mathf.Repeat(hour, 24f);
+            WorldHour.Value = _serverWorldHour;
+            _nextWorldTimeSync = Time.unscaledTime + 0.25f;
+        }
+
+        [Server]
+        public void ServerClearWorldHourTestOverride()
+        {
+            _worldTimeOverride = false;
+            SyncFromComputerClock();
+        }
+
+        /// <summary>Fractional local wall-clock hour, including minutes, seconds, and
+        /// daylight-saving/time-zone changes already applied by the operating system.</summary>
+        public static float ComputerLocalHourNow()
+        {
+            var now = System.DateTime.Now.TimeOfDay;
+            return (float)now.TotalHours;
+        }
+
+        private void SyncFromComputerClock()
+        {
+            _serverWorldHour = ComputerLocalHourNow();
             WorldHour.Value = _serverWorldHour;
             _nextWorldTimeSync = Time.unscaledTime + 0.25f;
         }
@@ -192,7 +227,6 @@ namespace RadiantPool.Game
             var save = new CampaignSave
             {
                 MusterState = MusterState.Value,
-                GameHour = WorldHour.Value,
                 ZoneStates = ZoneStates.ToList(),
                 ZoneClearedCounts = ZoneClearedCounts.ToList(),
                 CampaignComplete = CampaignComplete.Value,
@@ -956,8 +990,8 @@ namespace RadiantPool.Game
         {
             if (IsServerStarted)
             {
-                _serverWorldHour = Mathf.Repeat(_serverWorldHour
-                    + WorldAtmosphere.HoursPerRealSecond * Time.unscaledDeltaTime, 24f);
+                if (!_worldTimeOverride)
+                    _serverWorldHour = ComputerLocalHourNow();
                 if (Time.unscaledTime >= _nextWorldTimeSync)
                 {
                     _nextWorldTimeSync = Time.unscaledTime + 0.25f;

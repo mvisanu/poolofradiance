@@ -1,0 +1,3 @@
+[mcp_servers.blender]
+command = 'C:\Users\Bruce\.local\bin\uvx.exe'
+args = ["blender-mcp"]

@@ -6,17 +6,14 @@ using UnityEngine;
 
 namespace RadiantPool.Game
 {
-    /// <summary>Client presentation for the server-owned campaign clock. The server only
-    /// replicates an hour; every client derives the same sun, moon, fog, ambient light,
-    /// sky and lantern state locally, with interpolation between network updates.</summary>
+    /// <summary>Client presentation for the host computer's synchronized local clock. The
+    /// server replicates a fractional hour; every client derives the same sun, moon, fog,
+    /// ambient light, sky and lantern state, interpolating real seconds between updates.</summary>
     public class WorldAtmosphere : MonoBehaviour
     {
         public static WorldAtmosphere Instance { get; private set; }
 
-        // One in-game day per 24 real minutes: fast enough to experience in a session,
-        // slow enough that a district does not visibly strobe between moods.
-        public const float DayLengthRealSeconds = 24f * 60f;
-        public const float HoursPerRealSecond = 24f / DayLengthRealSeconds;
+        public const float RealHoursPerSecond = 1f / 3600f;
         // A carried torch should make the party readable without flattening the night.
         // Unity point lights have a hard physical range, so this is also the visibility
         // circle's authoritative radius (nine 5-foot combat cells).
@@ -107,7 +104,7 @@ namespace RadiantPool.Game
                 _visualHour = target;
             else
                 _visualHour = Mathf.Repeat(_visualHour
-                    + HoursPerRealSecond * Time.unscaledDeltaTime
+                    + RealHoursPerSecond * Time.unscaledDeltaTime
                     + hourDelta * Mathf.Min(1f, Time.unscaledDeltaTime * 2f), 24f);
             _ready = true;
             ApplyAtmosphere(_visualHour);
@@ -356,7 +353,12 @@ namespace RadiantPool.Game
                 yield break;
             }
 
-            director.ServerSetWorldHour(12f);
+            float computerAtStart = GameDirector.ComputerLocalHourNow();
+            float synchronizedAtStart = director.WorldHour.Value;
+            bool startedOnComputerClock = director.ComputerClockActive
+                && WrappedDistance(computerAtStart, synchronizedAtStart) < 0.02f;
+
+            director.ServerSetWorldHourForTest(12f);
             yield return new WaitForSeconds(1f);
             float daySun = SunIntensity;
             float dayMoon = MoonIntensity;
@@ -364,7 +366,7 @@ namespace RadiantPool.Game
             float dayLamps = AverageLampIntensity;
             float dayTorch = PartyTorchIntensity;
 
-            director.ServerSetWorldHour(0f);
+            director.ServerSetWorldHourForTest(0f);
             yield return new WaitForSeconds(1.5f);
             float nightSun = SunIntensity;
             float nightMoon = MoonIntensity;
@@ -374,25 +376,36 @@ namespace RadiantPool.Game
             float torchRange = PartyTorchRange;
             float torchOffset = PartyTorchHorizontalOffset;
             float nightAudio = GameAudio.Instance != null ? GameAudio.Instance.NightAmbienceLevel : 0f;
-            director.ServerSaveCampaign();
-            var persisted = SaveSystem.Read();
-            bool timePersisted = persisted != null
-                                 && Mathf.Abs(Mathf.DeltaAngle(persisted.GameHour * 15f, 0f)) < 2f;
+            bool nightPhase = PhaseLabel == "NIGHT";
 
-            bool pass = daySun > 0.65f && dayMoon < 0.05f
+            director.ServerClearWorldHourTestOverride();
+            yield return new WaitForSeconds(0.75f);
+            float computerAfterTest = GameDirector.ComputerLocalHourNow();
+            float synchronizedAfterTest = director.WorldHour.Value;
+            bool returnedToComputerClock = director.ComputerClockActive
+                && WrappedDistance(computerAfterTest, synchronizedAfterTest) < 0.02f;
+            director.ServerSaveCampaign();
+            bool saveIndependent = SaveSystem.Read() != null
+                && !File.ReadAllText(SaveSystem.SavePath).Contains("\"GameHour\"");
+
+            bool pass = startedOnComputerClock
+                        && daySun > 0.65f && dayMoon < 0.05f
                         && nightSun < 0.05f && nightMoon > 0.25f
                         && nightFog > dayFog + 0.01f
                         && dayLamps > 0f && nightLamps > dayLamps * 4f
                         && dayTorch < 0.05f && nightTorch > 4.5f
                         && Mathf.Abs(torchRange - PartyTorchRadius) < 0.05f
                         && torchOffset < 0.35f
-                        && nightAudio > 0.12f && PhaseLabel == "NIGHT" && timePersisted;
+                        && nightAudio > 0.12f && nightPhase
+                        && returnedToComputerClock && saveIndependent;
             Debug.Log($"[AtmosphereTest] {(pass ? "PASS" : "FAIL")} - " +
+                      $"host computer {FormatHour(computerAtStart)} matched; " +
                       $"noon sun {daySun:0.00}/moon {dayMoon:0.00}/fog {dayFog:0.000}/lamps {dayLamps:0.00}/torch {dayTorch:0.00}; " +
                       $"midnight sun {nightSun:0.00}/moon {nightMoon:0.00}/fog {nightFog:0.000}/lamps {nightLamps:0.00}/" +
                       $"torch {nightTorch:0.00} at {torchRange:0.0}m radius ({torchOffset:0.00}m offset), " +
-                      $"night audio {nightAudio:0.00}, clock {ClockLabel} {PhaseLabel}, " +
-                      $"save {(timePersisted ? "persisted" : "MISSING")}");
+                      $"night audio {nightAudio:0.00}; returned to computer " +
+                      $"{FormatHour(synchronizedAfterTest)}, save " +
+                      $"{(saveIndependent ? "excludes clock" : "STILL STORES CLOCK")}");
         }
 
         private IEnumerator CaptureRepresentativeTimes(string directory)
@@ -402,15 +415,30 @@ namespace RadiantPool.Game
             if (director == null || !director.IsServerStarted) yield break;
             Directory.CreateDirectory(directory);
 
-            director.ServerSetWorldHour(12f);
+            // First frame is untouched wall-clock presentation; the other two are
+            // deterministic regression references and are cleared back to wall time.
+            ScreenCapture.CaptureScreenshot(Path.Combine(directory, "atmosphere_realtime.png"));
+            yield return new WaitForSeconds(2f);
+
+            director.ServerSetWorldHourForTest(12f);
             yield return new WaitForSeconds(2f);
             ScreenCapture.CaptureScreenshot(Path.Combine(directory, "atmosphere_noon.png"));
             yield return new WaitForSeconds(2f);
 
-            director.ServerSetWorldHour(0f);
+            director.ServerSetWorldHourForTest(0f);
             yield return new WaitForSeconds(2f);
             ScreenCapture.CaptureScreenshot(Path.Combine(directory, "atmosphere_midnight.png"));
-            Debug.Log($"[AtmosphereCapture] wrote noon and midnight frames to {directory}");
+            director.ServerClearWorldHourTestOverride();
+            Debug.Log($"[AtmosphereCapture] wrote realtime, noon and midnight frames to {directory}; " +
+                      $"restored host computer time {FormatHour(GameDirector.ComputerLocalHourNow())}");
+        }
+
+        private static string FormatHour(float hour)
+        {
+            hour = Mathf.Repeat(hour, 24f);
+            int whole = Mathf.FloorToInt(hour);
+            int minute = Mathf.FloorToInt((hour - whole) * 60f);
+            return $"{whole:00}:{minute:00}";
         }
 
         private static float WrappedDistance(float a, float b)
