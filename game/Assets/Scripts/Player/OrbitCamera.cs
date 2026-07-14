@@ -49,6 +49,18 @@ namespace RadiantPool.Game
 
         public void RecenterPan() => _pan = Vector3.zero;
 
+        /// <summary>One-shot camera composition for command-line screenshot tests. The
+        /// same follow/orbit path still renders the frame; this only supplies a known
+        /// bearing, pitch and distance without sending desktop input.</summary>
+        public void SetPresentationView(float yaw, float pitch, float wantedDistance)
+        {
+            _yaw = yaw;
+            _pitch = Mathf.Clamp(pitch, pitchMin, pitchMax);
+            distance = Mathf.Clamp(wantedDistance, minDistance, maxDistance);
+            _pan = Vector3.zero;
+            _focusReady = false;
+        }
+
         /// <summary>Adds a short, bounded presentation shake. Combat rules never read it;
         /// the camera applies it after follow/orbit so it cannot accumulate drift.</summary>
         public void AddTrauma(float amount) => _trauma = Mathf.Clamp01(_trauma + amount);

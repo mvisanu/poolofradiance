@@ -373,6 +373,15 @@ namespace RadiantPool.Game
             bool questLampCoverage = questLamps.Length >= 4
                                      && healthyQuestLamps == questLamps.Length
                                      && surroundsQuestGivers;
+            var hall = GameObject.Find("Council Hall");
+            var hallTarget = GameObject.Find("Council Hall Facade Light Target");
+            var hallLamps = questLamps.Where(l => l.IlluminatesCouncilHall).ToArray();
+            int hallLightsInRange = hallTarget == null ? 0 : hallLamps.Count(l =>
+                l.Glow != null && Vector3.Distance(l.Glow.transform.position,
+                    hallTarget.transform.position) <= l.Glow.range);
+            bool councilHallIlluminated = hall != null && hallTarget != null
+                                          && hallLamps.Length >= 2
+                                          && hallLightsInRange == hallLamps.Length;
 
             director.ServerSetWorldHourForTest(12f);
             yield return new WaitForSeconds(1f);
@@ -380,6 +389,7 @@ namespace RadiantPool.Game
             float dayMoon = MoonIntensity;
             float dayFog = FogDensity;
             float dayLamps = AverageLampIntensity;
+            float dayHallLamps = hallLamps.Where(l => l.Glow != null).Sum(l => l.Glow.intensity);
             float dayTorch = PartyTorchIntensity;
 
             director.ServerSetWorldHourForTest(0f);
@@ -388,6 +398,7 @@ namespace RadiantPool.Game
             float nightMoon = MoonIntensity;
             float nightFog = FogDensity;
             float nightLamps = AverageLampIntensity;
+            float nightHallLamps = hallLamps.Where(l => l.Glow != null).Sum(l => l.Glow.intensity);
             float nightTorch = PartyTorchIntensity;
             float torchRange = PartyTorchRange;
             float torchOffset = PartyTorchHorizontalOffset;
@@ -406,10 +417,12 @@ namespace RadiantPool.Game
 
             bool pass = startedOnComputerClock
                         && questLampCoverage
+                        && councilHallIlluminated
                         && daySun > 0.65f && dayMoon < 0.05f
                         && nightSun < 0.05f && nightMoon > 0.25f
                         && nightFog > dayFog + 0.01f
                         && dayLamps > 0f && nightLamps > dayLamps * 4f
+                        && dayHallLamps > 0f && nightHallLamps > dayHallLamps * 4f
                         && dayTorch < 0.05f && nightTorch > 4.5f
                         && Mathf.Abs(torchRange - PartyTorchRadius) < 0.05f
                         && torchOffset < 0.35f
@@ -420,6 +433,8 @@ namespace RadiantPool.Game
                       $"quest-center flame lamps {healthyQuestLamps}/{questLamps.Length} " +
                       $"visible/lit and {(surroundsQuestGivers ? "surround" : "DO NOT SURROUND")} " +
                       $"{questGivers.Length} quest giver(s); " +
+                      $"Council Hall lit by {hallLightsInRange}/{hallLamps.Length} marked lamps " +
+                      $"({dayHallLamps:0.00} noon to {nightHallLamps:0.00} midnight); " +
                       $"noon sun {daySun:0.00}/moon {dayMoon:0.00}/fog {dayFog:0.000}/lamps {dayLamps:0.00}/torch {dayTorch:0.00}; " +
                       $"midnight sun {nightSun:0.00}/moon {nightMoon:0.00}/fog {nightFog:0.000}/lamps {nightLamps:0.00}/" +
                       $"torch {nightTorch:0.00} at {torchRange:0.0}m radius ({torchOffset:0.00}m offset), " +

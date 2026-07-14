@@ -296,7 +296,8 @@ namespace RadiantPool.Game
                 && ZoneClearedCounts[zone] >= cfg.RequiredEncounters)
             {
                 ZoneStates[zone] = (int)QuestState.ObjectivesMet;
-                RpcNotice($"{cfg.DisplayName} has been cleared! Return to Councilor Veresk.");
+                RpcNotice($"{cfg.DisplayName} has been cleared! Follow the gold marker to " +
+                          "Council Hall and speak with Councilor Veresk to turn it in.");
             }
         }
 
@@ -803,9 +804,9 @@ namespace RadiantPool.Game
                       $"({Vector3.Distance(holder.transform.position, smith.transform.position):0.0} m)");
         }
 
-        /// <summary>Screenshot-only QA path: park south of the council platform, face its
-        /// four quest-center flame posts, force midnight, capture, then restore wall time.
-        /// No synthetic desktop input is involved.</summary>
+        /// <summary>Screenshot-only QA path: park north of the council forecourt, face the
+        /// hall and its four flame posts, manufacture a ready turn-in, force midnight,
+        /// capture, then restore campaign state and wall time. No synthetic input.</summary>
         private System.Collections.IEnumerator QuestLampCapture(string path)
         {
             yield return new WaitForSeconds(8f);
@@ -817,16 +818,27 @@ namespace RadiantPool.Game
                 yield break;
             }
 
-            Warp(holder.transform, new Vector3(0f, 0.1f, -25.5f));
-            holder.transform.rotation = Quaternion.identity;
+            int oldMuster = MusterState.Value;
+            var oldStates = ZoneStates.ToArray();
+            MusterState.Value = (int)QuestState.Completed;
+            for (int i = 0; i < ZoneStates.Count; i++)
+                ZoneStates[i] = (int)QuestState.Locked;
+            if (ZoneStates.Count > 0) ZoneStates[0] = (int)QuestState.ObjectivesMet;
+
+            Warp(holder.transform, new Vector3(0f, 0.1f, -5f));
+            holder.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+            var orbit = Camera.main != null ? Camera.main.GetComponent<OrbitCamera>() : null;
+            if (orbit != null) orbit.SetPresentationView(180f, 22f, 10f);
             ServerSetWorldHourForTest(0f);
             yield return new WaitForSeconds(2f);
             string directory = System.IO.Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(directory)) System.IO.Directory.CreateDirectory(directory);
             ScreenCapture.CaptureScreenshot(path);
             yield return new WaitForSeconds(2f);
+            MusterState.Value = oldMuster;
+            for (int i = 0; i < oldStates.Length; i++) ZoneStates[i] = oldStates[i];
             ServerClearWorldHourTestOverride();
-            Debug.Log($"[QuestLampCapture] wrote midnight council lamp frame to {path}; " +
+            Debug.Log($"[QuestLampCapture] wrote midnight Council Hall turn-in frame to {path}; " +
                       $"restored host computer time {WorldHour.Value:0.00}");
         }
 
@@ -1058,7 +1070,7 @@ namespace RadiantPool.Game
                 GUILayout.ExpandHeight(true));
             GUILayout.BeginVertical(Theme.ParchmentStyle);
             DrawQuest("Report to the Council", (QuestState)MusterState.Value,
-                "Speak with Councilor Veresk on the council platform in the hub plaza " +
+                "Enter the lamplit Council Hall forecourt and speak with Councilor Veresk " +
                 "(follow the red X on the minimap).", -1f);
             for (int i = 0; i < Zones.Length; i++)
             {
@@ -1116,7 +1128,8 @@ namespace RadiantPool.Game
                 ? "<color=#8a6d1f><b>[!]</b></color>" : "<color=#8a6d1f><b>[ ]</b></color>";
             GUILayout.Label($"{mark}  <b>{title}</b>", Theme.HeaderInk);
             GUILayout.Label(state == QuestState.ObjectivesMet
-                ? "<i>Return to Councilor Veresk for your reward.</i>" : detail, Theme.BodyInk);
+                ? "<i>TURN IN: Follow the gold marker to Council Hall and speak with " +
+                  "Councilor Veresk for your reward.</i>" : detail, Theme.BodyInk);
             if (progress >= 0f && state == QuestState.Active)
             {
                 var r = GUILayoutUtility.GetRect(240, 9);

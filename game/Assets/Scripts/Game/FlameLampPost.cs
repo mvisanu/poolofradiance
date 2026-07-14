@@ -13,6 +13,7 @@ namespace RadiantPool.Game
         public string AreaId = "district";
         public Transform FlameVisual;
         public Light Glow;
+        public bool IlluminatesCouncilHall;
 
         private Vector3 _baseScale = Vector3.one;
         private float _seed;

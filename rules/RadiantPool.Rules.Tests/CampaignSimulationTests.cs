@@ -18,7 +18,8 @@ namespace RadiantPool.Rules.Tests
         private const int MusterXp = 50;
         private static readonly (string zone, int questXp)[] ZoneChain =
         {
-            ("old_docks", 300), ("drowned_market", 900), ("glasslit_temple", 3400)
+            ("old_docks", 300), ("drowned_market", 900),
+            ("sunken_warcamp", 1200), ("glasslit_temple", 3400)
         };
 
         private static string ContentRoot()

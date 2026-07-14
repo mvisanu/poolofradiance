@@ -172,6 +172,44 @@ namespace RadiantPool.Rules.Tests
         }
 
         [Fact]
+        public void CampaignQuests_FormOriginalIpCommissionArc_WithExplicitTurnIns()
+        {
+            var quests = Directory.EnumerateFiles(Path.Combine(ContentRoot, "quests"), "*.json")
+                .Select(f => JsonDocument.Parse(File.ReadAllText(f)))
+                .OrderBy(d => d.RootElement.GetProperty("chainOrder").GetInt32())
+                .ToList();
+            try
+            {
+                Assert.Equal(new[]
+                {
+                    "q_muster", "q_clear_docks", "q_clear_market",
+                    "q_clear_warcamp", "q_clear_temple"
+                }, quests.Select(d => d.RootElement.GetProperty("id").GetString()));
+                Assert.Equal(new[]
+                {
+                    "council_introduction", "urban_reclamation",
+                    "haunted_civic_reclamation", "enemy_alliance_disruption",
+                    "corrupted_seat_finale"
+                }, quests.Select(d => d.RootElement.GetProperty("campaignRole").GetString()));
+
+                foreach (var quest in quests.Where(d =>
+                             d.RootElement.GetProperty("type").GetString() == "clear_zone"))
+                {
+                    var turnIn = quest.RootElement.GetProperty("turnIn");
+                    Assert.Equal("hub_council_hall",
+                        turnIn.GetProperty("location").GetString());
+                    Assert.Equal("npc_council_veresk", turnIn.GetProperty("npc").GetString());
+                    Assert.Contains("gold marker", turnIn.GetProperty("instruction")
+                        .GetString()!, StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            finally
+            {
+                foreach (var quest in quests) quest.Dispose();
+            }
+        }
+
+        [Fact]
         public void NoBannedIpTerms_AnywhereInContent()
         {
             // Per IP-CHECKLIST.md hard bans.

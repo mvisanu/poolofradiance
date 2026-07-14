@@ -2,14 +2,17 @@
   "schemaVersion": 1,
   "id": "q_clear_warcamp",
   "name": "The Warband Below",
+  "chainOrder": 3,
+  "campaignRole": "enemy_alliance_disruption",
   "giver": "npc_council_veresk",
   "type": "clear_zone",
   "zone": "sunken_warcamp",
   "locked": true,
   "objectives": [
     { "id": "o1", "text": "Break the orc warband in the Sunken Warcamp", "counter": "encounters_cleared", "target": 3 },
-    { "id": "o2", "text": "Return to Councilor Veresk", "counter": "turned_in", "target": 1 }
+    { "id": "o2", "text": "Turn in the commission at Council Hall", "counter": "turned_in", "target": 1 }
   ],
+  "turnIn": { "location": "hub_council_hall", "npc": "npc_council_veresk", "instruction": "Follow the gold marker back to Council Hall." },
   "rewards": { "xpEach": 1200, "gold": 400, "storyBeat": "sb_warcamp_broken" },
   "unlocks": ["q_clear_temple"]
 }

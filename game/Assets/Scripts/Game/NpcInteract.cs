@@ -132,7 +132,8 @@ namespace RadiantPool.Game
                 if (state == QuestState.Active)
                 {
                     Say(i < ZoneBriefs.Length ? ZoneBriefs[i]
-                        : $"\"Clear {director.Zones[i].DisplayName}, then return to me.\"");
+                        : $"\"Clear {director.Zones[i].DisplayName}, then follow the gold " +
+                          "turn-in marker back to me at Council Hall.\"");
                     if (GUILayout.Button("We're on it.")) _open = false;
                     GUILayout.EndArea();
                     return;
@@ -141,7 +142,7 @@ namespace RadiantPool.Game
                 {
                     Say(i < ZoneTurnins.Length ? ZoneTurnins[i]
                         : $"\"{director.Zones[i].DisplayName} is clear. Well done.\"");
-                    if (GUILayout.Button($"{director.Zones[i].DisplayName} is clear. (Turn in)",
+                    if (GUILayout.Button($"Turn in at Council Hall: {director.Zones[i].DisplayName}",
                             Theme.BtnPrimary))
                     { director.CmdDialogueChoice($"turnin_{i}"); _open = false; }
                     GUILayout.EndArea();

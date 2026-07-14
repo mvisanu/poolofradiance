@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -15,6 +16,7 @@ namespace RadiantPool.Game
         public static QuestTracker Instance { get; private set; }
 
         public bool HasTarget { get; private set; }
+        public bool IsTurnInTarget { get; private set; }
         public Vector3 TargetPosition { get; private set; }
         public string TargetLabel { get; private set; } = "";
 
@@ -24,6 +26,12 @@ namespace RadiantPool.Game
         private GUIStyle _distStyle, _questTitle, _stepStyle, _stepDone, _cardBtn;
 
         private void Awake() => Instance = this;
+        private void Start()
+        {
+            if (System.Array.IndexOf(System.Environment.GetCommandLineArgs(),
+                    "-questguidancetest") >= 0)
+                StartCoroutine(QuestGuidanceSelfTest());
+        }
         private void OnDestroy() { if (Instance == this) Instance = null; }
 
         private Transform LocalPlayer()
@@ -57,6 +65,7 @@ namespace RadiantPool.Game
         private void Scan()
         {
             HasTarget = false;
+            IsTurnInTarget = false;
             var director = GameDirector.Instance;
             var player = LocalPlayer();
             bool inCombat = CombatManager.Instance != null && CombatManager.Instance.InCombat.Value;
@@ -66,10 +75,15 @@ namespace RadiantPool.Game
             // Talking to Veresk: muster, any turn-in, or campaign done.
             bool needVeresk = (QuestState)director.MusterState.Value == QuestState.Active;
             int activeZone = -1;
+            int turnInZone = -1;
             for (int i = 0; i < director.Zones.Length; i++)
             {
                 var state = director.GetZoneState(i);
-                if (state == QuestState.ObjectivesMet) needVeresk = true;
+                if (state == QuestState.ObjectivesMet)
+                {
+                    needVeresk = true;
+                    if (turnInZone < 0) turnInZone = i;
+                }
                 if (state == QuestState.Active && activeZone < 0) activeZone = i;
             }
 
@@ -80,7 +94,10 @@ namespace RadiantPool.Game
                 if (veresk != null)
                 {
                     TargetPosition = veresk.transform.position;
-                    TargetLabel = "Councilor Veresk";
+                    IsTurnInTarget = turnInZone >= 0;
+                    TargetLabel = IsTurnInTarget
+                        ? $"{director.Zones[turnInZone].QuestName} at Council Hall"
+                        : "Council Hall - Councilor Veresk";
                     HasTarget = true;
                 }
                 return;
@@ -154,7 +171,13 @@ namespace RadiantPool.Game
                 steps.Add((cleared
                     ? $"Clear {cfg.DisplayName} — {need}/{need}"
                     : $"Clear {cfg.DisplayName} — {done}/{need} ({need - done} left)", cleared));
-                steps.Add(("Report back to Councilor Veresk", false));
+                if (state == QuestState.ObjectivesMet)
+                {
+                    steps.Add(("TURN IN at Council Hall - speak with Councilor Veresk", false));
+                    return ($"READY TO TURN IN: {cfg.QuestName}", steps);
+                }
+
+                steps.Add(("When clear: follow the gold marker back to Council Hall", false));
                 return (cfg.QuestName, steps);
             }
 
@@ -214,8 +237,9 @@ namespace RadiantPool.Game
             float camYaw = Camera.main != null ? Camera.main.transform.eulerAngles.y : 0f;
             float bearing = Mathf.Atan2(delta.x, delta.z) * Mathf.Rad2Deg - camYaw;
 
+            string directive = IsTurnInTarget ? "TURN IN" : "NEXT";
             Theme.DrawToast(Ui.W / 2f, 58,
-                $"NEXT: {TargetLabel}  <color=#d0c5af>— {dist:0} m {Bearing(bearing)}</color>",
+                $"{directive}: {TargetLabel}  <color=#d0c5af>— {dist:0} m {Bearing(bearing)}</color>",
                 maxW: Mathf.Min(660f, Ui.W - 40f));
 
             DrawSteeringArrow(bearing, dist);
@@ -413,6 +437,52 @@ namespace RadiantPool.Game
                 "behind you", "behind-left", "to your left", "ahead-left"
             };
             return names[Mathf.RoundToInt(degrees / 45f) % 8];
+        }
+
+        /// <summary>Build-only regression: manufacture a ready commission briefly and
+        /// prove every visible guidance layer changes to an explicit Council Hall turn-in.
+        /// The original replicated quest state is restored before the test exits.</summary>
+        private IEnumerator QuestGuidanceSelfTest()
+        {
+            yield return new WaitForSeconds(7f);
+            var director = GameDirector.Instance;
+            if (director == null || !director.IsServerStarted || director.Zones.Length == 0
+                || director.ZoneStates.Count != director.Zones.Length)
+            {
+                Debug.Log("[QuestGuidanceTest] FAIL - campaign state unavailable");
+                yield break;
+            }
+
+            int oldMuster = director.MusterState.Value;
+            var oldStates = director.ZoneStates.ToArray();
+            director.MusterState.Value = (int)QuestState.Completed;
+            for (int i = 0; i < director.ZoneStates.Count; i++)
+                director.ZoneStates[i] = (int)QuestState.Locked;
+            director.ZoneStates[0] = (int)QuestState.ObjectivesMet;
+
+            yield return new WaitForSeconds(0.75f);
+            Scan();
+            var summary = Objectives();
+            var veresk = FindObjectsByType<NpcInteract>(FindObjectsSortMode.None)
+                .FirstOrDefault();
+            bool pointsToGiver = veresk != null
+                                 && Vector3.Distance(TargetPosition,
+                                     veresk.transform.position) < 0.1f;
+            bool cardNamesHall = summary.title.StartsWith("READY TO TURN IN:")
+                                 && summary.steps.Any(s => !s.done
+                                     && s.text.Contains("Council Hall"));
+            bool pass = HasTarget && IsTurnInTarget && pointsToGiver
+                        && TargetLabel.Contains("Council Hall") && cardNamesHall;
+            string testedLabel = TargetLabel;
+
+            director.MusterState.Value = oldMuster;
+            for (int i = 0; i < oldStates.Length; i++)
+                director.ZoneStates[i] = oldStates[i];
+            Scan();
+
+            Debug.Log($"[QuestGuidanceTest] {(pass ? "PASS" : "FAIL")} - " +
+                      $"turn-in target {(pointsToGiver ? "is" : "is not")} Veresk; " +
+                      $"toast '{testedLabel}'; card {(cardNamesHall ? "names" : "omits")} Council Hall");
         }
     }
 }

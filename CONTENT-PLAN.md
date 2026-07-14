@@ -1,6 +1,6 @@
 # CONTENT-PLAN.md — Radiant Pool
 
-First region layout (hub + 3 zones), quest structure, and the asset-pack shopping list.
+First region layout (hub + 4 zones), quest structure, and the asset-pack shopping list.
 All names below are original — see IP-CHECKLIST.md for the audit.
 
 ---
@@ -17,8 +17,9 @@ adventuring companies to retake the city block-by-block.
 **Villain:** **The Hollow Flame** — a bodiless will of living radiance that seeped from
 the Lightwell and possesses a chain of hosts (its current host: **Warden Sorrel**, the
 city's long-missing lord-protector). It wants the city empty so nothing interrupts its
-slow claim on the Lightwell. Structure mirrors Pool of Radiance (possessing entity,
-corrupted seat of power, pool as final site) with zero shared names, monsters, or lore.
+slow claim on the Lightwell. The campaign uses a classic commission-driven reclamation
+arc (possessing entity, corrupted seat of power, Lightwell as final site) with original
+names, monsters, dialogue, and lore.
 
 Tone: hopeful reclamation, not grimdark. Every cleared zone visibly relights —
 lanterns lit, council banners raised, a merchant or guard appears. The "permanently
@@ -26,7 +27,7 @@ pacified" mechanic is also the story's emotional payoff.
 
 ---
 
-## 2. First region: hub + 3 zones
+## 2. First region: hub + 4 zones
 
 ### Hub — Havenrock Quarter (safe zone, no combat)
 - **Council Hall** — quest-giver: **Councilor Veresk** (main quest chain), quest turn-ins, story beats.
@@ -49,7 +50,13 @@ pacified" mechanic is also the story's emotional payoff.
 - 4 required encounters + optional sunken vault (water hazard cells in combat — first
   taste of grid terrain). Clear → market stalls return, second vendor inventory tier.
 
-### Zone 3 — The Glasslit Temple (levels 3–5, region climax)
+### Zone 3 — The Sunken Warcamp (levels 3–4)
+- Fiction: an army gathering beyond the walls threatens to join the force occupying the
+  temple district. The Council commissions the party to break its two pickets and command
+  tent before the alliance is sealed.
+- 3 required encounters. Clear → the south road is reclaimed and the final assault opens.
+
+### Zone 4 — The Glasslit Temple (levels 4–5, region climax)
 - Fiction: the ruined temple district around the Lightwell; the Hollow Flame's cult
   ("the Kindled") prepare Warden Sorrel's final rite.
 - Enemies: **Kindled Zealots** (cultist stats), **Kindled Adepts** (cult fanatic stats),
@@ -61,10 +68,11 @@ pacified" mechanic is also the story's emotional payoff.
 
 ### Quest chain (workflow 3)
 1. `q_muster` — report to Councilor Veresk (teaches journal + turn-in). 
-2. `q_clear_docks` → 3. `q_clear_market` → 4. `q_clear_temple` (each: clear all required
+2. `q_clear_docks` → 3. `q_clear_market` → 4. `q_clear_warcamp` →
+   5. `q_clear_temple` (each: clear all required
    encounters, return for gold/XP/story beat; journal tracks per-objective counters,
    shared party progress, per-player rewards).
-5. Side quests (one per zone, optional): lost cargo (docks), the toll ledger (market),
+6. Side quests (one per zone, optional): lost cargo (docks), the toll ledger (market),
    evacuate the acolyte (temple) — each exercises a system (loot, dialogue choice, escort-lite).
 
 XP budget tuned so a 2-player party finishing required content hits level 5 at the

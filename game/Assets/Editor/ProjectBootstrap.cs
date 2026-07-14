@@ -656,6 +656,8 @@ namespace RadiantPool.EditorTools
             var marketCloth = Mat("M_MarketCloth", new Color(0.24f, 0.33f, 0.18f));
             var templeStone = Mat("M_TempleStone", new Color(0.43f, 0.37f, 0.31f));
             var templeEmber = Mat("M_TempleEmber", new Color(0.52f, 0.16f, 0.08f));
+            var councilWall = Mat("M_CouncilWall", new Color(0.42f, 0.30f, 0.20f));
+            var councilRoof = Mat("M_CouncilRoof", new Color(0.18f, 0.12f, 0.10f));
 
             // A building is a COLLIDER plus a look. The collider is gameplay (it blocks
             // movement, and the combat x-ray fades whatever hides a creature), so it is
@@ -704,6 +706,38 @@ namespace RadiantPool.EditorTools
                     PolyPackArt.Place(PolyPackArt.Kind.House, houseSeed++,
                         new Vector3(x, 0f, z), rot, size, byHeight: false);
 
+            // A real civic landmark behind Veresk, rather than a quest giver standing on
+            // an anonymous crate platform. The collider-backed hall always exists; an
+            // imported low-poly house becomes its visual when available.
+            Roofed("Council Hall", new Vector3(0f, 3f, -25f),
+                new Vector3(14f, 6f, 8f), councilWall, councilRoof);
+            KenneyArt.Place("FantasyTown", "wall-doorway-round", new Vector3(0f, 0f, -20.8f),
+                0f, 3.4f, true);
+            KenneyArt.Place("FantasyTown", "pillar-stone", new Vector3(-5.2f, 0f, -20.8f),
+                0f, 4.8f, true);
+            KenneyArt.Place("FantasyTown", "pillar-stone", new Vector3(5.2f, 0f, -20.8f),
+                0f, 4.8f, true);
+            KenneyArt.Place("FantasyTown", "banner-red", new Vector3(-3.8f, 0.5f, -20.7f),
+                0f, 3.1f, true);
+            KenneyArt.Place("FantasyTown", "banner-green", new Vector3(3.8f, 0.5f, -20.7f),
+                0f, 3.1f, true);
+
+            var hallLabelGo = new GameObject("Council Hall Sign");
+            hallLabelGo.transform.position = new Vector3(0f, 5.4f, -20.6f);
+            var hallLabel = hallLabelGo.AddComponent<TextMesh>();
+            hallLabel.text = "Council Hall";
+            hallLabel.characterSize = 0.09f;
+            hallLabel.fontSize = 46;
+            hallLabel.anchor = TextAnchor.LowerCenter;
+            hallLabel.color = new Color(1f, 0.86f, 0.45f);
+            hallLabelGo.AddComponent<Billboard>();
+
+            // The atmosphere self-test samples this point on the front elevation. Point
+            // lights are omnidirectional, so being within both marked lamp ranges proves
+            // the actual hall facade receives their warm night light.
+            var hallLightTarget = new GameObject("Council Hall Facade Light Target");
+            hallLightTarget.transform.position = new Vector3(0f, 3.2f, -20.7f);
+
             // --- CC0 Kenney set dressing (see Assets/Art/Kenney; CREDITS in README) ---
             var lampIron = Mat("M_LampIron", new Color(0.075f, 0.060f, 0.052f));
             var flameOrange = Mat("M_FlameOrange", new Color(1f, 0.22f, 0.035f));
@@ -727,7 +761,8 @@ namespace RadiantPool.EditorTools
                 piece.GetComponent<Renderer>().sharedMaterial = material;
             }
 
-            void Lantern(Vector3 pos, string areaId = "district")
+            void Lantern(Vector3 pos, string areaId = "district",
+                bool illuminatesCouncilHall = false)
             {
                 var root = new GameObject($"Flame Lamp Post [{areaId}]");
                 root.transform.position = pos;
@@ -774,8 +809,8 @@ namespace RadiantPool.EditorTools
                 var glow = glowObject.AddComponent<Light>();
                 glow.type = LightType.Point;
                 glow.color = new Color(1f, 0.58f, 0.22f);
-                glow.intensity = 2.25f;
-                glow.range = 10f;
+                glow.intensity = illuminatesCouncilHall ? 3.25f : 2.25f;
+                glow.range = illuminatesCouncilHall ? 14f : 10f;
                 glow.shadows = LightShadows.Soft;
                 glow.shadowStrength = 0.35f;
 
@@ -783,6 +818,7 @@ namespace RadiantPool.EditorTools
                 marker.AreaId = areaId;
                 marker.FlameVisual = flame.transform;
                 marker.Glow = glow;
+                marker.IlluminatesCouncilHall = illuminatesCouncilHall;
             }
 
             // Shrine of the Dawnmother — where a defeated party wakes
@@ -812,8 +848,8 @@ namespace RadiantPool.EditorTools
             // while two more carry that warm path through the fountain plaza.
             Lantern(new Vector3(-5, 0, -10), FlameLampPost.QuestCenterArea);
             Lantern(new Vector3(5, 0, -10), FlameLampPost.QuestCenterArea);
-            Lantern(new Vector3(-4, 0, -20), FlameLampPost.QuestCenterArea);
-            Lantern(new Vector3(4, 0, -20), FlameLampPost.QuestCenterArea);
+            Lantern(new Vector3(-4, 0, -20), FlameLampPost.QuestCenterArea, true);
+            Lantern(new Vector3(4, 0, -20), FlameLampPost.QuestCenterArea, true);
             Lantern(new Vector3(-5, 0, 2), "town_center");
             Lantern(new Vector3(5, 0, 2), "town_center");
             KenneyArt.Place("FantasyTown", "banner-red", new Vector3(-3.5f, 0.3f, -15), 0, 2.6f, true);
@@ -890,7 +926,7 @@ namespace RadiantPool.EditorTools
                 spawns.Add(sp.transform);
             }
 
-            // Council corner (hub stand-in): a raised platform + Veresk.
+            // Council forecourt: a raised speaking platform in front of the lit hall.
             Box("CouncilPlatform", new Vector3(0, 0.15f, -15), new Vector3(8, 0.3f, 6), crate);
             var veresk = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             veresk.name = "Councilor Veresk";
@@ -1118,7 +1154,8 @@ namespace RadiantPool.EditorTools
                     ZoneId = "old_docks", DisplayName = "The Old Docks",
                     QuestName = "Retake the Old Docks",
                     Description = "Squatter gangs hold three yards along the waterfront " +
-                        "WEST of the hub. Break all three, then return to Veresk.",
+                        "WEST of the hub. Break all three, then follow the gold marker " +
+                        "back to Council Hall to turn in the commission.",
                     RequiredEncounters = 3, XpEach = 300, Gold = 100
                 },
                 new GameDirector.ZoneConfig
@@ -1126,7 +1163,7 @@ namespace RadiantPool.EditorTools
                     ZoneId = "drowned_market", DisplayName = "The Drowned Market",
                     QuestName = "Silence the Drowned Market",
                     Description = "The drowned dead haunt the flooded market NORTH of the " +
-                        "hub. Lay all four hauntings to rest — mind the Toll-Keeper.",
+                        "hub. Lay all four hauntings to rest, then return SOUTH to Council Hall.",
                     RequiredEncounters = 4, XpEach = 900, Gold = 250
                 },
                 new GameDirector.ZoneConfig
@@ -1135,7 +1172,7 @@ namespace RadiantPool.EditorTools
                     QuestName = "The Warband Below",
                     Description = "Karg Splitjaw's orc warband holds the sunken quarter " +
                         "SOUTH of the walls. Break both picket bands, then storm the " +
-                        "war-tent and slay the Warchief.",
+                        "war-tent and slay the Warchief before returning to Council Hall.",
                     RequiredEncounters = 3, XpEach = 1200, Gold = 400
                 },
                 new GameDirector.ZoneConfig
@@ -1143,7 +1180,8 @@ namespace RadiantPool.EditorTools
                     ZoneId = "glasslit_temple", DisplayName = "The Glasslit Temple",
                     QuestName = "The Fire in the Glass",
                     Description = "The Kindled cult holds the Glasslit Temple EAST of the " +
-                        "hub. Break their five circles and face what wears the Warden.",
+                        "hub. Break their five circles, face what wears the Warden, then " +
+                        "return WEST to Council Hall.",
                     RequiredEncounters = 5, XpEach = 3400, Gold = 600
                 }
             };
