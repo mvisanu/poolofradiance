@@ -100,8 +100,10 @@ namespace RadiantPool.Game
         {
             base.OnStartServer();
             var args = System.Environment.GetCommandLineArgs();
+            int questLampCapture = System.Array.IndexOf(args, "-questlampcapture");
             _allowWorldTimeOverride = System.Array.IndexOf(args, "-atmospheretest") >= 0
-                                      || System.Array.IndexOf(args, "-atmospherecapture") >= 0;
+                                      || System.Array.IndexOf(args, "-atmospherecapture") >= 0
+                                      || questLampCapture >= 0;
             SyncFromComputerClock();
             Debug.Log($"[Atmosphere] host computer clock " +
                       $"{System.DateTime.Now:HH:mm:ss} ({System.TimeZoneInfo.Local.Id})");
@@ -123,6 +125,8 @@ namespace RadiantPool.Game
                 StartCoroutine(WeaponVisualSelfTest());
             if (System.Array.IndexOf(args, "-recruittest") >= 0)
                 StartCoroutine(SoloRecruitmentSelfTest());
+            if (questLampCapture >= 0 && questLampCapture + 1 < args.Length)
+                StartCoroutine(QuestLampCapture(args[questLampCapture + 1]));
 
             if (!SaveSystem.Exists) return;
             var save = SaveSystem.Read();
@@ -797,6 +801,33 @@ namespace RadiantPool.Game
                 holder.transform.position.y, smith.transform.position.z));
             Debug.Log($"[WarpSmith] parked at {smith.VendorName} " +
                       $"({Vector3.Distance(holder.transform.position, smith.transform.position):0.0} m)");
+        }
+
+        /// <summary>Screenshot-only QA path: park south of the council platform, face its
+        /// four quest-center flame posts, force midnight, capture, then restore wall time.
+        /// No synthetic desktop input is involved.</summary>
+        private System.Collections.IEnumerator QuestLampCapture(string path)
+        {
+            yield return new WaitForSeconds(8f);
+            var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => !p.IsCompanion && p.Owner != null && p.Owner.IsValid);
+            if (holder == null)
+            {
+                Debug.Log("[QuestLampCapture] FAIL - no player");
+                yield break;
+            }
+
+            Warp(holder.transform, new Vector3(0f, 0.1f, -25.5f));
+            holder.transform.rotation = Quaternion.identity;
+            ServerSetWorldHourForTest(0f);
+            yield return new WaitForSeconds(2f);
+            string directory = System.IO.Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(directory)) System.IO.Directory.CreateDirectory(directory);
+            ScreenCapture.CaptureScreenshot(path);
+            yield return new WaitForSeconds(2f);
+            ServerClearWorldHourTestOverride();
+            Debug.Log($"[QuestLampCapture] wrote midnight council lamp frame to {path}; " +
+                      $"restored host computer time {WorldHour.Value:0.00}");
         }
 
         /// <summary>A teleport that sticks. A CharacterController overwrites a direct

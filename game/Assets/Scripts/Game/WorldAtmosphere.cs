@@ -358,6 +358,22 @@ namespace RadiantPool.Game
             bool startedOnComputerClock = director.ComputerClockActive
                 && WrappedDistance(computerAtStart, synchronizedAtStart) < 0.02f;
 
+            var questLamps = FindObjectsByType<FlameLampPost>(FindObjectsSortMode.None)
+                .Where(l => l.AreaId == FlameLampPost.QuestCenterArea).ToArray();
+            var questGivers = FindObjectsByType<NpcInteract>(FindObjectsSortMode.None);
+            int healthyQuestLamps = questLamps.Count(l => l.HasVisibleFlame
+                && l.HasWorkingLight && _lamps.ContainsKey(l.Glow));
+            bool surroundsQuestGivers = questGivers.Length > 0 && questGivers.All(g =>
+            {
+                var nearby = questLamps.Select(l => l.transform.position - g.transform.position)
+                    .Where(delta => new Vector2(delta.x, delta.z).magnitude <= 8.5f).ToArray();
+                return nearby.Any(d => d.x < -1f) && nearby.Any(d => d.x > 1f)
+                       && nearby.Any(d => d.z < -1f) && nearby.Any(d => d.z > 1f);
+            });
+            bool questLampCoverage = questLamps.Length >= 4
+                                     && healthyQuestLamps == questLamps.Length
+                                     && surroundsQuestGivers;
+
             director.ServerSetWorldHourForTest(12f);
             yield return new WaitForSeconds(1f);
             float daySun = SunIntensity;
@@ -389,6 +405,7 @@ namespace RadiantPool.Game
                 && !File.ReadAllText(SaveSystem.SavePath).Contains("\"GameHour\"");
 
             bool pass = startedOnComputerClock
+                        && questLampCoverage
                         && daySun > 0.65f && dayMoon < 0.05f
                         && nightSun < 0.05f && nightMoon > 0.25f
                         && nightFog > dayFog + 0.01f
@@ -400,6 +417,9 @@ namespace RadiantPool.Game
                         && returnedToComputerClock && saveIndependent;
             Debug.Log($"[AtmosphereTest] {(pass ? "PASS" : "FAIL")} - " +
                       $"host computer {FormatHour(computerAtStart)} matched; " +
+                      $"quest-center flame lamps {healthyQuestLamps}/{questLamps.Length} " +
+                      $"visible/lit and {(surroundsQuestGivers ? "surround" : "DO NOT SURROUND")} " +
+                      $"{questGivers.Length} quest giver(s); " +
                       $"noon sun {daySun:0.00}/moon {dayMoon:0.00}/fog {dayFog:0.000}/lamps {dayLamps:0.00}/torch {dayTorch:0.00}; " +
                       $"midnight sun {nightSun:0.00}/moon {nightMoon:0.00}/fog {nightFog:0.000}/lamps {nightLamps:0.00}/" +
                       $"torch {nightTorch:0.00} at {torchRange:0.0}m radius ({torchOffset:0.00}m offset), " +

@@ -705,18 +705,84 @@ namespace RadiantPool.EditorTools
                         new Vector3(x, 0f, z), rot, size, byHeight: false);
 
             // --- CC0 Kenney set dressing (see Assets/Art/Kenney; CREDITS in README) ---
-            void Lantern(Vector3 pos)
+            var lampIron = Mat("M_LampIron", new Color(0.075f, 0.060f, 0.052f));
+            var flameOrange = Mat("M_FlameOrange", new Color(1f, 0.22f, 0.035f));
+            flameOrange.EnableKeyword("_EMISSION");
+            flameOrange.SetColor("_EmissionColor", new Color(4.2f, 0.55f, 0.06f));
+            EditorUtility.SetDirty(flameOrange);
+            var flameGold = Mat("M_FlameGold", new Color(1f, 0.72f, 0.16f));
+            flameGold.EnableKeyword("_EMISSION");
+            flameGold.SetColor("_EmissionColor", new Color(5.2f, 2.2f, 0.22f));
+            EditorUtility.SetDirty(flameGold);
+
+            void FlamePiece(Transform parent, string name, Vector3 localPosition,
+                Vector3 localScale, Material material)
             {
+                var piece = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                piece.name = name;
+                Object.DestroyImmediate(piece.GetComponent<Collider>());
+                piece.transform.SetParent(parent, false);
+                piece.transform.localPosition = localPosition;
+                piece.transform.localScale = localScale;
+                piece.GetComponent<Renderer>().sharedMaterial = material;
+            }
+
+            void Lantern(Vector3 pos, string areaId = "district")
+            {
+                var root = new GameObject($"Flame Lamp Post [{areaId}]");
+                root.transform.position = pos;
                 var post = KenneyArt.Place("FantasyTown", "lantern", pos,
                     targetSize: 2.6f, byHeight: true);
-                if (post == null) return;
-                var glow = new GameObject("GlowLight").AddComponent<Light>();
-                glow.transform.SetParent(post.transform, false);
-                glow.transform.position = pos + Vector3.up * 2.3f;
+                if (post != null)
+                    post.transform.SetParent(root.transform, true);
+                else
+                {
+                    // Art-pack-independent fallback: gameplay and a visible silhouette
+                    // survive even when the Kenney lantern model is not installed.
+                    var shaft = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                    shaft.name = "Lamp Post";
+                    Object.DestroyImmediate(shaft.GetComponent<Collider>());
+                    shaft.transform.SetParent(root.transform, false);
+                    shaft.transform.localPosition = Vector3.up * 1.1f;
+                    shaft.transform.localScale = new Vector3(0.075f, 1.1f, 0.075f);
+                    shaft.GetComponent<Renderer>().sharedMaterial = lampIron;
+                }
+
+                var basket = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                basket.name = "Flame Basket";
+                Object.DestroyImmediate(basket.GetComponent<Collider>());
+                basket.transform.SetParent(root.transform, false);
+                basket.transform.localPosition = Vector3.up * 2.18f;
+                basket.transform.localScale = new Vector3(0.20f, 0.055f, 0.20f);
+                basket.GetComponent<Renderer>().sharedMaterial = lampIron;
+
+                // Three faceted emissive lobes read as fire from every camera bearing.
+                // Their parent licks and leans in FlameLampPost.Update.
+                var flame = new GameObject("Visible Flame");
+                flame.transform.SetParent(root.transform, false);
+                flame.transform.localPosition = Vector3.up * 2.22f;
+                FlamePiece(flame.transform, "Flame Orange",
+                    new Vector3(0f, 0.15f, 0f), new Vector3(0.11f, 0.17f, 0.11f), flameOrange);
+                FlamePiece(flame.transform, "Flame Gold",
+                    new Vector3(0f, 0.11f, -0.075f), new Vector3(0.065f, 0.105f, 0.065f), flameGold);
+                FlamePiece(flame.transform, "Flame Tip",
+                    new Vector3(0.035f, 0.39f, 0f), new Vector3(0.052f, 0.13f, 0.052f), flameOrange);
+
+                var glowObject = new GameObject("GlowLight");
+                glowObject.transform.SetParent(root.transform, false);
+                glowObject.transform.localPosition = Vector3.up * 2.48f;
+                var glow = glowObject.AddComponent<Light>();
                 glow.type = LightType.Point;
-                glow.color = new Color(1f, 0.82f, 0.5f);
-                glow.intensity = 1.6f;
-                glow.range = 9f;
+                glow.color = new Color(1f, 0.58f, 0.22f);
+                glow.intensity = 2.25f;
+                glow.range = 10f;
+                glow.shadows = LightShadows.Soft;
+                glow.shadowStrength = 0.35f;
+
+                var marker = root.AddComponent<FlameLampPost>();
+                marker.AreaId = areaId;
+                marker.FlameVisual = flame.transform;
+                marker.Glow = glow;
             }
 
             // Shrine of the Dawnmother — where a defeated party wakes
@@ -742,10 +808,14 @@ namespace RadiantPool.EditorTools
 
             // Hub plaza: fountain, lanterns, banners, trees.
             KenneyArt.Place("FantasyTown", "fountain-round-detail", new Vector3(0, 0, -2), 0, 5f);
-            Lantern(new Vector3(-5, 0, -10));
-            Lantern(new Vector3(5, 0, -10));
-            Lantern(new Vector3(-5, 0, 2));
-            Lantern(new Vector3(5, 0, 2));
+            // Four flames surround the quest giver's platform (front pair + back pair),
+            // while two more carry that warm path through the fountain plaza.
+            Lantern(new Vector3(-5, 0, -10), FlameLampPost.QuestCenterArea);
+            Lantern(new Vector3(5, 0, -10), FlameLampPost.QuestCenterArea);
+            Lantern(new Vector3(-4, 0, -20), FlameLampPost.QuestCenterArea);
+            Lantern(new Vector3(4, 0, -20), FlameLampPost.QuestCenterArea);
+            Lantern(new Vector3(-5, 0, 2), "town_center");
+            Lantern(new Vector3(5, 0, 2), "town_center");
             KenneyArt.Place("FantasyTown", "banner-red", new Vector3(-3.5f, 0.3f, -15), 0, 2.6f, true);
             KenneyArt.Place("FantasyTown", "banner-green", new Vector3(3.5f, 0.3f, -15), 0, 2.6f, true);
             KenneyArt.Place("FantasyTown", "cart-high", new Vector3(8, 0, -18), 35f, 3f);
