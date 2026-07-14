@@ -132,6 +132,8 @@ namespace RadiantPool.Game
                 StartCoroutine(WeaponVisualSelfTest());
             if (System.Array.IndexOf(args, "-recruittest") >= 0)
                 StartCoroutine(SoloRecruitmentSelfTest());
+            if (System.Array.IndexOf(args, "-traveltest") >= 0)
+                StartCoroutine(CampaignTravelSelfTest());
             if (questLampCapture >= 0 && questLampCapture + 1 < args.Length)
                 StartCoroutine(QuestLampCapture(args[questLampCapture + 1]));
             if (nextQuestCapture >= 0 && nextQuestCapture + 1 < args.Length)
@@ -474,6 +476,44 @@ namespace RadiantPool.Game
                               "Other Council commissions remain open.");
                 ServerSaveCampaign();
             }
+        }
+
+        /// <summary>Fast travel is party travel: moving only the caller would strand a
+        /// co-op session across different encounter cells. The server rechecks location
+        /// access and waystone proximity before moving any body.</summary>
+        [ServerRpc(RequireOwnership = false)]
+        public void CmdTravelTo(int destinationZone, NetworkConnection conn = null)
+        {
+            if (CombatManager.Instance != null && CombatManager.Instance.InCombat.Value)
+            { RpcNotice("The party cannot travel during combat."); return; }
+            if (destinationZone < -1 || destinationZone >= Zones.Length)
+            { RpcNotice("That destination does not exist."); return; }
+            if (destinationZone >= 0 && GetZoneState(destinationZone) == QuestState.Locked)
+            { RpcNotice("The Council has not opened that route."); return; }
+
+            var caller = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => p.Owner == conn && !p.IsCompanion);
+            if (caller == null) return;
+            bool nearWaystone = FindObjectsByType<CampaignTravel>(FindObjectsSortMode.None)
+                .Any(t => t.Allows(caller.transform.position, destinationZone));
+            if (!nearWaystone)
+            { RpcNotice("Reach a Council waystone before travelling."); return; }
+
+            var destination = FindObjectsByType<CampaignDestination>(FindObjectsSortMode.None)
+                .FirstOrDefault(d => d.ZoneIndex == destinationZone);
+            if (destination == null)
+            { RpcNotice("That waystone route is not ready."); return; }
+
+            var party = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .Where(p => p.Sheet != null).ToArray();
+            for (int i = 0; i < party.Length; i++)
+            {
+                float angle = i * Mathf.PI * 2f / Mathf.Max(1, party.Length);
+                var offset = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * 1.5f;
+                Warp(party[i].transform, destination.transform.position + offset);
+            }
+            string place = destinationZone < 0 ? "Council Hall" : Zones[destinationZone].DisplayName;
+            RpcNotice($"The party travels to {place}.");
         }
 
         [Server]
@@ -875,6 +915,46 @@ namespace RadiantPool.Game
                 holder.transform.position.y, smith.transform.position.z));
             Debug.Log($"[WarpSmith] parked at {smith.VendorName} " +
                       $"({Vector3.Distance(holder.transform.position, smith.transform.position):0.0} m)");
+        }
+
+        /// <summary>Build-only regression for server-authoritative party travel: use the
+        /// same RPC as the waystone UI to visit the first commissioned site and return.</summary>
+        private System.Collections.IEnumerator CampaignTravelSelfTest()
+        {
+            yield return new WaitForSeconds(8f);
+            var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => !p.IsCompanion && p.Owner != null && p.Owner.IsValid);
+            var directory = FindObjectsByType<CampaignTravel>(FindObjectsSortMode.None)
+                .FirstOrDefault(t => t.IsDirectory);
+            var site = FindObjectsByType<CampaignDestination>(FindObjectsSortMode.None)
+                .FirstOrDefault(d => d.ZoneIndex == 0);
+            var hub = FindObjectsByType<CampaignDestination>(FindObjectsSortMode.None)
+                .FirstOrDefault(d => d.ZoneIndex == -1);
+            if (holder == null || directory == null || site == null || hub == null)
+            {
+                Debug.Log("[TravelTest] FAIL - player or waystone anchors missing");
+                yield break;
+            }
+
+            int oldMuster = MusterState.Value;
+            int oldZone = ZoneStates.Count > 0 ? ZoneStates[0] : (int)QuestState.Locked;
+            MusterState.Value = (int)QuestState.Completed;
+            if (ZoneStates.Count > 0) ZoneStates[0] = (int)QuestState.Active;
+
+            Warp(holder.transform, directory.transform.position + Vector3.right * 1.5f);
+            CmdTravelTo(0, holder.Owner);
+            yield return new WaitForSeconds(0.5f);
+            bool reachedSite = Vector3.Distance(holder.transform.position, site.transform.position) < 3f;
+
+            CmdTravelTo(-1, holder.Owner);
+            yield return new WaitForSeconds(0.5f);
+            bool reachedHub = Vector3.Distance(holder.transform.position, hub.transform.position) < 3f;
+
+            MusterState.Value = oldMuster;
+            if (ZoneStates.Count > 0) ZoneStates[0] = oldZone;
+            Debug.Log($"[TravelTest] {(reachedSite && reachedHub ? "PASS" : "FAIL")} - " +
+                      $"site {(reachedSite ? "reached" : "missed")}; " +
+                      $"hub {(reachedHub ? "reached" : "missed")}");
         }
 
         /// <summary>Screenshot-only QA path: park north of the council forecourt, face the

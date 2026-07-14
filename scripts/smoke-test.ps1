@@ -69,6 +69,20 @@ Stop-Process -Id $migrationProc.Id -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 $migrationText = Get-Content $migrationLog -Raw
 
+# Campaign waystones move the whole party through a server-validated route. Keep this
+# isolated because it deliberately teleports the host out of, and back into, the hub.
+Write-Host "Starting campaign travel instance (-traveltest)..."
+$travelLog = Join-Path $logDir "travel.log"
+Remove-Item $travelLog -ErrorAction SilentlyContinue
+$travelSave = Join-Path $logDir "travelsave"
+Remove-Item -Recurse -Force $travelSave -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $travelSave | Out-Null
+$travelProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Fara","-autohost","-traveltest","-savedir",$travelSave,"-logFile",$travelLog -PassThru
+Start-Sleep -Seconds 14
+Stop-Process -Id $travelProc.Id -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+$travelText = Get-Content $travelLog -Raw
+
 # -attacktest gets its OWN host: it starts a real encounter, and a fight running underneath
 # the sell/level checks would fight them for the turn clock. One click on the FURTHEST enemy
 # must both close the distance and land the blow.
@@ -116,6 +130,8 @@ $checks = @(
     @{ Name = "completed four-zone save unlocks the next quest"; Ok = $migrationText -match "\[CampaignMigration\] PASS.+Beyond the Lightwell" },
     @{ Name = "new quest has a live Ashen Ward waypoint"; Ok = $migrationText -match "\[NextQuestWaypointTest\] PASS.+target 'The Ashen Ward'" },
     @{ Name = "save migration has no runtime exception"; Ok = $migrationText -notmatch "Exception|\[CampaignMigration\] FAIL" },
+    @{ Name = "campaign waystone reaches a site and returns to Council Hall"; Ok = $travelText -match "\[TravelTest\] PASS - site reached; hub reached" },
+    @{ Name = "campaign travel has no runtime exception"; Ok = $travelText -notmatch "Exception|\[TravelTest\] FAIL" },
     @{ Name = "one click on a distant enemy closes in and attacks"; Ok = $fightText -match "\[AttackTest\] PASS" },
     @{ Name = "no failed attack assertion";        Ok = $fightText -notmatch "\[AttackTest\] FAIL" },
     @{ Name = "combat attack produces graphics and sound feedback"; Ok = $fightText -match "presentation FX/SFX" },
@@ -127,6 +143,6 @@ foreach ($c in $checks) {
     if ($c.Ok) { Write-Host "  PASS  $($c.Name)" -ForegroundColor Green }
     else { Write-Host "  FAIL  $($c.Name)" -ForegroundColor Red; $failed++ }
 }
-Write-Host "Logs: $hostLog | $clientLog | $recruitLog | $migrationLog | $fightLog"
+Write-Host "Logs: $hostLog | $clientLog | $recruitLog | $migrationLog | $travelLog | $fightLog"
 if ($failed -gt 0) { exit 1 }
 Write-Host "Smoke test passed - two instances hosted, joined, and spawned characters." -ForegroundColor Green

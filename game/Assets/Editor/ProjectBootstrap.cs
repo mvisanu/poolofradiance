@@ -1142,6 +1142,39 @@ namespace RadiantPool.EditorTools
             District("The Glasslit Temple", new Vector3(48f, 0f, -2f), signGold);
             District("The Ashen Ward", new Vector3(46f, 0f, 43f), signGold);
 
+            // Council waystones are the scalable route to the larger campaign. The hub
+            // stone opens a directory; each site stone is both its arrival anchor and the
+            // return route. Future remote regions only add another entry here.
+            var waystoneMat = Mat("M_Waystone", new Color(0.10f, 0.34f, 0.38f));
+            waystoneMat.EnableKeyword("_EMISSION");
+            waystoneMat.SetColor("_EmissionColor", new Color(0.12f, 1.1f, 1.25f));
+            void Waystone(string label, Vector3 pos, int zoneIndex, bool directory)
+            {
+                var stone = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                stone.name = $"Waystone_{label}";
+                stone.transform.position = pos + Vector3.up * 0.8f;
+                stone.transform.localScale = new Vector3(0.65f, 0.8f, 0.65f);
+                stone.GetComponent<Renderer>().sharedMaterial = waystoneMat;
+                var travel = stone.AddComponent<CampaignTravel>();
+                travel.IsDirectory = directory;
+                travel.ReturnsToCouncil = !directory;
+                travel.DisplayName = directory ? "Council Waystone Network" : label;
+                stone.AddComponent<CampaignDestination>().ZoneIndex = zoneIndex;
+
+                var glow = new GameObject($"WaystoneGlow_{label}").AddComponent<Light>();
+                glow.transform.position = pos + Vector3.up * 1.8f;
+                glow.type = LightType.Point;
+                glow.color = new Color(0.2f, 0.9f, 1f);
+                glow.range = 8f;
+                glow.intensity = 1.8f;
+            }
+            Waystone("Council Quarter", new Vector3(8f, 0f, -8f), -1, true);
+            Waystone("Old Docks", new Vector3(-21f, 0f, -2f), 0, false);
+            Waystone("Drowned Market", new Vector3(0f, 0f, 29f), 1, false);
+            Waystone("Sunken Warcamp", new Vector3(2f, 0f, -35f), 2, false);
+            Waystone("Glasslit Temple", new Vector3(38f, 0f, -13f), 3, false);
+            Waystone("Ashen Ward", new Vector3(48f, 0f, 28f), 4, false);
+
             // Vendor NPC by the council platform.
             var vendor = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             vendor.name = "The Salvage Exchange";
