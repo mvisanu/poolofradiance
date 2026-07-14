@@ -30,9 +30,20 @@ scripts/ip-scan.ps1
 ```
 
 Build output: `game/Builds/Win64/RadiantPool.exe`. Exe flags for automation:
-`-name <n> -autohost` / `-name <n> -autojoin localhost`.
+`-name <n> -autohost` / `-name <n> -autojoin localhost`; **self-tests** `-selltest`
+(bag → trader → purse), `-leveltest` (XP → level → point spent), `-attacktest` (one click on
+a distant enemy → walk → blow), `-warpsmith` (park at the smithy so a shop panel can be
+LOOKED at); `-savedir <dir>` keeps a test run off the real campaign.
 Player log (first place to look when the user reports bugs):
 `%USERPROFILE%\AppData\LocalLow\RadiantPool\Radiant Pool\Player.log`.
+
+**Verify gameplay with those flags — never by driving the window.** The user is at this
+desktop: synthetic keystrokes/clicks (`SendKeys`, `keybd_event`, `mouse_event`) land in
+whatever window actually has focus (they have gone into his browser), and ALT-tapping to steal
+foreground puts the game in system-menu mode, which eats every key after it and hangs the game.
+Screenshotting the window is fine; sending it INPUT is not. To cover a client-side path, pull
+it into one public method the test can call — `CombatClientUI.ClickCell` is the pattern: the
+mouse and the self-test drive the very same code.
 
 ## Layout
 
@@ -260,6 +271,15 @@ Player log (first place to look when the user reports bugs):
   (`new Rect(12, Ui.H - 174, ...)`), which drifted from the panels the moment either moved.
   They are now `Rect` PROPERTIES (`LogRect`, `MyCardRect`, `InitiativeRect`, plus
   `HotBar.BarRect` / `MiniMap.MapRect`) — one definition, both users. Never re-type a rect.
+- **`GUI.tooltip` is GLOBAL to the frame, not to your panel.** Whatever control was hovered
+  last sets it, so any panel that prints `GUI.tooltip` prints the *other* panel's hint — the
+  hotbar spent a build rendering the minimap's "Show map (M)" across the health readout. Gate
+  it on your own rect: `if (GUI.tooltip.Length > 0 && MyRect.Contains(Ui.Mouse))`.
+- **A narrow IMGUI button has no room for its own icon.** The skin's padding is subtracted from
+  the button's width, so a 24 px button hands its `GUIContent` image a ~4 px content box and the
+  icon renders invisible (the 46 px slots next to it were fine). Draw the texture OVER the
+  button instead — `GUI.Button(...)` then `GUILayoutUtility.GetLastRect()` + `GUI.DrawTexture`
+  (see `HotBar` stow button, `MiniMap.IconButton`).
 - **NO dingbat/arrow glyphs in UI strings** — MedievalSharp and Inter carry no
   `✔ ✘ ⚔ ✝ ★ ● ▼ ► ↑↗→ ▶ −`, and a missing glyph renders as a **tofu box**, not the symbol
   you meant. This has bitten the minimap buttons AND the whole combat HUD. Use ASCII
