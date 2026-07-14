@@ -67,9 +67,14 @@ namespace RadiantPool.Game
         private Vector3 _origin;
         private bool _turnDone;
         private GameObject _overlay;
+        private Material _gridMaterial;
 
         private void Awake() => Instance = this;
-        private void OnDestroy() { if (Instance == this) Instance = null; }
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+            if (_gridMaterial != null) Destroy(_gridMaterial);
+        }
 
         private Vector3 CellToWorld(Vector2Int c) =>
             _originForClients() + new Vector3(c.x * CellSize, 0f, c.y * CellSize);
@@ -546,6 +551,8 @@ namespace RadiantPool.Game
             var target = ClientUnits.FirstOrDefault(u => u.Id == targetId);
             var fx = CombatFx.Instance;
             GameAudio.Play(!hit ? "miss" : crit ? "crit" : "hit");
+            if (fx != null && target != null && target.Visual != null)
+                fx.AttackFeedback(target.Visual.position, hit, crit);
             if (fx == null || target?.Visual == null) return;
             if (attacker?.Visual != null)
             {
@@ -674,9 +681,9 @@ namespace RadiantPool.Game
             BroadcastBudget();
         }
 
-        /// <summary>Click-to-move: walk toward a destination cell, spending movement per
-        /// 5 ft step until we arrive, get blocked, or run dry. Clicking an occupied cell
-        /// (an enemy) stops adjacent to it. Same greedy stepping as the AI.</summary>
+        /// <summary>Click-to-move: shortest-path around occupied cells, spending movement
+        /// per 5 ft step until we arrive or run dry. Clicking an occupied cell (an enemy)
+        /// targets the nearest reachable adjacent cell.</summary>
         [ServerRpc(RequireOwnership = false)]
         public void CmdMoveTo(int cx, int cy, NetworkConnection conn = null)
         {
@@ -689,12 +696,16 @@ namespace RadiantPool.Game
             if (dest == unit.Cell) return;
             bool stopAdjacent = Occupied(dest);
             Vector2Int from = unit.Cell;
-            while (Chebyshev(dest, unit.Cell) > (stopAdjacent ? 1 : 0))
+            var path = FindGridPath(from, dest, stopAdjacent);
+            if (path.Count == 0)
             {
-                var step = new Vector2Int(
-                    unit.Cell.x + Math.Sign(dest.x - unit.Cell.x),
-                    unit.Cell.y + Math.Sign(dest.y - unit.Cell.y));
-                if (Occupied(step)) break;
+                TargetReject(conn, "Can't move there - no open path.");
+                return;
+            }
+
+            int availableSteps = _engine.ActiveBudget.MovementRemaining / 5;
+            foreach (var step in path.Take(availableSteps))
+            {
                 try { _engine.SpendMovement(5); }
                 catch (RuleViolationException) { break; }
                 unit.Cell = step;
@@ -703,6 +714,84 @@ namespace RadiantPool.Game
             { TargetReject(conn, "Can't move there — blocked or out of movement."); return; }
             RpcUnitMoved(unit.Id, unit.Cell.x, unit.Cell.y);
             BroadcastBudget();
+        }
+
+        /// <summary>Attack-test fixture: puts a second monster on the direct first step so
+        /// the public one-click path must prove it can detour. Guarded by the executable
+        /// flag and unavailable in normal play.</summary>
+        [Server]
+        public bool ServerArrangeBlockedApproachForTest(string moverId, string targetId)
+        {
+            if (System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-attacktest") < 0)
+                return false;
+            if (!_server.TryGetValue(moverId, out var mover)
+                || !_server.TryGetValue(targetId, out var target)) return false;
+            var direct = new Vector2Int(
+                mover.Cell.x + Math.Sign(target.Cell.x - mover.Cell.x),
+                mover.Cell.y + Math.Sign(target.Cell.y - mover.Cell.y));
+            if (direct == target.Cell || direct == mover.Cell) return false;
+
+            var occupant = _server.Values.FirstOrDefault(u => u.Cell == direct && u != mover);
+            if (occupant != null) return true;
+            var blocker = _server.Values.FirstOrDefault(u => u != target && u != mover
+                && u.Player == null && !u.Creature.IsDead);
+            if (blocker == null) return false;
+            blocker.Cell = direct;
+            RpcUnitMoved(blocker.Id, direct.x, direct.y);
+            return true;
+        }
+
+        /// <summary>Breadth-first path on the small fixed combat board. Eight-way steps
+        /// match the existing Chebyshev/5-foot movement rule. Occupied cells are walls,
+        /// except that an occupied destination becomes an adjacency goal.</summary>
+        private System.Collections.Generic.List<Vector2Int> FindGridPath(
+            Vector2Int from, Vector2Int dest, bool stopAdjacent)
+        {
+            var open = new System.Collections.Generic.Queue<Vector2Int>();
+            var seen = new System.Collections.Generic.HashSet<Vector2Int> { from };
+            var previous = new System.Collections.Generic.Dictionary<Vector2Int, Vector2Int>();
+            open.Enqueue(from);
+            Vector2Int goal = from;
+            bool found = false;
+
+            while (open.Count > 0)
+            {
+                var cell = open.Dequeue();
+                if ((stopAdjacent && Chebyshev(cell, dest) == 1)
+                    || (!stopAdjacent && cell == dest))
+                {
+                    goal = cell;
+                    found = true;
+                    break;
+                }
+
+                // Prefer directions toward the target, then allow every detour. Sorting
+                // keeps equally short paths deterministic across server runs.
+                var neighbors = new System.Collections.Generic.List<Vector2Int>(8);
+                for (int dx = -1; dx <= 1; dx++)
+                    for (int dy = -1; dy <= 1; dy++)
+                    {
+                        if (dx == 0 && dy == 0) continue;
+                        var next = new Vector2Int(cell.x + dx, cell.y + dy);
+                        if (Math.Abs(next.x) > 8 || Math.Abs(next.y) > 8) continue;
+                        if (seen.Contains(next) || Occupied(next)) continue;
+                        neighbors.Add(next);
+                    }
+                foreach (var next in neighbors
+                             .OrderBy(n => Chebyshev(n, dest))
+                             .ThenBy(n => n.x).ThenBy(n => n.y))
+                {
+                    seen.Add(next);
+                    previous[next] = cell;
+                    open.Enqueue(next);
+                }
+            }
+
+            var result = new System.Collections.Generic.List<Vector2Int>();
+            if (!found || goal == from) return result;
+            for (var at = goal; at != from; at = previous[at]) result.Add(at);
+            result.Reverse();
+            return result;
         }
 
         [ServerRpc(RequireOwnership = false)]
@@ -1008,6 +1097,7 @@ namespace RadiantPool.Game
                 ClientUnits.Add(view);
             }
             BuildOverlay();
+            if (CombatFx.Instance != null) CombatFx.Instance.CombatStarted(origin);
         }
 
         /// <summary>Monster id → (model names tried in order '|'-separated, tint, scale).
@@ -1282,6 +1372,7 @@ namespace RadiantPool.Game
                 ? $"+{xpEach} XP each" + (lootSummary.Length > 0 ? $"\nLoot: {lootSummary}" : "")
                 : "The party is carried back to Havenrock,\nbruised but alive. The block remains hostile.";
             BannerUntil = Time.time + 6f;
+            if (CombatFx.Instance != null) CombatFx.Instance.CombatEnded(victory);
 
             ActiveUnitId = "";
             CombatFx.Instance?.ClearTurnMarker();
@@ -1295,34 +1386,54 @@ namespace RadiantPool.Game
                 CharacterVisuals.SetDead(u.Visual, false);
             }
             if (_overlay != null) Destroy(_overlay);
+            if (_gridMaterial != null) Destroy(_gridMaterial);
             ClientUnits.Clear();
         }
 
         private void BuildOverlay()
         {
             if (_overlay != null) Destroy(_overlay);
+            if (_gridMaterial != null) Destroy(_gridMaterial);
             _overlay = new GameObject("GridOverlay");
             // Resources material: shader guaranteed in build (Shader.Find gets stripped).
-            var mat = Resources.Load<Material>("Fx/M_GridOverlay");
-            if (mat == null)
+            var source = Resources.Load<Material>("Fx/M_GridOverlay");
+            if (source != null) _gridMaterial = new Material(source);
+            else
             {
                 var quadTemp = GameObject.CreatePrimitive(PrimitiveType.Quad);
-                mat = new Material(quadTemp.GetComponent<Renderer>().sharedMaterial);
+                _gridMaterial = new Material(quadTemp.GetComponent<Renderer>().sharedMaterial);
                 Destroy(quadTemp);
             }
-            for (int x = -8; x <= 8; x++)
-                for (int y = -8; y <= 8; y++)
-                {
-                    if ((x + y) % 2 != 0) continue;   // checkerboard
-                    var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
-                    Destroy(quad.GetComponent<Collider>());
-                    quad.transform.SetParent(_overlay.transform, false);
-                    quad.transform.position = GridOrigin
-                        + new Vector3(x * CellSize, 0.03f, y * CellSize);
-                    quad.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-                    quad.transform.localScale = Vector3.one * (CellSize * 0.96f);
-                    quad.GetComponent<Renderer>().sharedMaterial = mat;
-                }
+            RuntimeArt.Tint(_gridMaterial, new Color(0.22f, 0.38f, 0.43f, 0.34f));
+
+            // Preserve the battlefield art: restrained lines communicate cells while
+            // move range and hover overlays carry the stronger interaction colors.
+            float edge = 8.5f * CellSize;
+            for (int i = -8; i <= 9; i++)
+            {
+                float p = (i - 0.5f) * CellSize;
+                GridLine($"GridX_{i}", GridOrigin + new Vector3(p, 0.045f, -edge),
+                    GridOrigin + new Vector3(p, 0.045f, edge));
+                GridLine($"GridY_{i}", GridOrigin + new Vector3(-edge, 0.045f, p),
+                    GridOrigin + new Vector3(edge, 0.045f, p));
+            }
+        }
+
+        private void GridLine(string name, Vector3 from, Vector3 to)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(_overlay.transform, false);
+            var line = go.AddComponent<LineRenderer>();
+            line.useWorldSpace = true;
+            line.positionCount = 2;
+            line.SetPosition(0, from);
+            line.SetPosition(1, to);
+            line.startWidth = 0.035f;
+            line.endWidth = 0.035f;
+            line.numCapVertices = 0;
+            line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            line.receiveShadows = false;
+            line.sharedMaterial = _gridMaterial;
         }
     }
 }

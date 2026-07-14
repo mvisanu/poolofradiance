@@ -99,9 +99,6 @@ namespace RadiantPool.EditorTools
         private static Texture2D GroundTexture()
         {
             string path = SettingsDir + "/T_GroundGrass.png";
-            var existing = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
-            if (existing != null) return existing;
-
             const int size = 128;
             var tex = new Texture2D(size, size, TextureFormat.RGB24, false);
             var rand = new System.Random(7);
@@ -122,7 +119,7 @@ namespace RadiantPool.EditorTools
                     float broad = Noise(x, y, 8) * 0.10f;          // patchiness
                     float fine = (float)rand.NextDouble() * 0.06f;  // blade speckle
                     float v = 0.90f + broad + fine;
-                    tex.SetPixel(x, y, new Color(0.42f * v, 0.60f * v, 0.32f * v));
+                    tex.SetPixel(x, y, new Color(0.22f * v, 0.30f * v, 0.20f * v));
                 }
             tex.Apply();
             System.IO.File.WriteAllBytes(path, tex.EncodeToPNG());
@@ -142,6 +139,10 @@ namespace RadiantPool.EditorTools
                 m = new Material(Shader.Find("Universal Render Pipeline/Lit")) { color = color };
                 AssetDatabase.CreateAsset(m, path);
             }
+            m.color = color;
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);
+            m.SetFloat("_Smoothness", name == "M_Water" ? 0.62f : 0.16f);
+            EditorUtility.SetDirty(m);
             return m;
         }
 
@@ -424,18 +425,18 @@ namespace RadiantPool.EditorTools
             var lightGo = new GameObject("Directional Light");
             var light = lightGo.AddComponent<Light>();
             light.type = LightType.Directional;
-            light.intensity = 1.55f;
-            light.color = new Color(1f, 0.97f, 0.88f);
+            light.intensity = 0.35f;
+            light.color = new Color(1f, 0.55f, 0.34f);
             light.shadows = LightShadows.Soft;
             lightGo.transform.rotation = Quaternion.Euler(52f, -35f, 0f);
             RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.72f, 0.83f, 0.98f);
-            RenderSettings.ambientEquatorColor = new Color(0.62f, 0.65f, 0.62f);
-            RenderSettings.ambientGroundColor = new Color(0.36f, 0.37f, 0.32f);
+            RenderSettings.ambientSkyColor = new Color(0.12f, 0.14f, 0.19f);
+            RenderSettings.ambientEquatorColor = new Color(0.09f, 0.09f, 0.10f);
+            RenderSettings.ambientGroundColor = new Color(0.035f, 0.035f, 0.04f);
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Exponential;
-            RenderSettings.fogColor = new Color(0.73f, 0.81f, 0.92f);
-            RenderSettings.fogDensity = 0.006f;
+            RenderSettings.fogColor = new Color(0.09f, 0.075f, 0.085f);
+            RenderSettings.fogDensity = 0.022f;
 
             // A procedural sky gives the bright stylized world a real horizon and sun
             // disc. It is generated as an asset so player builds retain the shader.
@@ -449,9 +450,9 @@ namespace RadiantPool.EditorTools
             sky.SetFloat("_SunSize", 0.045f);
             sky.SetFloat("_SunSizeConvergence", 5f);
             sky.SetFloat("_AtmosphereThickness", 0.85f);
-            sky.SetColor("_SkyTint", new Color(0.44f, 0.66f, 0.95f));
-            sky.SetColor("_GroundColor", new Color(0.38f, 0.42f, 0.34f));
-            sky.SetFloat("_Exposure", 1.18f);
+            sky.SetColor("_SkyTint", new Color(0.075f, 0.085f, 0.14f));
+            sky.SetColor("_GroundColor", new Color(0.035f, 0.03f, 0.04f));
+            sky.SetFloat("_Exposure", 0.62f);
             RenderSettings.skybox = sky;
 
             // Camera with URP post-processing (bloom + vignette + slight warmth).
@@ -473,26 +474,44 @@ namespace RadiantPool.EditorTools
                 profile = ScriptableObject.CreateInstance<VolumeProfile>();
                 AssetDatabase.CreateAsset(profile, profilePath);
             }
-            if (!profile.TryGet(out Bloom bloom)) bloom = profile.Add<Bloom>();
+            // VolumeProfile.Add updates the in-memory list but does not persist a newly
+            // created component inside an existing asset by itself. The old profile thus
+            // serialized six {fileID: 0} entries and shipped none of its grading. Remove
+            // those ghosts and embed every component as a real sub-asset.
+            profile.components.RemoveAll(c => c == null);
+            T ProfileEffect<T>() where T : VolumeComponent
+            {
+                if (!profile.TryGet(out T effect)) effect = profile.Add<T>();
+                if (!AssetDatabase.Contains(effect)) AssetDatabase.AddObjectToAsset(effect, profile);
+                EditorUtility.SetDirty(effect);
+                return effect;
+            }
+
+            var bloom = ProfileEffect<Bloom>();
             bloom.active = true;
-            bloom.intensity.Override(0.48f);
-            bloom.threshold.Override(1.02f);
-            bloom.scatter.Override(0.68f);
-            if (!profile.TryGet(out Vignette vignette)) vignette = profile.Add<Vignette>();
+            bloom.intensity.Override(0.42f);
+            bloom.threshold.Override(0.86f);
+            bloom.scatter.Override(0.72f);
+            var vignette = ProfileEffect<Vignette>();
             vignette.active = true;
-            vignette.intensity.Override(0.16f);
-            vignette.smoothness.Override(0.55f);
-            if (!profile.TryGet(out ColorAdjustments colors)) colors = profile.Add<ColorAdjustments>();
+            vignette.intensity.Override(0.28f);
+            vignette.smoothness.Override(0.72f);
+            var colors = ProfileEffect<ColorAdjustments>();
             colors.active = true;
-            colors.postExposure.Override(0.12f);
-            colors.contrast.Override(7f);
-            colors.saturation.Override(10f);
-            if (!profile.TryGet(out Tonemapping tonemapping)) tonemapping = profile.Add<Tonemapping>();
+            colors.postExposure.Override(-0.22f);
+            colors.contrast.Override(18f);
+            colors.saturation.Override(-14f);
+            var tonemapping = ProfileEffect<Tonemapping>();
             tonemapping.active = true;
             tonemapping.mode.Override(TonemappingMode.ACES);
-            if (!profile.TryGet(out WhiteBalance whiteBalance)) whiteBalance = profile.Add<WhiteBalance>();
+            var whiteBalance = ProfileEffect<WhiteBalance>();
             whiteBalance.active = true;
-            whiteBalance.temperature.Override(4f);
+            whiteBalance.temperature.Override(-8f);
+            whiteBalance.tint.Override(-4f);
+            var grain = ProfileEffect<FilmGrain>();
+            grain.active = true;
+            grain.intensity.Override(0.14f);
+            grain.response.Override(0.72f);
             EditorUtility.SetDirty(profile);
             AssetDatabase.SaveAssets();
             var volumeGo = new GameObject("Global PostFX");
@@ -574,7 +593,7 @@ namespace RadiantPool.EditorTools
             var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.name = "Ground";
             ground.transform.localScale = new Vector3(12f, 1f, 12f); // 120x120 m
-            var groundMat = Mat("M_Ground", new Color(0.52f, 0.66f, 0.42f));   // sunny grass
+            var groundMat = Mat("M_Ground", new Color(0.24f, 0.31f, 0.22f));
             groundMat.mainTexture = GroundTexture();
             groundMat.mainTextureScale = new Vector2(48f, 48f);
             ground.GetComponent<Renderer>().sharedMaterial = groundMat;
@@ -588,10 +607,10 @@ namespace RadiantPool.EditorTools
                 b.GetComponent<Renderer>().sharedMaterial = mat;
             }
 
-            var wall = Mat("M_Wall", new Color(0.5f, 0.47f, 0.44f));
-            var crate = Mat("M_Crate", new Color(0.55f, 0.42f, 0.28f));
-            var water = Mat("M_Water", new Color(0.2f, 0.35f, 0.5f));
-            var gateMat = Mat("M_Gate", new Color(0.3f, 0.28f, 0.34f));
+            var wall = Mat("M_Wall", new Color(0.32f, 0.31f, 0.32f));
+            var crate = Mat("M_Crate", new Color(0.35f, 0.25f, 0.18f));
+            var water = Mat("M_Water", new Color(0.07f, 0.15f, 0.20f));
+            var gateMat = Mat("M_Gate", new Color(0.15f, 0.14f, 0.18f));
 
             // Perimeter walls.
             Box("Wall_N", new Vector3(0, 1.5f, 60), new Vector3(120, 3, 1), wall);
@@ -631,12 +650,12 @@ namespace RadiantPool.EditorTools
 
             // Zone dressing — Albion-style district color zoning: each quarter has its
             // own saturated palette so you always know where you are at a glance.
-            var docksWood = Mat("M_DocksWood", new Color(0.45f, 0.33f, 0.22f));   // tarred timber
-            var docksRoof = Mat("M_DocksRoof", new Color(0.25f, 0.42f, 0.45f));   // teal slate
-            var marketWood = Mat("M_MarketWood", new Color(0.72f, 0.6f, 0.4f));   // pale timber
-            var marketCloth = Mat("M_MarketCloth", new Color(0.55f, 0.68f, 0.3f)); // awning green
-            var templeStone = Mat("M_TempleStone", new Color(0.78f, 0.68f, 0.5f)); // warm sandstone
-            var templeEmber = Mat("M_TempleEmber", new Color(0.75f, 0.3f, 0.18f)); // cult ember
+            var docksWood = Mat("M_DocksWood", new Color(0.26f, 0.20f, 0.16f));
+            var docksRoof = Mat("M_DocksRoof", new Color(0.12f, 0.24f, 0.27f));
+            var marketWood = Mat("M_MarketWood", new Color(0.38f, 0.33f, 0.26f));
+            var marketCloth = Mat("M_MarketCloth", new Color(0.24f, 0.33f, 0.18f));
+            var templeStone = Mat("M_TempleStone", new Color(0.43f, 0.37f, 0.31f));
+            var templeEmber = Mat("M_TempleEmber", new Color(0.52f, 0.16f, 0.08f));
 
             // A building is a COLLIDER plus a look. The collider is gameplay (it blocks
             // movement, and the combat x-ray fades whatever hides a creature), so it is

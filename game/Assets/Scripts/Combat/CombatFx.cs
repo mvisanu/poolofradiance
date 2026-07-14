@@ -12,9 +12,162 @@ namespace RadiantPool.Game
         public static CombatFx Instance { get; private set; }
 
         private GameObject _turnRing;
+        private Texture2D _combatVignette;
+        private float _impactFlash;
+        private string _combatCapturePath = "";
 
-        private void Awake() => Instance = this;
-        private void OnDestroy() { if (Instance == this) Instance = null; }
+        public int AttackFeedbackEvents { get; private set; }
+        public bool CombatPresentationReady => _combatVignette != null;
+
+        private void Awake()
+        {
+            Instance = this;
+            _combatVignette = BuildVignette();
+            var args = System.Environment.GetCommandLineArgs();
+            int capture = System.Array.IndexOf(args, "-combatcapture");
+            if (capture >= 0 && capture + 1 < args.Length)
+                _combatCapturePath = args[capture + 1];
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+            if (_combatVignette != null) Destroy(_combatVignette);
+        }
+
+        private void Update()
+        {
+            _impactFlash = Mathf.MoveTowards(_impactFlash, 0f, Time.unscaledDeltaTime * 2.8f);
+        }
+
+        private void OnGUI()
+        {
+            if (Ui.PanelOpen) return;
+            bool combat = CombatManager.Instance != null && CombatManager.Instance.InCombat.Value;
+            if (!combat && _impactFlash <= 0f) return;
+
+            var old = GUI.color;
+            if (combat && _combatVignette != null)
+            {
+                GUI.color = new Color(0.30f, 0.08f, 0.08f,
+                    0.62f + Mathf.Sin(Time.unscaledTime * 1.7f) * 0.04f);
+                GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height),
+                    _combatVignette, ScaleMode.StretchToFill);
+            }
+            if (_impactFlash > 0f)
+            {
+                GUI.color = new Color(0.72f, 0.06f, 0.025f, _impactFlash * 0.16f);
+                GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+            }
+            GUI.color = old;
+        }
+
+        private static Texture2D BuildVignette()
+        {
+            const int size = 96;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "Combat Vignette",
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear
+            };
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float nx = Mathf.Abs((x + 0.5f) / size * 2f - 1f);
+                    float ny = Mathf.Abs((y + 0.5f) / size * 2f - 1f);
+                    float edge = Mathf.Clamp01((Mathf.Max(nx, ny) - 0.38f) / 0.62f);
+                    edge = edge * edge * (3f - 2f * edge);
+                    tex.SetPixel(x, y, new Color(0f, 0f, 0f, edge * 0.72f));
+                }
+            tex.Apply(false, true);
+            return tex;
+        }
+
+        public void CombatStarted(Vector3 origin)
+        {
+            _impactFlash = Mathf.Max(_impactFlash, 0.55f);
+            AddCameraTrauma(0.42f);
+            CastFlare(origin, new Color(0.38f, 0.045f, 0.025f));
+        }
+
+        public void CombatEnded(bool victory)
+        {
+            _impactFlash = Mathf.Max(_impactFlash, victory ? 0.18f : 0.75f);
+            AddCameraTrauma(victory ? 0.12f : 0.55f);
+        }
+
+        /// <summary>One presentation entry point per replicated attack, hit or miss.
+        /// Keeps the unattended attack test on the same event path as live play.</summary>
+        public void AttackFeedback(Vector3 at, bool hit, bool critical)
+        {
+            AttackFeedbackEvents++;
+            if (_combatCapturePath.Length > 0)
+            {
+                StartCoroutine(CaptureCombatFrame(_combatCapturePath));
+                _combatCapturePath = "";
+            }
+            if (!hit)
+            {
+                AddCameraTrauma(0.07f);
+                return;
+            }
+            AddCameraTrauma(critical ? 0.62f : 0.28f);
+            _impactFlash = Mathf.Max(_impactFlash, critical ? 0.82f : 0.28f);
+            StartCoroutine(ImpactSparks(at + Vector3.up * 1.15f, critical ? 12 : 7));
+        }
+
+        private static IEnumerator CaptureCombatFrame(string path)
+        {
+            // The replicated event arrives at wind-up; capture when the lunge/impact lands.
+            yield return new WaitForSeconds(0.14f);
+            string directory = System.IO.Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(directory)) System.IO.Directory.CreateDirectory(directory);
+            ScreenCapture.CaptureScreenshot(path);
+            Debug.Log($"[CombatCapture] wrote presentation frame to {path}");
+        }
+
+        private static void AddCameraTrauma(float amount)
+        {
+            var camera = Camera.main;
+            if (camera == null) return;
+            var orbit = camera.GetComponent<OrbitCamera>();
+            if (orbit != null) orbit.AddTrauma(amount);
+        }
+
+        private IEnumerator ImpactSparks(Vector3 origin, int count)
+        {
+            var parts = new GameObject[count];
+            var velocities = new Vector3[count];
+            for (int i = 0; i < count; i++)
+            {
+                var p = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                p.name = "Impact Spark";
+                Destroy(p.GetComponent<Collider>());
+                p.transform.position = origin;
+                p.transform.localScale = Vector3.one * Random.Range(0.035f, 0.085f);
+                RuntimeArt.Paint(p, Color.Lerp(new Color(0.75f, 0.08f, 0.025f),
+                    new Color(1f, 0.58f, 0.18f), Random.value), emission: 1.8f);
+                parts[i] = p;
+                velocities[i] = new Vector3(Random.Range(-3.2f, 3.2f),
+                    Random.Range(-0.2f, 2.8f), Random.Range(-3.2f, 3.2f));
+            }
+            float t = 0f;
+            const float duration = 0.32f;
+            while (t < duration)
+            {
+                t += Time.deltaTime;
+                for (int i = 0; i < count; i++)
+                {
+                    if (parts[i] == null) continue;
+                    velocities[i] += Physics.gravity * (Time.deltaTime * 0.25f);
+                    parts[i].transform.position += velocities[i] * Time.deltaTime;
+                    parts[i].transform.localScale *= 0.90f;
+                }
+                yield return null;
+            }
+            foreach (var p in parts) if (p != null) Destroy(p);
+        }
 
         // ---------- damage numbers ----------
 

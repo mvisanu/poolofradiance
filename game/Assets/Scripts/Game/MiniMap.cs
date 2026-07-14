@@ -81,7 +81,7 @@ namespace RadiantPool.Game
         {
             get
             {
-                if (EffectiveMode == 0) return new Rect(Ui.W - 74 - 12, MapTop, 74, Header);
+                if (EffectiveMode == 0) return new Rect(Ui.W - 126 - 12, MapTop, 126, Header);
                 float s = Side;
                 return new Rect(Ui.W - s - 12, MapTop, s, s + Header);
             }
@@ -244,7 +244,8 @@ namespace RadiantPool.Game
             {
                 // Collapsed: a labelled pill — icon alone would be a guessing game.
                 var pill = MapRect;
-                if (IconButton(pill, _icoRestore, "Show map (M)", "MAP")) SetSize(1);
+                string label = $"{WorldAtmosphere.ClockLabel}  MAP";
+                if (IconButton(pill, _icoRestore, "Show map (M)", label)) SetSize(1);
                 return;
             }
 
@@ -254,8 +255,9 @@ namespace RadiantPool.Game
                 GUIContent.none);
 
             // Header strip: title, recenter (only once panned), then the two size icons.
-            GUI.Label(new Rect(frame.x + 6, frame.y + 5, 84, 16),
-                _pan == Vector2.zero ? "MAP" : "MAP (PANNED)", Theme.Caps);
+            string mapTitle = _pan == Vector2.zero ? "MAP" : "MAP (PANNED)";
+            GUI.Label(new Rect(frame.x + 6, frame.y + 5, 128, 16),
+                $"{mapTitle}  {WorldAtmosphere.ClockLabel}", Theme.Caps);
             if (_pan != Vector2.zero
                 && GUI.Button(new Rect(frame.xMax - 130, frame.y + 2, 62, BtnH), "RECENTER"))
                 Recenter();

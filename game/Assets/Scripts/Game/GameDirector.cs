@@ -37,6 +37,9 @@ namespace RadiantPool.Game
         public readonly SyncList<int> ZoneClearedCounts = new SyncList<int>();
         public readonly SyncVar<bool> CampaignComplete = new SyncVar<bool>(false);
         public readonly SyncVar<int> PartyGold = new SyncVar<int>(0);
+        /// <summary>Authoritative 24-hour campaign clock. Clients only derive presentation
+        /// from this value; the host advances and saves it.</summary>
+        public readonly SyncVar<float> WorldHour = new SyncVar<float>(20.5f);
 
         /// <summary>Party-shared loot stash (item ids from content/items).</summary>
         public readonly SyncList<string> Stash = new SyncList<string>();
@@ -83,6 +86,8 @@ namespace RadiantPool.Game
             _roster = new System.Collections.Generic.Dictionary<string, RadiantPool.Rules.CharacterSheet>();
         private readonly System.Collections.Generic.Dictionary<string, CharacterBuild>
             _builds = new System.Collections.Generic.Dictionary<string, CharacterBuild>();
+        private float _serverWorldHour = 20.5f;
+        private float _nextWorldTimeSync;
         /// <summary>Cleared encounter ids, replicated so clients can point quest markers
         /// at the nearest block that still needs fighting.</summary>
         public readonly SyncList<string> ConsumedEncounterIds = new SyncList<string>();
@@ -90,6 +95,7 @@ namespace RadiantPool.Game
         public override void OnStartServer()
         {
             base.OnStartServer();
+            _serverWorldHour = WorldHour.Value;
             for (int i = 0; i < Zones.Length; i++)
             {
                 ZoneStates.Add((int)QuestState.Locked);
@@ -124,6 +130,7 @@ namespace RadiantPool.Game
             }
             CampaignComplete.Value = save.CampaignComplete;
             PartyGold.Value = save.PartyGold;
+            ServerSetWorldHour(save.GameHour);
             Stash.Clear();
             foreach (var s in save.Stash) Stash.Add(s);
             foreach (var saved in save.Roster)
@@ -157,6 +164,14 @@ namespace RadiantPool.Game
         }
 
         [Server]
+        public void ServerSetWorldHour(float hour)
+        {
+            _serverWorldHour = Mathf.Repeat(hour, 24f);
+            WorldHour.Value = _serverWorldHour;
+            _nextWorldTimeSync = Time.unscaledTime + 0.25f;
+        }
+
+        [Server]
         public RadiantPool.Rules.CharacterSheet ServerGetOrCreateSheet(string name, CharacterBuild build)
         {
             string key = name.ToLowerInvariant();
@@ -177,6 +192,7 @@ namespace RadiantPool.Game
             var save = new CampaignSave
             {
                 MusterState = MusterState.Value,
+                GameHour = WorldHour.Value,
                 ZoneStates = ZoneStates.ToList(),
                 ZoneClearedCounts = ZoneClearedCounts.ToList(),
                 CampaignComplete = CampaignComplete.Value,
@@ -675,6 +691,9 @@ namespace RadiantPool.Game
                 yield break;
             }
 
+            bool blockedApproach = combat.ServerArrangeBlockedApproachForTest(mine.Id, enemy.Id);
+            yield return null;   // let the forced blocker reach the client-side board view
+
             var armedEnemies = combat.ClientUnits
                 .Where(u => !u.IsPc && CombatManager.WeaponModelForUnit(u.Id).Length > 0)
                 .ToArray();
@@ -687,6 +706,9 @@ namespace RadiantPool.Game
 
             var from = mine.Cell;
             int feet = Chebyshev(from, enemy.Cell) * 5;
+            int feedbackBefore = CombatFx.Instance != null
+                ? CombatFx.Instance.AttackFeedbackEvents : -1;
+            int sfxBefore = GameAudio.Instance != null ? GameAudio.Instance.SfxEventsPlayed : -1;
             Debug.Log($"[AttackTest] one click on {enemy.Name} at {feet} ft " +
                       $"(move {combat.MoveLeft} ft, action {combat.ActionLeft})");
             CombatClientUI.Instance.ClickCell(enemy.Cell);
@@ -703,12 +725,19 @@ namespace RadiantPool.Game
             string blow = combat.Log.LastOrDefault(
                 l => l.Contains(mine.Name) && l.Contains(enemy.Name)) ?? "";
             bool struck = !combat.ActionLeft && blow.Length > 0;
-            bool pass = weaponsVisible && struck
+            bool visualFeedback = CombatFx.Instance != null
+                                  && CombatFx.Instance.CombatPresentationReady
+                                  && CombatFx.Instance.AttackFeedbackEvents > feedbackBefore;
+            bool soundFeedback = GameAudio.Instance != null
+                                 && GameAudio.Instance.SfxEventsPlayed > sfxBefore;
+            bool pass = blockedApproach && weaponsVisible && struck && visualFeedback && soundFeedback
                         && (feet <= 5 || walked);   // in reach already? then no walk owed
             Debug.Log($"[AttackTest] {(pass ? "PASS" : "FAIL")} - one click at {feet} ft: " +
                       $"walked {(walked ? "into reach" : "NOWHERE")} " +
                       $"({from} to {(now != null ? now.Cell.ToString() : "?")}), attack " +
-                      $"{(struck ? "resolved" : "NEVER LANDED")}");
+                      $"{(struck ? "resolved" : "NEVER LANDED")}, presentation " +
+                      $"{(visualFeedback ? "FX" : "NO FX")}/{(soundFeedback ? "SFX" : "NO SFX")}, " +
+                      $"blocked-path {(blockedApproach ? "detour" : "NOT ARRANGED")}");
             Debug.Log($"[AttackTest] the blow: {(blow.Length > 0 ? blow : "(no log line!)")}");
         }
 
@@ -925,6 +954,16 @@ namespace RadiantPool.Game
 
         private void Update()
         {
+            if (IsServerStarted)
+            {
+                _serverWorldHour = Mathf.Repeat(_serverWorldHour
+                    + WorldAtmosphere.HoursPerRealSecond * Time.unscaledDeltaTime, 24f);
+                if (Time.unscaledTime >= _nextWorldTimeSync)
+                {
+                    _nextWorldTimeSync = Time.unscaledTime + 0.25f;
+                    WorldHour.Value = _serverWorldHour;
+                }
+            }
             if (Input.GetKeyDown(KeyCode.J) && !Ui.Typing) Ui.Toggle(Ui.Panel.Journal);
             if (Input.GetKeyDown(KeyCode.F5) && IsServerStarted)
             {

@@ -21,7 +21,7 @@ New-Item -ItemType Directory -Force $saveDir | Out-Null
 Write-Host "Starting host instance..."
 # -selltest / -leveltest: the host drives a real sale (bag -> trader -> purse) and a real
 # level-up (XP -> level -> ability point spent), and asserts on both below.
-$hostProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Anna","-autohost","-selltest","-leveltest","-weapontest","-savedir",$saveDir,"-logFile",$hostLog -PassThru
+$hostProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Anna","-autohost","-selltest","-leveltest","-weapontest","-atmospheretest","-savedir",$saveDir,"-logFile",$hostLog -PassThru
 Start-Sleep -Seconds 12
 
 Write-Host "Starting client instance..."
@@ -69,6 +69,7 @@ $checks = @(
     @{ Name = "host spawned its own character";    Ok = $hostText -match "character ready: Anna" },
     @{ Name = "client connected and host spawned it"; Ok = $hostText -match "character ready: Ben" },
     @{ Name = "client attempted autojoin";         Ok = $clientText -match "\[RadiantPool\] autojoin" },
+    @{ Name = "client received the synchronized world clock"; Ok = $clientText -match "\[Atmosphere\] client clock synchronized" },
     @{ Name = "no NullReference in host log";      Ok = $hostText -notmatch "NullReferenceException" },
     @{ Name = "no NullReference in client log";    Ok = $clientText -notmatch "NullReferenceException" },
     @{ Name = "selling an item at a trader pays gold"; Ok = $hostText -match "\[SellTest\] PASS - gold" },
@@ -79,12 +80,15 @@ $checks = @(
     @{ Name = "no failed level assertion";         Ok = $hostText -notmatch "\[LevelTest\] FAIL" },
     @{ Name = "player and NPC equipped weapons are visible"; Ok = $hostText -match "\[WeaponTest\] PASS" },
     @{ Name = "no failed weapon visual assertion"; Ok = $hostText -notmatch "\[WeaponTest\] FAIL" },
+    @{ Name = "day/night lighting, fog, lamps, clock, and ambience transition"; Ok = $hostText -match "\[AtmosphereTest\] PASS" },
+    @{ Name = "no failed atmosphere assertion"; Ok = $hostText -notmatch "\[AtmosphereTest\] FAIL" },
     @{ Name = "armed combat NPC weapons are visible"; Ok = $fightText -match "\[WeaponTest\] PASS - combat NPCs" },
     @{ Name = "no failed combat weapon assertion"; Ok = $fightText -notmatch "\[WeaponTest\] FAIL" },
     @{ Name = "post-campaign solo player can hire three NPC helpers"; Ok = $recruitText -match "\[RecruitTest\] PASS" },
     @{ Name = "no failed solo recruitment assertion"; Ok = $recruitText -notmatch "\[RecruitTest\] FAIL" },
     @{ Name = "one click on a distant enemy closes in and attacks"; Ok = $fightText -match "\[AttackTest\] PASS" },
     @{ Name = "no failed attack assertion";        Ok = $fightText -notmatch "\[AttackTest\] FAIL" },
+    @{ Name = "combat attack produces graphics and sound feedback"; Ok = $fightText -match "presentation FX/SFX" },
     @{ Name = "no NullReference in combat log";    Ok = $fightText -notmatch "NullReferenceException" }
 )
 

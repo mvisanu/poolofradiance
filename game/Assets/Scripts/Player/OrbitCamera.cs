@@ -39,6 +39,7 @@ namespace RadiantPool.Game
         private bool _wasInCombat;
         private Vector3 _smoothedFocus;
         private bool _focusReady;
+        private float _trauma;
         private readonly RaycastHit[] _cameraHits = new RaycastHit[16];
 
         public float Yaw => _yaw;
@@ -47,6 +48,10 @@ namespace RadiantPool.Game
         public bool IsPanned => _pan.sqrMagnitude > 0.01f;
 
         public void RecenterPan() => _pan = Vector3.zero;
+
+        /// <summary>Adds a short, bounded presentation shake. Combat rules never read it;
+        /// the camera applies it after follow/orbit so it cannot accumulate drift.</summary>
+        public void AddTrauma(float amount) => _trauma = Mathf.Clamp01(_trauma + amount);
 
         public void SetTarget(Transform target)
         {
@@ -122,8 +127,24 @@ namespace RadiantPool.Game
             float cameraDistance = CollisionDistance(focus, backwards, distance);
             transform.position = focus + backwards * cameraDistance;
             transform.rotation = rotation;
+            ApplyTrauma(rotation);
 
             UpdateOcclusion(focus);
+        }
+
+        private void ApplyTrauma(Quaternion baseRotation)
+        {
+            if (_trauma <= 0f) return;
+            float power = _trauma * _trauma;
+            float t = Time.unscaledTime * 22f;
+            float x = (Mathf.PerlinNoise(t, 3.1f) - 0.5f) * 2f;
+            float y = (Mathf.PerlinNoise(7.7f, t) - 0.5f) * 2f;
+            float roll = (Mathf.PerlinNoise(t, 13.4f) - 0.5f) * 2f;
+            transform.position += (baseRotation * Vector3.right) * (x * 0.18f * power)
+                                  + (baseRotation * Vector3.up) * (y * 0.12f * power);
+            transform.rotation *= Quaternion.Euler(y * 0.65f * power,
+                x * 0.55f * power, roll * 0.8f * power);
+            _trauma = Mathf.MoveTowards(_trauma, 0f, Time.unscaledDeltaTime * 2.6f);
         }
 
         private float CollisionDistance(Vector3 focus, Vector3 direction, float wanted)
