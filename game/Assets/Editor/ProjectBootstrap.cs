@@ -566,6 +566,7 @@ namespace RadiantPool.EditorTools
             velocity.enabled = true;
             velocity.x = new ParticleSystem.MinMaxCurve(0.06f, 0.18f);
             velocity.y = new ParticleSystem.MinMaxCurve(0.02f, 0.09f);
+            velocity.z = new ParticleSystem.MinMaxCurve(0f, 0f);
             motesGo.GetComponent<ParticleSystemRenderer>().sharedMaterial = moteMat;
 
             // Gray-box geometry: 120x120 map, hub south-center, docks west,
@@ -807,7 +808,9 @@ namespace RadiantPool.EditorTools
             veresk.transform.position = new Vector3(0, 1.3f, -16);
             veresk.GetComponent<Renderer>().sharedMaterial =
                 Mat("M_Npc", new Color(0.85f, 0.75f, 0.35f));
-            veresk.AddComponent<NpcVisual>().Model = "Mage";   // robed councilor
+            var vereskVisual = veresk.AddComponent<NpcVisual>();
+            vereskVisual.Model = "Mage";   // robed councilor
+            vereskVisual.WeaponId = "quarterstaff";
             veresk.AddComponent<NpcInteract>();
             var plateGo = new GameObject("Nameplate");
             plateGo.transform.SetParent(veresk.transform, false);
@@ -967,7 +970,9 @@ namespace RadiantPool.EditorTools
             vendor.transform.position = new Vector3(4, 1.3f, -13);
             vendor.GetComponent<Renderer>().sharedMaterial =
                 Mat("M_Vendor", new Color(0.4f, 0.75f, 0.5f));
-            vendor.AddComponent<NpcVisual>().Model = "Barbarian";  // burly trader
+            var vendorVisual = vendor.AddComponent<NpcVisual>();
+            vendorVisual.Model = "Barbarian";  // burly trader
+            vendorVisual.WeaponId = "greataxe";
             vendor.AddComponent<VendorInteract>();
             var vplateGo = new GameObject("Nameplate");
             vplateGo.transform.SetParent(vendor.transform, false);
@@ -987,7 +992,9 @@ namespace RadiantPool.EditorTools
             smith.transform.position = new Vector3(-4, 1.3f, -13);
             smith.GetComponent<Renderer>().sharedMaterial =
                 Mat("M_Smith", new Color(0.75f, 0.45f, 0.3f));
-            smith.AddComponent<NpcVisual>().Model = "Knight";   // armored smith
+            var smithVisual = smith.AddComponent<NpcVisual>();
+            smithVisual.Model = "Knight";   // armored smith
+            smithVisual.WeaponId = "warhammer";
             smith.AddComponent<SmithInteract>();
             var splateGo = new GameObject("Nameplate");
             splateGo.transform.SetParent(smith.transform, false);

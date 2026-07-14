@@ -105,6 +105,8 @@ namespace RadiantPool.Game
                 StartCoroutine(ServerWarpToSmith());
             if (System.Array.IndexOf(args, "-attacktest") >= 0)
                 StartCoroutine(AttackSelfTest());
+            if (System.Array.IndexOf(args, "-weapontest") >= 0)
+                StartCoroutine(WeaponVisualSelfTest());
 
             if (!SaveSystem.Exists) return;
             var save = SaveSystem.Read();
@@ -519,6 +521,51 @@ namespace RadiantPool.Game
                       $"{sheet.PendingAbilityPoints} left of {pointsBefore}");
         }
 
+        /// <summary>Unattended visual-equipment check. It proves the replicated starting
+        /// weapon appears, an equipment change replaces it, and every armed town NPC has
+        /// its declared item mounted. Runs only with -weapontest.</summary>
+        private System.Collections.IEnumerator WeaponVisualSelfTest()
+        {
+            yield return new WaitForSeconds(8f);
+
+            var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => !p.IsCompanion && p.Owner != null && p.Owner.IsValid);
+            if (holder == null || holder.Sheet == null)
+            {
+                Debug.Log("[WeaponTest] FAIL - no player character");
+                yield break;
+            }
+
+            var starting = GameItem.Get(holder.WeaponId.Value);
+            bool playerStart = starting != null && CharacterVisuals.HasHandItem(
+                holder.transform, "r", starting.HandModel);
+
+            // Change through the same authoritative equipment method used by the bags,
+            // then restore the original item so this check leaves no campaign mutation.
+            var swap = GameItem.Get("greataxe");
+            holder.ServerEquip(swap);
+            yield return new WaitForSeconds(0.5f);
+            bool playerSwap = CharacterVisuals.HasHandItem(
+                holder.transform, "r", swap.HandModel);
+            if (starting != null) holder.ServerEquip(starting);
+
+            var armedNpcs = FindObjectsByType<NpcVisual>(FindObjectsSortMode.None)
+                .Where(n => !string.IsNullOrEmpty(n.WeaponId)).ToArray();
+            int visibleNpcs = armedNpcs.Count(n =>
+            {
+                var item = GameItem.Get(n.WeaponId);
+                return item != null && CharacterVisuals.HasHandItem(
+                    n.transform, "r", item.HandModel);
+            });
+
+            bool pass = playerStart && playerSwap
+                        && armedNpcs.Length >= 3 && visibleNpcs == armedNpcs.Length;
+            Debug.Log($"[WeaponTest] {(pass ? "PASS" : "FAIL")} - player start " +
+                      $"{(playerStart ? "visible" : "MISSING")}, swap " +
+                      $"{(playerSwap ? "visible" : "MISSING")}, armed NPCs " +
+                      $"{visibleNpcs}/{armedNpcs.Length} visible");
+        }
+
         /// <summary>Unattended combat check (`RadiantPool.exe -autohost -attacktest`, asserted
         /// by scripts/smoke-test.ps1): start a real encounter, then drive ONE left-click on the
         /// enemy standing FURTHEST away and prove the fighter closes the distance and swings —
@@ -531,8 +578,10 @@ namespace RadiantPool.Game
             var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
                 .FirstOrDefault(p => !p.IsCompanion && p.Owner != null && p.Owner.IsValid);
             var fight = FindObjectsByType<EncounterTrigger>(FindObjectsSortMode.None)
-                .FirstOrDefault(t => !t.Consumed && t.MonsterIds.Length > 0
-                                     && !ConsumedEncounterIds.Contains(t.EncounterId));
+                .Where(t => !t.Consumed && t.MonsterIds.Length > 0
+                            && !ConsumedEncounterIds.Contains(t.EncounterId))
+                .OrderByDescending(t => t.MonsterIds.Any(CombatManager.HasWeaponLoadout))
+                .FirstOrDefault();
             var combat = CombatManager.Instance;
             if (holder == null || fight == null || combat == null
                 || CombatClientUI.Instance == null)
@@ -566,6 +615,16 @@ namespace RadiantPool.Game
                 yield break;
             }
 
+            var armedEnemies = combat.ClientUnits
+                .Where(u => !u.IsPc && CombatManager.WeaponModelForUnit(u.Id).Length > 0)
+                .ToArray();
+            int visibleWeapons = armedEnemies.Count(u => CharacterVisuals.HasHandItem(
+                u.Visual, "r", CombatManager.WeaponModelForUnit(u.Id)));
+            bool weaponsVisible = armedEnemies.Length > 0
+                                  && visibleWeapons == armedEnemies.Length;
+            Debug.Log($"[WeaponTest] {(weaponsVisible ? "PASS" : "FAIL")} - combat NPCs " +
+                      $"{visibleWeapons}/{armedEnemies.Length} equipped weapons visible");
+
             var from = mine.Cell;
             int feet = Chebyshev(from, enemy.Cell) * 5;
             Debug.Log($"[AttackTest] one click on {enemy.Name} at {feet} ft " +
@@ -584,7 +643,8 @@ namespace RadiantPool.Game
             string blow = combat.Log.LastOrDefault(
                 l => l.Contains(mine.Name) && l.Contains(enemy.Name)) ?? "";
             bool struck = !combat.ActionLeft && blow.Length > 0;
-            bool pass = struck && (feet <= 5 || walked);   // in reach already? then no walk owed
+            bool pass = weaponsVisible && struck
+                        && (feet <= 5 || walked);   // in reach already? then no walk owed
             Debug.Log($"[AttackTest] {(pass ? "PASS" : "FAIL")} - one click at {feet} ft: " +
                       $"walked {(walked ? "into reach" : "NOWHERE")} " +
                       $"({from} to {(now != null ? now.Cell.ToString() : "?")}), attack " +

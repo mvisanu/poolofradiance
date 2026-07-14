@@ -9,6 +9,7 @@ namespace RadiantPool.Game
     public static class CharacterVisuals
     {
         public const string VisualName = "CharacterModel";
+        private const string EquipmentSocketPrefix = "EquipmentSocket_";
 
         public static GameObject Attach(Transform parent, string prefabName,
             Color? tint = null, float scale = 1f)
@@ -55,32 +56,96 @@ namespace RadiantPool.Game
 
         /// <summary>Puts a weapon/shield model into the character's hand slot at runtime
         /// (prefabs live under Resources/Weapons). Empty model name clears the hand.</summary>
-        public static void SetHandItem(Transform unitRoot, string side, string modelName)
+        public static bool SetHandItem(Transform unitRoot, string side, string modelName)
         {
             var visual = unitRoot != null ? unitRoot.Find(VisualName) : null;
-            if (visual == null) return;
-            Transform slot = null;
-            foreach (var t in visual.GetComponentsInChildren<Transform>())
+            if (visual == null) return false;
+            side = side != null && side.ToLowerInvariant().StartsWith("l") ? "L" : "R";
+
+            var socket = FindOrCreateEquipmentSocket(visual, side);
+            if (socket == null) return false;
+            for (int i = socket.childCount - 1; i >= 0; i--)
+                Object.Destroy(socket.GetChild(i).gameObject);
+            if (string.IsNullOrEmpty(modelName)) return true;
+
+            var prefab = Resources.Load<GameObject>($"Weapons/{modelName}");
+            if (prefab == null)
+            {
+                Debug.LogWarning($"[RadiantPool] missing hand model Resources/Weapons/{modelName}");
+                return false;
+            }
+
+            // Keep the imported prefab's local rotation and scale. KayKit weapon FBXes
+            // carry a required -90 degree root correction; resetting rotation to identity
+            // made equipped items lie inside the hand and appear to be missing.
+            var item = Object.Instantiate(prefab, socket, false);
+            item.name = $"Equipped_{side}_{modelName}";
+            return true;
+        }
+
+        /// <summary>True when the named model is mounted in the requested hand. Used by
+        /// the unattended weapon self-test, so visual equipment cannot silently regress.</summary>
+        public static bool HasHandItem(Transform unitRoot, string side, string modelName)
+        {
+            var visual = unitRoot != null ? unitRoot.Find(VisualName) : null;
+            if (visual == null) return false;
+            side = side != null && side.ToLowerInvariant().StartsWith("l") ? "L" : "R";
+            var socket = FindEquipmentSocket(visual, side);
+            if (socket == null) return false;
+            string expected = $"Equipped_{side}_{modelName}";
+            for (int i = 0; i < socket.childCount; i++)
+                if (socket.GetChild(i).name == expected) return true;
+            return false;
+        }
+
+        private static Transform FindEquipmentSocket(Transform visual, string side)
+        {
+            string name = EquipmentSocketPrefix + side;
+            foreach (var t in visual.GetComponentsInChildren<Transform>(true))
+                if (t.name == name) return t;
+            return null;
+        }
+
+        private static Transform FindOrCreateEquipmentSocket(Transform visual, string side)
+        {
+            var existing = FindEquipmentSocket(visual, side);
+            if (existing != null) return existing;
+
+            var all = visual.GetComponentsInChildren<Transform>(true);
+            Transform hand = null;
+            foreach (var t in all)
             {
                 string n = t.name.ToLowerInvariant();
-                if (n.Contains("handslot") && n.Contains(side)) { slot = t; break; }
+                if (n.Contains("handslot") && MatchesSide(n, side)) { hand = t; break; }
             }
-            if (slot == null)
-                foreach (var t in visual.GetComponentsInChildren<Transform>())
+            if (hand == null)
+                foreach (var t in all)
                 {
                     string n = t.name.ToLowerInvariant();
-                    if (n.Contains("hand") && n.Contains(side)) { slot = t; break; }
+                    if (n.Contains("hand") && MatchesSide(n, side)) { hand = t; break; }
                 }
-            if (slot == null) return;
 
-            for (int i = slot.childCount - 1; i >= 0; i--)
-                Object.Destroy(slot.GetChild(i).gameObject);
-            if (string.IsNullOrEmpty(modelName)) return;
-            var prefab = Resources.Load<GameObject>($"Weapons/{modelName}");
-            if (prefab == null) return;
-            var item = Object.Instantiate(prefab, slot);
-            item.transform.localPosition = Vector3.zero;
-            item.transform.localRotation = Quaternion.identity;
+            // Non-humanoid/fallback rigs may not expose named hand bones. A model-root
+            // socket still keeps the item visible; humanoid KayKit rigs take the animated
+            // hand path above.
+            bool fallback = hand == null;
+            if (fallback) hand = visual;
+            var socket = new GameObject(EquipmentSocketPrefix + side).transform;
+            socket.SetParent(hand, false);
+            if (fallback)
+                socket.localPosition = side == "R"
+                    ? new Vector3(0.48f, 1.05f, 0.08f)
+                    : new Vector3(-0.48f, 1.05f, 0.08f);
+            return socket;
+        }
+
+        private static bool MatchesSide(string name, string side)
+        {
+            if (side == "R")
+                return name.Contains("right") || name.EndsWith("r")
+                    || name.Contains(".r") || name.Contains("_r") || name.Contains("-r");
+            return name.Contains("left") || name.EndsWith("l")
+                || name.Contains(".l") || name.Contains("_l") || name.Contains("-l");
         }
 
         public static void SetDead(Transform unitRoot, bool dead)

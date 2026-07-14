@@ -21,7 +21,7 @@ New-Item -ItemType Directory -Force $saveDir | Out-Null
 Write-Host "Starting host instance..."
 # -selltest / -leveltest: the host drives a real sale (bag -> trader -> purse) and a real
 # level-up (XP -> level -> ability point spent), and asserts on both below.
-$hostProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Anna","-autohost","-selltest","-leveltest","-savedir",$saveDir,"-logFile",$hostLog -PassThru
+$hostProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Anna","-autohost","-selltest","-leveltest","-weapontest","-savedir",$saveDir,"-logFile",$hostLog -PassThru
 Start-Sleep -Seconds 12
 
 Write-Host "Starting client instance..."
@@ -63,6 +63,10 @@ $checks = @(
     @{ Name = "earned XP levels the character up"; Ok = $hostText -match "\[LevelTest\] PASS - \d+ XP took" },
     @{ Name = "an ability point can be spent";     Ok = $hostText -match "\[LevelTest\] PASS - spending" },
     @{ Name = "no failed level assertion";         Ok = $hostText -notmatch "\[LevelTest\] FAIL" },
+    @{ Name = "player and NPC equipped weapons are visible"; Ok = $hostText -match "\[WeaponTest\] PASS" },
+    @{ Name = "no failed weapon visual assertion"; Ok = $hostText -notmatch "\[WeaponTest\] FAIL" },
+    @{ Name = "armed combat NPC weapons are visible"; Ok = $fightText -match "\[WeaponTest\] PASS - combat NPCs" },
+    @{ Name = "no failed combat weapon assertion"; Ok = $fightText -notmatch "\[WeaponTest\] FAIL" },
     @{ Name = "one click on a distant enemy closes in and attacks"; Ok = $fightText -match "\[AttackTest\] PASS" },
     @{ Name = "no failed attack assertion";        Ok = $fightText -notmatch "\[AttackTest\] FAIL" },
     @{ Name = "no NullReference in combat log";    Ok = $fightText -notmatch "NullReferenceException" }

@@ -49,19 +49,6 @@ namespace RadiantPool.EditorTools
             }
         }
 
-        /// <summary>Character → (right-hand weapon, left-hand item). Weapon UVs sit on the
-        /// character atlases, so each weapon borrows a suitable character material.</summary>
-        private static readonly System.Collections.Generic.Dictionary<string, (string right, string left)>
-            Loadouts = new System.Collections.Generic.Dictionary<string, (string, string)>
-        {
-            // Player-class characters get weapons at runtime from equipment SyncVars;
-            // only monsters keep gear baked into their prefabs.
-            { "Ranger", ("bow", null) },
-            { "Skeleton_Warrior", ("Skeleton_Blade", "Skeleton_Shield_Large_A") },
-            { "Skeleton_Rogue", ("dagger", null) },
-            { "Skeleton_Mage", ("staff", null) },
-        };
-
         private static void SetupMaterialsAndImport()
         {
             foreach (string folder in new[] { "Characters", "Skeletons" })
@@ -253,46 +240,6 @@ namespace RadiantPool.EditorTools
             return controller;
         }
 
-        /// <summary>Puts weapons in the rig's hand slots (KayKit rigs expose attachment
-        /// bones whose names contain "handslot"; falls back to hand bones).</summary>
-        private static void AttachLoadout(GameObject instance, string characterName)
-        {
-            if (!Loadouts.TryGetValue(characterName, out var loadout)) return;
-
-            Transform FindSlot(string side)
-            {
-                var all = instance.GetComponentsInChildren<Transform>();
-                return all.FirstOrDefault(t =>
-                           t.name.ToLowerInvariant().Contains("handslot")
-                           && t.name.ToLowerInvariant().Contains(side))
-                       ?? all.FirstOrDefault(t =>
-                           t.name.ToLowerInvariant().Contains("hand")
-                           && t.name.ToLowerInvariant().Contains(side));
-            }
-
-            void Attach(string weapon, string side)
-            {
-                if (string.IsNullOrEmpty(weapon)) return;
-                var slot = FindSlot(side);
-                if (slot == null)
-                {
-                    Debug.LogWarning($"[Bootstrap] No {side} hand slot on {characterName}");
-                    return;
-                }
-                var model = AssetDatabase.LoadAssetAtPath<GameObject>(
-                    $"{Root}/Weapons/{weapon}.fbx");
-                if (model == null) return;
-                var w = (GameObject)PrefabUtility.InstantiatePrefab(model);
-                w.name = weapon;
-                w.transform.SetParent(slot, false);
-                w.transform.localPosition = Vector3.zero;
-                w.transform.localRotation = Quaternion.identity;
-            }
-
-            Attach(loadout.right, "r");
-            Attach(loadout.left, "l");
-        }
-
         private static void BuildPrefabs(AnimatorController controller)
         {
             if (!AssetDatabase.IsValidFolder("Assets/Resources"))
@@ -327,8 +274,6 @@ namespace RadiantPool.EditorTools
                     if (animator == null) animator = instance.AddComponent<Animator>();
                     animator.runtimeAnimatorController = controller;
                     animator.applyRootMotion = false;
-
-                    AttachLoadout(instance, name);
 
                     PrefabUtility.SaveAsPrefabAsset(instance, $"{PrefabDir}/{name}.prefab");
                     Object.DestroyImmediate(instance);

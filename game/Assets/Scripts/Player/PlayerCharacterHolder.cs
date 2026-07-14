@@ -60,6 +60,7 @@ namespace RadiantPool.Game
         public int ModOf(Ability a) => Mathf.FloorToInt((ScoreOf(a) - 10) / 2f);
 
         private float _nextStatSync;
+        private int _appliedClassVisual = -1;
 
         /// <summary>Server: push the sheet's derived stats out to clients. Cheap — FishNet
         /// only sends SyncVars that actually changed — so a slow poll covers every source
@@ -120,6 +121,7 @@ namespace RadiantPool.Game
 
         private void ApplyHandVisuals()
         {
+            if (!IsClientStarted) return;
             var weapon = GameItem.Get(WeaponId.Value);
             CharacterVisuals.SetHandItem(transform, "r", weapon?.HandModel ?? "");
             CharacterVisuals.SetHandItem(transform, "l",
@@ -173,6 +175,7 @@ namespace RadiantPool.Game
         {
             base.OnStartClient();
             ApplyClassVisual(ClassIndex.Value);
+            StartCoroutine(RefreshVisualWhenEquipmentArrives());
             if (!IsOwner) return;
             var b = CharacterBuild.Local;
             CmdSubmitBuild(SessionLauncher.LocalDisplayName, b.ClassIndex, b.RaceIndex,
@@ -181,9 +184,28 @@ namespace RadiantPool.Game
 
         private void ApplyClassVisual(int classIndex)
         {
+            if (!IsClientStarted) return;
             if (classIndex < 0 || classIndex >= ClassModels.Length) return;
-            CharacterVisuals.Attach(transform, ClassModels[classIndex]);
+            // Host-side and client-side SyncVar callbacks can both observe initialization.
+            // Replacing the same model twice used to discard the weapon mounted by the
+            // first callback. Attachment is idempotent for a class; equipment can refresh
+            // independently as often as its replicated values change.
+            if (_appliedClassVisual != classIndex
+                || transform.Find(CharacterVisuals.VisualName) == null)
+            {
+                CharacterVisuals.Attach(transform, ClassModels[classIndex]);
+                _appliedClassVisual = classIndex;
+            }
             ApplyHandVisuals();
+        }
+
+        private System.Collections.IEnumerator RefreshVisualWhenEquipmentArrives()
+        {
+            float deadline = Time.time + 5f;
+            while ((ClassIndex.Value < 0 || string.IsNullOrEmpty(WeaponId.Value))
+                   && Time.time < deadline)
+                yield return null;
+            ApplyClassVisual(ClassIndex.Value);
         }
 
         [ServerRpc]

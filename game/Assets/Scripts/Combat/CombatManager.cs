@@ -1029,6 +1029,34 @@ namespace RadiantPool.Game
             { "goblin", ("Goblin|Orc|Barbarian", new Color(0.85f, 1f, 0.75f), 0.72f) },
         };
 
+        /// <summary>Visible combat loadouts mirror each humanoid monster's authored
+        /// attacks. Natural-weapon creatures intentionally have no entry.</summary>
+        private static readonly Dictionary<string, (string weaponId, bool shield)>
+            MonsterLoadouts = new Dictionary<string, (string, bool)>
+        {
+            { "marsh_skulker", ("light_crossbow", false) },
+            { "bonewalker", ("shortsword", true) },
+            { "kindled_zealot", ("dagger", false) },
+            { "hollow_warden", ("greatsword", false) },
+            { "orc", ("greataxe", false) },
+            { "orc_warchief", ("greataxe", false) },
+            { "goblin", ("shortsword", false) },
+        };
+
+        public static bool HasWeaponLoadout(string monsterId) =>
+            MonsterLoadouts.ContainsKey(monsterId);
+
+        /// <summary>Expected mounted hand model for a replicated monster unit id
+        /// (`m0_monster_id`). Empty means natural weapons/no held item.</summary>
+        public static string WeaponModelForUnit(string unitId)
+        {
+            int split = string.IsNullOrEmpty(unitId) ? -1 : unitId.IndexOf('_');
+            if (split < 0 || split >= unitId.Length - 1) return "";
+            string monsterId = unitId.Substring(split + 1);
+            return MonsterLoadouts.TryGetValue(monsterId, out var loadout)
+                ? GameItem.Get(loadout.weaponId)?.HandModel ?? "" : "";
+        }
+
         private Transform ResolveVisual(UnitView view)
         {
             if (view.IsPc)
@@ -1057,6 +1085,14 @@ namespace RadiantPool.Game
                 }
                 if (model != null)
                 {
+                    if (MonsterLoadouts.TryGetValue(monsterId, out var loadout))
+                    {
+                        var weapon = GameItem.Get(loadout.weaponId);
+                        CharacterVisuals.SetHandItem(root.transform, "r",
+                            weapon?.HandModel ?? "");
+                        CharacterVisuals.SetHandItem(root.transform, "l",
+                            loadout.shield ? "shield_badge" : "");
+                    }
                     AttachLabel(root.transform, view.Name);
                     return root.transform;
                 }
