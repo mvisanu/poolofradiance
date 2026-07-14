@@ -47,6 +47,30 @@ namespace RadiantPool.Game
             return visual != null ? visual.GetComponent<Animator>() : null;
         }
 
+        /// <summary>True only when a real rendered character has replaced the primitive
+        /// network placeholder. Used by unattended recruitment coverage so companions
+        /// cannot silently regress to visible capsules.</summary>
+        public static bool HasVisibleCharacterModel(Transform unitRoot)
+        {
+            if (unitRoot == null) return false;
+            var visual = unitRoot.Find(VisualName);
+            if (visual == null) return false;
+
+            bool hasVisibleRenderer = false;
+            foreach (var r in visual.GetComponentsInChildren<Renderer>(true))
+                if (r.enabled) { hasVisibleRenderer = true; break; }
+            if (!hasVisibleRenderer) return false;
+
+            foreach (var r in unitRoot.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                if (r.transform.IsChildOf(visual)) continue;
+                if ((r.gameObject.name is "Capsule" or "Cube" or "nose"
+                     || r.gameObject.name.StartsWith("Monster_")) && r.enabled)
+                    return false;
+            }
+            return true;
+        }
+
         public static void Trigger(Transform unitRoot, string trigger)
         {
             var animator = AnimatorOf(unitRoot);

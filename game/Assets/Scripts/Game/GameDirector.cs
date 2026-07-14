@@ -286,14 +286,19 @@ namespace RadiantPool.Game
                     ? anchor.transform.position + new Vector3(1.5f + spawned, 0.2f, -1.5f)
                     : new Vector3(0, 0.2f, -8);
                 var nob = Instantiate(CompanionPrefab, pos, Quaternion.identity);
-                FishNet.InstanceFinder.ServerManager.Spawn(nob);   // no owner = server AI
                 var holder = nob.GetComponent<PlayerCharacterHolder>();
                 string name = spawned < namePool.Count
                     ? namePool[spawned]
                     : $"Sellsword {spawned + 1}";   // pool exhausted (never in practice)
+
+                // Populate every replicated appearance field before FishNet builds the
+                // initial observer snapshot. Spawning first briefly (and, for host-side
+                // callbacks, permanently) exposed ClassIndex=-1, leaving the prefab's
+                // placeholder capsule visible instead of attaching the class model.
                 holder.ServerInitCompanion(name, (int)cls);
                 var identity = nob.GetComponent<PlayerIdentity>();
                 if (identity != null) identity.ServerSetName(name);
+                FishNet.InstanceFinder.ServerManager.Spawn(nob);   // no owner = server AI
                 holders.Add(holder);
                 hired.Add($"{name} the {cls}");
                 spawned++;
@@ -592,17 +597,27 @@ namespace RadiantPool.Game
 
             int offered = NpcInteract.AvailableRecruitSlots();
             CmdRecruitCompanions();
-            yield return new WaitForSeconds(0.75f);
+            yield return new WaitForSeconds(1.5f);
 
-            int companions = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
-                .Count(p => p.IsCompanion && p.Sheet != null);
+            var hired = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .Where(p => p.IsCompanion && p.Sheet != null).ToArray();
+            int companions = hired.Length;
+            int modeled = hired.Count(p => CharacterVisuals.HasVisibleCharacterModel(p.transform));
+            int armed = hired.Count(p =>
+            {
+                var item = GameItem.Get(p.WeaponId.Value);
+                return item != null && CharacterVisuals.HasHandItem(
+                    p.transform, "r", item.HandModel);
+            });
             int party = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
                 .Count(p => p.Sheet != null);
             bool pass = offered == 3 && companions == 3
+                        && modeled == companions && armed == companions
                         && party == RadiantPool.Rules.PartyComposition.MaxPartySize
                         && NpcInteract.AvailableRecruitSlots() == 0;
             Debug.Log($"[RecruitTest] {(pass ? "PASS" : "FAIL")} - post-campaign solo " +
                       $"offer {offered} slot(s), spawned {companions} companion(s), " +
+                      $"models {modeled}/{companions}, weapons {armed}/{companions}, " +
                       $"party {party}/{RadiantPool.Rules.PartyComposition.MaxPartySize}");
         }
 
