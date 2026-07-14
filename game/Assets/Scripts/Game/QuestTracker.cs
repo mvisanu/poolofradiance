@@ -208,13 +208,14 @@ namespace RadiantPool.Game
                 Destroy(_beacon.GetComponent<Collider>());
                 _beacon.name = "QuestBeacon";
                 // Repaint: the primitive's default material is built-in Standard, which
-                // URP renders as a MAGENTA pillar in a build (it looked gold in editor).
+                // URP renders magenta in a build. This is a ground beacon, not a giant
+                // vertical pillar that hides the NPC or landmark it is meant to reveal.
                 RuntimeArt.Paint(_beacon, new Color(1f, 0.85f, 0.3f, 1f), emission: 1.4f);
             }
             _beacon.SetActive(true);
-            _beacon.transform.position = new Vector3(TargetPosition.x, 14f, TargetPosition.z);
+            _beacon.transform.position = new Vector3(TargetPosition.x, 0.08f, TargetPosition.z);
             float pulse = 0.8f + 0.18f * Mathf.Sin(Time.time * 2.4f);
-            _beacon.transform.localScale = new Vector3(pulse, 14f, pulse);
+            _beacon.transform.localScale = new Vector3(pulse * 1.6f, 0.055f, pulse * 1.6f);
         }
 
         private void OnGUI()
