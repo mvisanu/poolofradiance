@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "ashen_ward",
+  "name": "The Ashen Ward",
+  "scene": "Zone_AshenWard",
+  "levelBand": [4, 5],
+  "locked": true,
+  "encounters": [
+    { "id": "enc_ashen_01", "trigger": "vol_ashen_01",
+      "units": ["kindled_zealot", "kindled_zealot", "kindled_zealot", "bonewalker"], "requiredForClear": true },
+    { "id": "enc_ashen_02", "trigger": "vol_ashen_02",
+      "units": ["kindled_zealot", "kindled_zealot", "kindled_zealot", "kindled_zealot", "bonewalker"], "requiredForClear": true },
+    { "id": "enc_ashen_03", "trigger": "vol_ashen_03",
+      "units": ["giant_spider", "giant_spider", "kindled_zealot", "kindled_zealot"], "requiredForClear": true,
+      "storyBeatOnVictory": "sb_hollow_flame_sealed" }
+  ],
+  "clearQuest": "q_clear_ashen_ward",
+  "onCleared": { "pacify": true, "unlocks": null, "campaignComplete": true }
+}

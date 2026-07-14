@@ -622,7 +622,10 @@ namespace RadiantPool.EditorTools
 
             // Market divider (z=25) with a 6 m gate gap at x=0.
             Box("MarketWall_W", new Vector3(-31.5f, 1.5f, 25), new Vector3(57, 3, 1), wall);
-            Box("MarketWall_E", new Vector3(31.5f, 1.5f, 25), new Vector3(57, 3, 1), wall);
+            // Leave a second postern at x=48. It stays sealed until the appended
+            // Lightwell commission is active, then opens into the Ashen Ward.
+            Box("MarketWall_E_A", new Vector3(24f, 1.5f, 25), new Vector3(42, 3, 1), wall);
+            Box("MarketWall_E_B", new Vector3(55.5f, 1.5f, 25), new Vector3(9, 3, 1), wall);
             var gateMarket = GameObject.CreatePrimitive(PrimitiveType.Cube);
             gateMarket.name = "Gate_DrownedMarket";
             gateMarket.transform.position = new Vector3(0, 1.5f, 25);
@@ -633,6 +636,17 @@ namespace RadiantPool.EditorTools
                 new Vector3(0, 0, 25), 0, 7f);
             if (gateMarketVisual != null)
                 gateMarketVisual.transform.SetParent(gateMarket.transform, true);
+
+            var gateAshen = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            gateAshen.name = "Gate_AshenWard";
+            gateAshen.transform.position = new Vector3(48, 1.5f, 25);
+            gateAshen.transform.localScale = new Vector3(6, 3, 1.2f);
+            gateAshen.GetComponent<Renderer>().enabled = false;
+            gateAshen.AddComponent<ZoneGate>().ZoneIndex = 4;
+            var gateAshenVisual = KenneyArt.Place("Pirate", "castle-gate",
+                new Vector3(48, 0, 25), 0f, 7f);
+            if (gateAshenVisual != null)
+                gateAshenVisual.transform.SetParent(gateAshen.transform, true);
 
             // Temple divider (x=35, south of the market wall) with a 6 m gate gap at z=0.
             Box("TempleWall_S", new Vector3(35, 1.5f, -31.5f), new Vector3(1, 3, 57), wall);
@@ -915,6 +929,30 @@ namespace RadiantPool.EditorTools
             wellLight.intensity = 3.5f;
             wellLight.range = 18f;
 
+            // The newly opened ward reads as a distinct endgame space even from the
+            // Lightwell: three low, emissive breach seals identify the actual quest sites.
+            var breachMat = Mat("M_AshenBreach", new Color(0.22f, 0.07f, 0.035f));
+            breachMat.EnableKeyword("_EMISSION");
+            breachMat.SetColor("_EmissionColor", new Color(2.2f, 0.42f, 0.08f));
+            void BreachSeal(string name, Vector3 pos)
+            {
+                var seal = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                seal.name = name;
+                seal.transform.position = new Vector3(pos.x, 0.08f, pos.z);
+                seal.transform.localScale = new Vector3(2.4f, 0.05f, 2.4f);
+                Object.DestroyImmediate(seal.GetComponent<Collider>());
+                seal.GetComponent<Renderer>().sharedMaterial = breachMat;
+                var glow = new GameObject(name + " Glow").AddComponent<Light>();
+                glow.transform.position = pos + Vector3.up * 1.2f;
+                glow.type = LightType.Point;
+                glow.color = new Color(1f, 0.24f, 0.06f);
+                glow.intensity = 2.4f;
+                glow.range = 9f;
+            }
+            BreachSeal("Ashen Breach I", new Vector3(42, 0, 34));
+            BreachSeal("Ashen Breach II", new Vector3(53, 0, 43));
+            BreachSeal("Ashen Breach III", new Vector3(42, 0, 52));
+
             // Spawn points (hub plaza) — DressWorld() lives below in this class.
             var spawnParent = new GameObject("SpawnPoints");
             var spawns = new List<Transform>();
@@ -1017,6 +1055,18 @@ namespace RadiantPool.EditorTools
                 new Vector3(50, 1.5f, 19), new Vector3(12, 3, 10), true,
                 new[] { "hollow_warden", "kindled_zealot" });
 
+            // Zone 4 — The Ashen Ward (northeast, beyond the Lightwell postern).
+            Encounter("enc_ashen_01", "ashen_ward", "the breached postern",
+                new Vector3(42, 1.5f, 34), new Vector3(9, 3, 9), true,
+                new[] { "kindled_zealot", "kindled_zealot", "kindled_zealot", "bonewalker" });
+            Encounter("enc_ashen_02", "ashen_ward", "the cinder court",
+                new Vector3(53, 1.5f, 43), new Vector3(9, 3, 9), true,
+                new[] { "kindled_zealot", "kindled_zealot", "kindled_zealot",
+                        "kindled_zealot", "bonewalker" });
+            Encounter("enc_ashen_03", "ashen_ward", "the hollow shrine",
+                new Vector3(42, 1.5f, 52), new Vector3(10, 3, 9), true,
+                new[] { "giant_spider", "giant_spider", "kindled_zealot", "kindled_zealot" });
+
             // Zone 2 — The Sunken Warcamp (south, gated): orc warband + boss fight.
             Encounter("enc_warcamp_01", "sunken_warcamp", "the picket line",
                 new Vector3(10, 1.5f, -32), new Vector3(10, 3, 10), true,
@@ -1065,7 +1115,9 @@ namespace RadiantPool.EditorTools
                     Mat("M_SignPost", new Color(0.32f, 0.22f, 0.14f));
 
                 var textGo = new GameObject("DistrictLabel");
-                textGo.transform.SetParent(post.transform, false);
+                // Do not parent this under the post: the post is deliberately scaled
+                // (thin in X/Z, tall in Y), which stretches child TextMesh glyphs into
+                // unreadable vertical streaks. Position is enough; the scene owns both.
                 textGo.transform.position = groundPos + new Vector3(0f, 8.2f, 0f);
                 var text = textGo.AddComponent<TextMesh>();
                 text.text = label;
@@ -1088,6 +1140,7 @@ namespace RadiantPool.EditorTools
             District("The Drowned Market", new Vector3(0f, 0f, 42f), signGold);
             District("The Sunken Warcamp", new Vector3(15f, 0f, -39f), signGold);
             District("The Glasslit Temple", new Vector3(48f, 0f, -2f), signGold);
+            District("The Ashen Ward", new Vector3(46f, 0f, 43f), signGold);
 
             // Vendor NPC by the council platform.
             var vendor = GameObject.CreatePrimitive(PrimitiveType.Capsule);
@@ -1183,6 +1236,16 @@ namespace RadiantPool.EditorTools
                         "hub. Break their five circles, face what wears the Warden, then " +
                         "return WEST to Council Hall.",
                     RequiredEncounters = 5, XpEach = 3400, Gold = 600
+                },
+                new GameDirector.ZoneConfig
+                {
+                    ZoneId = "ashen_ward", DisplayName = "The Ashen Ward",
+                    QuestName = "Beyond the Lightwell",
+                    Description = "The Hollow Flame fled through the sealed postern " +
+                        "NORTHEAST of the Lightwell. Follow the gold waypoint through the " +
+                        "newly opened gate, seal all three breaches, then return SOUTHWEST " +
+                        "to Council Hall.",
+                    RequiredEncounters = 3, XpEach = 1200, Gold = 750
                 }
             };
             director.CompanionPrefab = playerPrefab;

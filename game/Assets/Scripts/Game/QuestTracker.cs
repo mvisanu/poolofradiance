@@ -28,9 +28,11 @@ namespace RadiantPool.Game
         private void Awake() => Instance = this;
         private void Start()
         {
-            if (System.Array.IndexOf(System.Environment.GetCommandLineArgs(),
-                    "-questguidancetest") >= 0)
+            var args = System.Environment.GetCommandLineArgs();
+            if (System.Array.IndexOf(args, "-questguidancetest") >= 0)
                 StartCoroutine(QuestGuidanceSelfTest());
+            if (System.Array.IndexOf(args, "-nextquesttest") >= 0)
+                StartCoroutine(NextQuestWaypointSelfTest());
         }
         private void OnDestroy() { if (Instance == this) Instance = null; }
 
@@ -484,6 +486,30 @@ namespace RadiantPool.Game
             Debug.Log($"[QuestGuidanceTest] {(pass ? "PASS" : "FAIL")} - " +
                       $"turn-in target {(pointsToGiver ? "is" : "is not")} Veresk; " +
                       $"toast '{testedLabel}'; card {(cardNamesHall ? "names" : "omits")} Council Hall");
+        }
+
+        /// <summary>Build-only regression for the real completed-save migration: after
+        /// GameDirector appends the next chapter, every guidance layer must name and point
+        /// into the new ward rather than showing the old campaign-complete state.</summary>
+        private IEnumerator NextQuestWaypointSelfTest()
+        {
+            yield return new WaitForSeconds(8f);
+            Scan();
+            var director = GameDirector.Instance;
+            var summary = Objectives();
+            int active = -1;
+            if (director != null)
+                for (int i = 0; i < director.Zones.Length; i++)
+                    if (director.GetZoneState(i) == QuestState.Active) { active = i; break; }
+
+            bool isAshen = active >= 0 && director.Zones[active].ZoneId == "ashen_ward";
+            bool cardNamesQuest = summary.title == "Beyond the Lightwell"
+                                  && summary.steps.Any(s => s.text.Contains("The Ashen Ward"));
+            bool pass = isAshen && HasTarget && !IsTurnInTarget
+                        && TargetLabel.Contains("The Ashen Ward") && cardNamesQuest;
+            Debug.Log($"[NextQuestWaypointTest] {(pass ? "PASS" : "FAIL")} - " +
+                      $"active {(isAshen ? "Ashen Ward" : "zone missing")}; " +
+                      $"target '{TargetLabel}'; card '{summary.title}'");
         }
     }
 }

@@ -47,6 +47,28 @@ Stop-Process -Id $recruitProc.Id -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 $recruitText = Get-Content $recruitLog -Raw
 
+# A completed pre-Ashen-Ward save must not dead-end on its old finale. Load the exact
+# old four-zone shape and prove the appended commission activates automatically.
+Write-Host "Starting completed-save migration instance..."
+$migrationLog = Join-Path $logDir "migration.log"
+Remove-Item $migrationLog -ErrorAction SilentlyContinue
+$migrationSave = Join-Path $logDir "migrationsave"
+Remove-Item -Recurse -Force $migrationSave -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $migrationSave | Out-Null
+$legacy = [ordered]@{
+    SchemaVersion = 1; SavedAtUtc = "2026-07-14T00:00:00Z"
+    MusterState = 3; PartyGold = 1000
+    ZoneStates = @(3, 3, 3, 3); ZoneClearedCounts = @(3, 4, 3, 5)
+    CampaignComplete = $true; Stash = @(); ConsumedEncounters = @(); Roster = @()
+} | ConvertTo-Json -Depth 5
+[System.IO.File]::WriteAllText((Join-Path $migrationSave "campaign.json"), $legacy,
+    (New-Object System.Text.UTF8Encoding($false)))
+$migrationProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Eira","-autohost","-nextquesttest","-savedir",$migrationSave,"-logFile",$migrationLog -PassThru
+Start-Sleep -Seconds 12
+Stop-Process -Id $migrationProc.Id -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+$migrationText = Get-Content $migrationLog -Raw
+
 # -attacktest gets its OWN host: it starts a real encounter, and a fight running underneath
 # the sell/level checks would fight them for the turn clock. One click on the FURTHEST enemy
 # must both close the distance and land the blow.
@@ -91,6 +113,9 @@ $checks = @(
     @{ Name = "no failed combat weapon assertion"; Ok = $fightText -notmatch "\[WeaponTest\] FAIL" },
     @{ Name = "post-campaign solo player can hire three NPC helpers"; Ok = $recruitText -match "\[RecruitTest\] PASS" },
     @{ Name = "no failed solo recruitment assertion"; Ok = $recruitText -notmatch "\[RecruitTest\] FAIL" },
+    @{ Name = "completed four-zone save unlocks the next quest"; Ok = $migrationText -match "\[CampaignMigration\] PASS.+Beyond the Lightwell" },
+    @{ Name = "new quest has a live Ashen Ward waypoint"; Ok = $migrationText -match "\[NextQuestWaypointTest\] PASS.+target 'The Ashen Ward'" },
+    @{ Name = "save migration has no runtime exception"; Ok = $migrationText -notmatch "Exception|\[CampaignMigration\] FAIL" },
     @{ Name = "one click on a distant enemy closes in and attacks"; Ok = $fightText -match "\[AttackTest\] PASS" },
     @{ Name = "no failed attack assertion";        Ok = $fightText -notmatch "\[AttackTest\] FAIL" },
     @{ Name = "combat attack produces graphics and sound feedback"; Ok = $fightText -match "presentation FX/SFX" },
@@ -102,6 +127,6 @@ foreach ($c in $checks) {
     if ($c.Ok) { Write-Host "  PASS  $($c.Name)" -ForegroundColor Green }
     else { Write-Host "  FAIL  $($c.Name)" -ForegroundColor Red; $failed++ }
 }
-Write-Host "Logs: $hostLog | $clientLog | $recruitLog | $fightLog"
+Write-Host "Logs: $hostLog | $clientLog | $recruitLog | $migrationLog | $fightLog"
 if ($failed -gt 0) { exit 1 }
 Write-Host "Smoke test passed - two instances hosted, joined, and spawned characters." -ForegroundColor Green

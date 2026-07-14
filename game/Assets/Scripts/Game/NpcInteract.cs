@@ -22,7 +22,10 @@ namespace RadiantPool.Game
             "the Temple with raiders at its back. Mind the wilds on the road: spiders, " +
             "bears, goblin ambushes.\"",
             "\"Only the Temple remains. The cult there serves something that wears our own " +
-            "Warden like a cloak. Break their five circles and end it.\""
+            "Warden like a cloak. Break their five circles and end it.\"",
+            "\"Sorrel was right: the Flame fled through the Lightwell gate into the ward " +
+            "beyond. Seal its three breaches before it can kindle the city again. Follow " +
+            "the gold waypoint northeast from the Lightwell.\""
         };
 
         private static readonly string[] ZoneTurnins =
@@ -33,7 +36,9 @@ namespace RadiantPool.Game
             "\"Splitjaw's warband is broken and the south road is ours again. Nothing stands " +
             "between us and the Temple now.\"",
             "\"Sorrel lives — freed after nine years in that thing's grip. The Flame has fled " +
-            "deep into the Lightwell, and Aldenmere is ours to the last stone.\""
+            "deep into the Lightwell. The old gate is open; finish this beyond it.\"",
+            "\"The breaches are cold and the ward is ours. This time the Hollow Flame has " +
+            "nowhere left to run.\""
         };
 
         private bool _open;

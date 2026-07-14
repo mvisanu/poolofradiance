@@ -13,6 +13,6 @@
     { "id": "o2", "text": "Turn in the final commission at Council Hall", "counter": "turned_in", "target": 1 }
   ],
   "turnIn": { "location": "hub_council_hall", "npc": "npc_council_veresk", "instruction": "Return west to Council Hall and follow the gold marker." },
-  "rewards": { "xpEach": 3400, "gold": 600, "storyBeat": "sb_campaign_complete" },
-  "unlocks": []
+  "rewards": { "xpEach": 3400, "gold": 600, "storyBeat": "sb_sorrel_freed" },
+  "unlocks": ["q_clear_ashen_ward"]
 }

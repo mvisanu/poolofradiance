@@ -101,6 +101,7 @@ namespace RadiantPool.Game
             base.OnStartServer();
             var args = System.Environment.GetCommandLineArgs();
             int questLampCapture = System.Array.IndexOf(args, "-questlampcapture");
+            int nextQuestCapture = System.Array.IndexOf(args, "-nextquestcapture");
             _allowWorldTimeOverride = System.Array.IndexOf(args, "-atmospheretest") >= 0
                                       || System.Array.IndexOf(args, "-atmospherecapture") >= 0
                                       || questLampCapture >= 0;
@@ -127,6 +128,8 @@ namespace RadiantPool.Game
                 StartCoroutine(SoloRecruitmentSelfTest());
             if (questLampCapture >= 0 && questLampCapture + 1 < args.Length)
                 StartCoroutine(QuestLampCapture(args[questLampCapture + 1]));
+            if (nextQuestCapture >= 0 && nextQuestCapture + 1 < args.Length)
+                StartCoroutine(NextQuestCapture(args[nextQuestCapture + 1]));
 
             if (!SaveSystem.Exists) return;
             var save = SaveSystem.Read();
@@ -164,6 +167,7 @@ namespace RadiantPool.Game
             string savedDate = save.SavedAtUtc.Length >= 10
                 ? save.SavedAtUtc.Substring(0, 10) : save.SavedAtUtc;
             RpcNotice($"Campaign loaded (saved {savedDate}).");
+            ServerUnlockAppendedCampaign(save);
             // Self-heal, in this order:
             //   1. Recount every zone from the consumed list. Saves written before the
             //      count/save ordering fix persisted counts that lagged the consumed
@@ -172,6 +176,29 @@ namespace RadiantPool.Game
             for (int i = 0; i < Zones.Length; i++) ServerRecountZone(i);
             for (int i = 0; i < Zones.Length; i++) ServerRecheckZone(i);
             ServerSaveCampaign();   // persist the repair so it happens once
+        }
+
+        /// <summary>Content updates may append chapters after a save's old finale. A party
+        /// that truly completed every zone present in that save gets the first appended
+        /// quest immediately; incomplete or malformed saves are never advanced. This is
+        /// derived from the saved zone count so later appended chapters use the same path.</summary>
+        [Server]
+        private void ServerUnlockAppendedCampaign(CampaignSave save)
+        {
+            int savedZones = save.ZoneStates.Count;
+            if (!save.CampaignComplete || savedZones < 4 || savedZones >= Zones.Length)
+                return;
+            for (int i = 0; i < savedZones; i++)
+                if ((QuestState)save.ZoneStates[i] != QuestState.Completed)
+                    return;
+
+            CampaignComplete.Value = false;
+            ZoneStates[savedZones] = (int)QuestState.Active;
+            string quest = Zones[savedZones].QuestName;
+            Debug.Log($"[CampaignMigration] PASS - completed {savedZones}-zone save unlocked " +
+                      $"appended quest '{quest}'");
+            RpcNotice($"A new Council commission is ready: {quest}. Follow the gold " +
+                      "waypoint beyond the Lightwell.");
         }
 
         [Server]
@@ -397,7 +424,7 @@ namespace RadiantPool.Game
                 {
                     CampaignComplete.Value = true;
                     RpcNotice($"Quest complete! +{cfg.XpEach} XP each, +{cfg.Gold} gold. " +
-                              "The Hollow Flame recedes — Aldenmere is free!");
+                              "The Hollow Flame is sealed. Aldenmere stands free!");
                 }
                 ServerSaveCampaign();
             }
@@ -840,6 +867,32 @@ namespace RadiantPool.Game
             ServerClearWorldHourTestOverride();
             Debug.Log($"[QuestLampCapture] wrote midnight Council Hall turn-in frame to {path}; " +
                       $"restored host computer time {WorldHour.Value:0.00}");
+        }
+
+        /// <summary>Screenshot-only QA path for a migrated completed save. It parks at the
+        /// Lightwell facing the newly opened postern and Ashen Ward while the normal quest
+        /// card, toast, world marker, and steering arrow render from real campaign state.</summary>
+        private System.Collections.IEnumerator NextQuestCapture(string path)
+        {
+            yield return new WaitForSeconds(8f);
+            var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => !p.IsCompanion && p.Owner != null && p.Owner.IsValid);
+            if (holder == null)
+            {
+                Debug.Log("[NextQuestCapture] FAIL - no player");
+                yield break;
+            }
+
+            Warp(holder.transform, new Vector3(39f, 0.1f, 18f));
+            holder.transform.rotation = Quaternion.Euler(0f, 35f, 0f);
+            var orbit = Camera.main != null ? Camera.main.GetComponent<OrbitCamera>() : null;
+            if (orbit != null) orbit.SetPresentationView(35f, 24f, 16f);
+            yield return new WaitForSeconds(2f);
+            string directory = System.IO.Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(directory)) System.IO.Directory.CreateDirectory(directory);
+            ScreenCapture.CaptureScreenshot(path);
+            yield return new WaitForSeconds(2f);
+            Debug.Log($"[NextQuestCapture] wrote Lightwell-to-Ashen-Ward waypoint frame to {path}");
         }
 
         /// <summary>A teleport that sticks. A CharacterController overwrites a direct

@@ -156,7 +156,8 @@ namespace RadiantPool.Rules.Tests
         [Fact]
         public void ZoneProgression_FormsCompleteChain()
         {
-            // docks → market → warcamp → temple, temple completes the campaign.
+            // docks → market → warcamp → temple → Ashen Ward; the appended ward is
+            // the finale so completed four-zone saves have somewhere real to continue.
             using var docks = Load(Path.Combine("zones", "old_docks.json"));
             Assert.Equal("drowned_market",
                 docks.RootElement.GetProperty("onCleared").GetProperty("unlocks").GetString());
@@ -167,7 +168,10 @@ namespace RadiantPool.Rules.Tests
             Assert.Equal("glasslit_temple",
                 warcamp.RootElement.GetProperty("onCleared").GetProperty("unlocks").GetString());
             using var temple = Load(Path.Combine("zones", "glasslit_temple.json"));
-            Assert.True(temple.RootElement.GetProperty("onCleared")
+            Assert.Equal("ashen_ward",
+                temple.RootElement.GetProperty("onCleared").GetProperty("unlocks").GetString());
+            using var ashen = Load(Path.Combine("zones", "ashen_ward.json"));
+            Assert.True(ashen.RootElement.GetProperty("onCleared")
                 .GetProperty("campaignComplete").GetBoolean());
         }
 
@@ -183,13 +187,13 @@ namespace RadiantPool.Rules.Tests
                 Assert.Equal(new[]
                 {
                     "q_muster", "q_clear_docks", "q_clear_market",
-                    "q_clear_warcamp", "q_clear_temple"
+                    "q_clear_warcamp", "q_clear_temple", "q_clear_ashen_ward"
                 }, quests.Select(d => d.RootElement.GetProperty("id").GetString()));
                 Assert.Equal(new[]
                 {
                     "council_introduction", "urban_reclamation",
                     "haunted_civic_reclamation", "enemy_alliance_disruption",
-                    "corrupted_seat_finale"
+                    "corrupted_seat_finale", "post_victory_containment"
                 }, quests.Select(d => d.RootElement.GetProperty("campaignRole").GetString()));
 
                 foreach (var quest in quests.Where(d =>

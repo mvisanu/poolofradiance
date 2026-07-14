@@ -20,5 +20,5 @@
       "storyBeatOnVictory": "sb_sorrel_freed" }
   ],
   "clearQuest": "q_clear_temple",
-  "onCleared": { "pacify": true, "unlocks": null, "campaignComplete": true }
+  "onCleared": { "pacify": true, "unlocks": "ashen_ward", "campaignComplete": false }
 }
