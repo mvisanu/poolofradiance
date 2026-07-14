@@ -18,6 +18,10 @@ namespace RadiantPool.EditorTools
     {
         private const string Root = "Assets/Art/Generated";
         private const string PrefabDir = "Assets/Resources/Characters";
+        // Blender's FBX declares centimetres even though make_beasts.py models in metres.
+        // Unity consequently imported these meshes at 0.01 scale: the bear's world bounds
+        // were only 2 x 1 x 3 cm. Restore metres in the importer, keeping prefab scale 1.
+        private const float BlenderCentimetresToMetres = 100f;
 
         /// <summary>Flat colours matching what the generator baked in (the FBX material
         /// survives import, but we want a URP Lit material Unity is happy to batch).</summary>
@@ -61,6 +65,11 @@ namespace RadiantPool.EditorTools
 
             var importer = (ModelImporter)AssetImporter.GetAtPath(path);
             bool changed = false;
+            if (!Mathf.Approximately(importer.globalScale, BlenderCentimetresToMetres))
+            {
+                importer.globalScale = BlenderCentimetresToMetres;
+                changed = true;
+            }
             var map = importer.GetExternalObjectMap();
             foreach (string embedded in AssetDatabase.LoadAllAssetsAtPath(path)
                          .OfType<Material>().Select(m => m.name).Distinct())
@@ -84,7 +93,21 @@ namespace RadiantPool.EditorTools
 
             var instance = (GameObject)PrefabUtility.InstantiatePrefab(model);
             instance.transform.localScale = Vector3.one;   // already true-to-life metres
+
+            var renderers = instance.GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0)
+                throw new System.InvalidOperationException(
+                    $"Generated beast '{name}' imported without a renderer.");
+            var bounds = renderers[0].bounds;
+            foreach (var renderer in renderers.Skip(1)) bounds.Encapsulate(renderer.bounds);
+            if (bounds.size.x < 0.2f || bounds.size.y < 0.2f || bounds.size.z < 0.2f)
+                throw new System.InvalidOperationException(
+                    $"Generated beast '{name}' is still microscopic after FBX metre " +
+                    $"conversion: {bounds.size}.");
+
             PrefabUtility.SaveAsPrefabAsset(instance, $"{PrefabDir}/{name}.prefab");
+            Debug.Log($"[Bootstrap] {name} visible bounds " +
+                      $"{bounds.size.x:0.00} x {bounds.size.y:0.00} x {bounds.size.z:0.00} m.");
             Object.DestroyImmediate(instance);
         }
     }

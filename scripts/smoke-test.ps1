@@ -19,9 +19,10 @@ Remove-Item -Recurse -Force $saveDir -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $saveDir | Out-Null
 
 Write-Host "Starting host instance..."
-# -selltest / -leveltest: the host drives a real sale (bag -> trader -> purse) and a real
-# level-up (XP -> level -> ability point spent), and asserts on both below.
-$hostProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Anna","-autohost","-selltest","-leveltest","-weapontest","-atmospheretest","-savedir",$saveDir,"-logFile",$hostLog -PassThru
+# The host drives sale/progression/equipment/atmosphere checks plus a complete monster
+# gallery: every rules-library creature must resolve to supported visible renderers, valid
+# bounds above ground, and no capsule fallback.
+$hostProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Anna","-autohost","-selltest","-leveltest","-weapontest","-atmospheretest","-creaturetest","-savedir",$saveDir,"-logFile",$hostLog -PassThru
 Start-Sleep -Seconds 12
 
 Write-Host "Starting client instance..."
@@ -82,6 +83,8 @@ $checks = @(
     @{ Name = "no failed weapon visual assertion"; Ok = $hostText -notmatch "\[WeaponTest\] FAIL" },
     @{ Name = "day/night lighting, fog, lamps, clock, and ambience transition"; Ok = $hostText -match "\[AtmosphereTest\] PASS" },
     @{ Name = "no failed atmosphere assertion"; Ok = $hostText -notmatch "\[AtmosphereTest\] FAIL" },
+    @{ Name = "every creature mapping produces a visible real model"; Ok = $hostText -match "\[CreatureTest\] PASS - all creature visuals 11/11 visible, mappings 11/11" },
+    @{ Name = "no failed creature visual or capsule fallback"; Ok = $hostText -notmatch "\[CreatureTest\] FAIL|falling back to a capsule" },
     @{ Name = "armed combat NPC weapons are visible"; Ok = $fightText -match "\[WeaponTest\] PASS - combat NPCs" },
     @{ Name = "no failed combat weapon assertion"; Ok = $fightText -notmatch "\[WeaponTest\] FAIL" },
     @{ Name = "post-campaign solo player can hire three NPC helpers"; Ok = $recruitText -match "\[RecruitTest\] PASS" },

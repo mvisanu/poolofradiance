@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using FishNet.Connection;
 using FishNet.Object;
@@ -70,6 +71,16 @@ namespace RadiantPool.Game
         private Material _gridMaterial;
 
         private void Awake() => Instance = this;
+        private void Start()
+        {
+            var args = System.Environment.GetCommandLineArgs();
+            int capture = System.Array.IndexOf(args, "-creaturecapture");
+            string capturePath = capture >= 0 && capture + 1 < args.Length
+                ? args[capture + 1] : "";
+            if (System.Array.IndexOf(args, "-creaturetest") >= 0 || capturePath.Length > 0)
+                StartCoroutine(CreatureVisualSelfTest(capturePath));
+        }
+
         private void OnDestroy()
         {
             if (Instance == this) Instance = null;
@@ -1210,6 +1221,91 @@ namespace RadiantPool.Game
                 ? new Color(0.55f, 0.1f, 0.12f) : new Color(0.75f, 0.25f, 0.2f));
             AttachLabel(go.transform, view.Name);
             return go.transform;
+        }
+
+        /// <summary>Instantiates the actual ResolveVisual path for every rules-library
+        /// monster, arranges them as a gallery, and validates renderers/materials/bounds.
+        /// This catches missing Resources prefabs, capsule fallbacks, transparent art,
+        /// degenerate imports, and FBX axis corrections that bury a creature.</summary>
+        private IEnumerator CreatureVisualSelfTest(string capturePath)
+        {
+            yield return new WaitForSeconds(8f);
+            var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => p.IsOwner);
+            if (holder == null)
+            {
+                Debug.Log("[CreatureTest] FAIL - no locally owned character for gallery");
+                yield break;
+            }
+
+            var definitions = MonsterLibrary.All.Values.OrderBy(m => m.Id).ToArray();
+            var gallery = new List<(MonsterDefinition definition, Transform root)>();
+            Vector3 forward = holder.transform.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 0.01f) forward = Vector3.forward;
+            forward.Normalize();
+            Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
+
+            for (int i = 0; i < definitions.Length; i++)
+            {
+                var def = definitions[i];
+                var view = new UnitView
+                {
+                    Id = $"gallery_{def.Id}", Name = def.Name,
+                    IsPc = false, MaxHp = 10, Hp = 10
+                };
+                Transform root = ResolveVisual(view);
+                int row = i / 4;
+                int column = i % 4;
+                int rowCount = Mathf.Min(4, definitions.Length - row * 4);
+                float x = (column - (rowCount - 1) * 0.5f) * 2.25f;
+                float z = 4.0f + row * 2.65f;
+                root.position = holder.transform.position + right * x + forward * z;
+                Vector3 face = holder.transform.position - root.position;
+                face.y = 0f;
+                if (face.sqrMagnitude > 0.01f) root.rotation = Quaternion.LookRotation(face);
+                gallery.Add((def, root));
+            }
+
+            // Let skinned bounds, Animator defaults, and runtime materials settle.
+            yield return null;
+            yield return null;
+
+            int mapped = 0;
+            int visible = 0;
+            foreach (var entry in gallery)
+            {
+                bool hasMapping = MonsterModels.ContainsKey(entry.definition.Id);
+                if (hasMapping) mapped++;
+                bool healthy = CharacterVisuals.TryGetVisibleCharacterBounds(
+                    entry.root, out var bounds, out string issue);
+                if (healthy) visible++;
+                Vector3 size = bounds.size;
+                string detail = healthy
+                    ? $"visible {size.x:0.00}x{size.y:0.00}x{size.z:0.00}m" : issue;
+                Debug.Log($"[CreatureTest] {(hasMapping && healthy ? "PASS" : "FAIL")} " +
+                          $"{entry.definition.Id}: " +
+                          $"{(hasMapping ? "mapped" : "NO MAPPING")}, " +
+                          detail);
+            }
+
+            bool pass = mapped == definitions.Length && visible == definitions.Length;
+            Debug.Log($"[CreatureTest] {(pass ? "PASS" : "FAIL")} - " +
+                      $"all creature visuals {visible}/{definitions.Length} visible, " +
+                      $"mappings {mapped}/{definitions.Length}, no capsule fallbacks");
+
+            if (!string.IsNullOrEmpty(capturePath))
+            {
+                string directory = Path.GetDirectoryName(capturePath);
+                if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+                yield return new WaitForSeconds(2f);
+                ScreenCapture.CaptureScreenshot(capturePath);
+                yield return new WaitForSeconds(2f);
+                Debug.Log($"[CreatureCapture] wrote complete gallery to {capturePath}");
+            }
+
+            foreach (var entry in gallery)
+                if (entry.root != null) Destroy(entry.root.gameObject);
         }
 
         private static void AttachLabel(Transform parent, string text)

@@ -1,3 +1,4 @@
+using System.Linq;
 using UnityEngine;
 
 namespace RadiantPool.Game
@@ -29,12 +30,27 @@ namespace RadiantPool.Game
             var visual = Object.Instantiate(prefab, parent);
             visual.name = VisualName;
             visual.transform.localPosition = Vector3.zero;
-            visual.transform.localRotation = Quaternion.identity;
             visual.transform.localScale *= scale;
+
+            // Preserve the prefab's authored root correction. Generated Blender beasts
+            // carry a required -90 degree FBX conversion here; replacing it with identity
+            // rotated the bear and rat into the ground. Remember it so the fallback death
+            // pose can be applied relative to the authored orientation as well.
+            var pose = visual.GetComponent<AuthoredVisualPose>();
+            if (pose == null) pose = visual.AddComponent<AuthoredVisualPose>();
+            pose.BaseLocalRotation = visual.transform.localRotation;
 
             if (tint.HasValue)
                 foreach (var r in visual.GetComponentsInChildren<Renderer>())
-                    r.material.color = tint.Value;
+                {
+                    // Tint is a multiplier: white means "keep the source art". Assigning
+                    // white directly erased the flat brown/grey materials on generated
+                    // beasts, while multiplication still colours textured stand-ins.
+                    Color source = r.material.color;
+                    Color t = tint.Value;
+                    r.material.color = new Color(source.r * t.r, source.g * t.g,
+                        source.b * t.b, source.a * t.a);
+                }
 
             if (visual.GetComponent<MotionAnimator>() == null)
                 visual.AddComponent<MotionAnimator>();
@@ -68,6 +84,54 @@ namespace RadiantPool.Game
                      || r.gameObject.name.StartsWith("Monster_")) && r.enabled)
                     return false;
             }
+            return true;
+        }
+
+        /// <summary>Stronger whole-creature visual audit: proves there is an enabled real
+        /// renderer, supported opaque material, non-degenerate world bounds, and geometry
+        /// above the unit's ground plane. Used by -creaturetest for every monster id.</summary>
+        public static bool TryGetVisibleCharacterBounds(Transform unitRoot,
+            out Bounds bounds, out string issue)
+        {
+            bounds = default;
+            issue = "";
+            if (unitRoot == null) { issue = "missing unit root"; return false; }
+            var visual = unitRoot.Find(VisualName);
+            if (visual == null) { issue = "capsule fallback/no character model"; return false; }
+
+            var renderers = visual.GetComponentsInChildren<Renderer>(true)
+                .Where(r => r.enabled && r.gameObject.activeInHierarchy).ToArray();
+            if (renderers.Length == 0) { issue = "no enabled renderer"; return false; }
+
+            bool first = true;
+            bool hasGraphicsDevice = SystemInfo.graphicsDeviceType
+                != UnityEngine.Rendering.GraphicsDeviceType.Null;
+            foreach (var r in renderers)
+            {
+                foreach (var material in r.sharedMaterials)
+                {
+                    // Shader.isSupported is always false under -nographics because Unity
+                    // deliberately owns no graphics device there. Visible capture sessions
+                    // still enforce support; headless smoke enforces a real non-null shader.
+                    if (material == null || material.shader == null
+                        || (hasGraphicsDevice && !material.shader.isSupported))
+                    { issue = $"unsupported material on {r.name}"; return false; }
+                    if (hasGraphicsDevice && material.HasProperty("_BaseColor")
+                        && material.GetColor("_BaseColor").a < 0.1f)
+                    { issue = $"transparent material on {r.name}"; return false; }
+                }
+                if (first) { bounds = r.bounds; first = false; }
+                else bounds.Encapsulate(r.bounds);
+            }
+
+            Vector3 size = bounds.size;
+            if (size.x < 0.08f || size.y < 0.08f || size.z < 0.08f)
+            { issue = $"degenerate bounds {size}"; return false; }
+            float ground = unitRoot.position.y;
+            if (bounds.max.y < ground + 0.08f)
+            { issue = $"entire model below ground (top {bounds.max.y - ground:0.00}m)"; return false; }
+            if (bounds.min.y < ground - 0.45f)
+            { issue = $"model buried {ground - bounds.min.y:0.00}m below ground"; return false; }
             return true;
         }
 
@@ -189,10 +253,21 @@ namespace RadiantPool.Game
             {
                 var visual = unitRoot != null ? unitRoot.Find(VisualName) : null;
                 if (visual != null)
+                {
+                    var pose = visual.GetComponent<AuthoredVisualPose>();
+                    Quaternion authored = pose != null
+                        ? pose.BaseLocalRotation : Quaternion.identity;
                     visual.localRotation = dead
-                        ? Quaternion.Euler(-90f, 0f, 0f) : Quaternion.identity;
+                        ? authored * Quaternion.Euler(-90f, 0f, 0f) : authored;
+                }
             }
         }
+    }
+
+    /// <summary>Runtime memory of a prefab's imported root correction.</summary>
+    public sealed class AuthoredVisualPose : MonoBehaviour
+    {
+        public Quaternion BaseLocalRotation { get; set; } = Quaternion.identity;
     }
 
     /// <summary>Feeds the animator's Speed parameter from actual world displacement, so
