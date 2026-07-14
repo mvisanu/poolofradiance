@@ -11,8 +11,11 @@ namespace RadiantPool.Game
     {
         private const float FollowDistance = 2.6f;
         private const float Speed = 5.8f;
+        private const float CatchUpSpeed = 9.5f;
 
         private CharacterController _controller;
+        private Transform _leader;
+        private float _nextLeaderScan;
         private int _slot;   // fan companions out so they don't stack
         private static int _slotCounter;
 
@@ -30,22 +33,28 @@ namespace RadiantPool.Game
             if (holder == null || !holder.IsCompanion) return;
             if (CombatManager.Instance != null && CombatManager.Instance.InCombat.Value) return;
 
-            var leader = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
-                .Where(p => !p.IsCompanion && p.Sheet != null)
-                .OrderBy(p => Vector3.Distance(p.transform.position, transform.position))
-                .FirstOrDefault();
-            if (leader == null) return;
+            if (_leader == null || Time.time >= _nextLeaderScan)
+            {
+                _nextLeaderScan = Time.time + 0.5f;
+                _leader = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                    .Where(p => !p.IsCompanion && p.Sheet != null)
+                    .OrderBy(p => Vector3.Distance(p.transform.position, transform.position))
+                    .Select(p => p.transform)
+                    .FirstOrDefault();
+            }
+            if (_leader == null) return;
 
             // Trail position: behind the leader, fanned by slot.
             float angle = (_slot - 1) * 45f;
             Vector3 offset = Quaternion.Euler(0f, angle, 0f)
-                             * -leader.transform.forward * FollowDistance;
-            Vector3 target = leader.transform.position + offset;
+                             * -_leader.forward * FollowDistance;
+            Vector3 target = _leader.position + offset;
             Vector3 delta = target - transform.position;
             delta.y = 0f;
             if (delta.magnitude < 0.6f) return;
 
-            Vector3 step = delta.normalized * Mathf.Min(Speed, delta.magnitude * 2f);
+            float topSpeed = delta.magnitude > 6f ? CatchUpSpeed : Speed;
+            Vector3 step = delta.normalized * Mathf.Min(topSpeed, delta.magnitude * 2f);
             if (_controller != null && _controller.enabled)
                 _controller.Move((step + Physics.gravity * 0.2f) * Time.deltaTime);
             else

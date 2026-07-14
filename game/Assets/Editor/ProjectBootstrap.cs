@@ -80,6 +80,13 @@ namespace RadiantPool.EditorTools
             }
             GraphicsSettings.defaultRenderPipeline = existing;
             QualitySettings.renderPipeline = existing;
+            // Desktop-first MMORPG presentation: stable 4x MSAA, HDR colour and enough
+            // shadow reach that the district silhouettes do not visibly pop in.
+            existing.msaaSampleCount = 4;
+            existing.renderScale = 1f;
+            existing.supportsHDR = true;
+            existing.shadowDistance = 70f;
+            EditorUtility.SetDirty(existing);
         }
 
         /// <summary>Procedural cobblestone-ish tile so the ground reads as a surface,
@@ -430,6 +437,23 @@ namespace RadiantPool.EditorTools
             RenderSettings.fogColor = new Color(0.73f, 0.81f, 0.92f);
             RenderSettings.fogDensity = 0.006f;
 
+            // A procedural sky gives the bright stylized world a real horizon and sun
+            // disc. It is generated as an asset so player builds retain the shader.
+            var skyPath = SettingsDir + "/M_SunnySky.mat";
+            var sky = AssetDatabase.LoadAssetAtPath<Material>(skyPath);
+            if (sky == null)
+            {
+                sky = new Material(Shader.Find("Skybox/Procedural"));
+                AssetDatabase.CreateAsset(sky, skyPath);
+            }
+            sky.SetFloat("_SunSize", 0.045f);
+            sky.SetFloat("_SunSizeConvergence", 5f);
+            sky.SetFloat("_AtmosphereThickness", 0.85f);
+            sky.SetColor("_SkyTint", new Color(0.44f, 0.66f, 0.95f));
+            sky.SetColor("_GroundColor", new Color(0.38f, 0.42f, 0.34f));
+            sky.SetFloat("_Exposure", 1.18f);
+            RenderSettings.skybox = sky;
+
             // Camera with URP post-processing (bloom + vignette + slight warmth).
             var camGo = new GameObject("Main Camera") { tag = "MainCamera" };
             var cam = camGo.AddComponent<Camera>();
@@ -438,6 +462,8 @@ namespace RadiantPool.EditorTools
             camGo.transform.position = new Vector3(0f, 6f, -10f);
             var camData = camGo.AddComponent<UniversalAdditionalCameraData>();
             camData.renderPostProcessing = true;
+            camData.antialiasing = AntialiasingMode.SubpixelMorphologicalAntiAliasing;
+            camData.antialiasingQuality = AntialiasingQuality.High;
             cam.allowHDR = true;
 
             var profilePath = SettingsDir + "/PostFX.asset";
@@ -446,16 +472,29 @@ namespace RadiantPool.EditorTools
             {
                 profile = ScriptableObject.CreateInstance<VolumeProfile>();
                 AssetDatabase.CreateAsset(profile, profilePath);
-                var bloom = profile.Add<Bloom>();
-                bloom.intensity.Override(0.65f);
-                bloom.threshold.Override(1.05f);
-                var vignette = profile.Add<Vignette>();
-                vignette.intensity.Override(0.22f);
-                var colors = profile.Add<ColorAdjustments>();
-                colors.postExposure.Override(0.2f);
-                colors.saturation.Override(16f);   // hand-painted warmth, Albion-leaning
-                AssetDatabase.SaveAssets();
             }
+            if (!profile.TryGet(out Bloom bloom)) bloom = profile.Add<Bloom>();
+            bloom.active = true;
+            bloom.intensity.Override(0.48f);
+            bloom.threshold.Override(1.02f);
+            bloom.scatter.Override(0.68f);
+            if (!profile.TryGet(out Vignette vignette)) vignette = profile.Add<Vignette>();
+            vignette.active = true;
+            vignette.intensity.Override(0.16f);
+            vignette.smoothness.Override(0.55f);
+            if (!profile.TryGet(out ColorAdjustments colors)) colors = profile.Add<ColorAdjustments>();
+            colors.active = true;
+            colors.postExposure.Override(0.12f);
+            colors.contrast.Override(7f);
+            colors.saturation.Override(10f);
+            if (!profile.TryGet(out Tonemapping tonemapping)) tonemapping = profile.Add<Tonemapping>();
+            tonemapping.active = true;
+            tonemapping.mode.Override(TonemappingMode.ACES);
+            if (!profile.TryGet(out WhiteBalance whiteBalance)) whiteBalance = profile.Add<WhiteBalance>();
+            whiteBalance.active = true;
+            whiteBalance.temperature.Override(4f);
+            EditorUtility.SetDirty(profile);
+            AssetDatabase.SaveAssets();
             var volumeGo = new GameObject("Global PostFX");
             var volume = volumeGo.AddComponent<Volume>();
             volume.isGlobal = true;
@@ -493,6 +532,41 @@ namespace RadiantPool.EditorTools
                 solid.SetFloat("_Smoothness", 0.1f);
                 AssetDatabase.CreateAsset(solid, "Assets/Resources/Fx/M_Solid.mat");
             }
+
+            // Slow, sparse motes catch the sunlight and add depth without fogging the
+            // battlefield. The camera carries the emission volume; particles simulate in
+            // world space, so they drift past instead of sticking to the screen.
+            var motePath = "Assets/Resources/Fx/M_AmbientMotes.mat";
+            var moteMat = AssetDatabase.LoadAssetAtPath<Material>(motePath);
+            if (moteMat == null)
+            {
+                moteMat = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit"));
+                moteMat.SetColor("_BaseColor", new Color(1f, 0.88f, 0.58f, 0.42f));
+                AssetDatabase.CreateAsset(moteMat, motePath);
+            }
+            var motesGo = new GameObject("Ambient Sun Motes");
+            motesGo.transform.SetParent(camGo.transform, false);
+            motesGo.transform.localPosition = new Vector3(0f, 2f, 10f);
+            var motes = motesGo.AddComponent<ParticleSystem>();
+            var main = motes.main;
+            main.loop = true;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(8f, 14f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.03f, 0.12f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.025f, 0.085f);
+            main.startColor = new ParticleSystem.MinMaxGradient(
+                new Color(1f, 0.84f, 0.5f, 0.12f), new Color(1f, 0.96f, 0.78f, 0.42f));
+            main.maxParticles = 90;
+            var emission = motes.emission;
+            emission.rateOverTime = 7f;
+            var shape = motes.shape;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            shape.scale = new Vector3(28f, 10f, 28f);
+            var velocity = motes.velocityOverLifetime;
+            velocity.enabled = true;
+            velocity.x = new ParticleSystem.MinMaxCurve(0.06f, 0.18f);
+            velocity.y = new ParticleSystem.MinMaxCurve(0.02f, 0.09f);
+            motesGo.GetComponent<ParticleSystemRenderer>().sharedMaterial = moteMat;
 
             // Gray-box geometry: 120x120 map, hub south-center, docks west,
             // Drowned Market north (gated), Glasslit Temple east (gated).

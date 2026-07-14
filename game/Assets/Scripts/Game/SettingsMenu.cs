@@ -22,12 +22,17 @@ namespace RadiantPool.Game
         private float _volume;
         private bool _fullscreen;
         private bool _vsync;
+        private int _graphics;
+
+        private static readonly string[] GraphicsNames = { "LOW", "MEDIUM", "HIGH", "ULTRA" };
+        private static readonly int[] QualityLevels = { 1, 2, 3, 5 };
 
         private void Start()
         {
             _volume = PlayerPrefs.GetFloat("volume", 0.8f);
             _fullscreen = PlayerPrefs.GetInt("fullscreen", 0) == 1;
             _vsync = PlayerPrefs.GetInt("vsync", 1) == 1;
+            _graphics = Mathf.Clamp(PlayerPrefs.GetInt("graphics", 2), 0, GraphicsNames.Length - 1);
             MouseSensitivity = PlayerPrefs.GetFloat("sensitivity", 3.5f);
             Apply();
         }
@@ -38,10 +43,13 @@ namespace RadiantPool.Game
             Screen.fullScreenMode = _fullscreen
                 ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
             QualitySettings.vSyncCount = _vsync ? 1 : 0;
+            QualitySettings.SetQualityLevel(QualityLevels[_graphics], true);
+            Application.targetFrameRate = _vsync ? -1 : 60;
             PlayerPrefs.SetFloat("volume", _volume);
             PlayerPrefs.SetInt("fullscreen", _fullscreen ? 1 : 0);
             PlayerPrefs.SetInt("vsync", _vsync ? 1 : 0);
             PlayerPrefs.SetFloat("sensitivity", MouseSensitivity);
+            PlayerPrefs.SetInt("graphics", _graphics);
         }
 
         private void Update()
@@ -57,7 +65,7 @@ namespace RadiantPool.Game
             Ui.Begin();
             if (!Ui.IsOpen(Ui.Panel.Settings)) return;
 
-            var rect = Ui.Fit(360f, 330f);
+            var rect = Ui.Fit(360f, 370f);
             GUILayout.BeginArea(rect, Theme.PanelStyle);
             GUILayout.BeginHorizontal();
             GUILayout.Label("Settings", Theme.Header);
@@ -80,6 +88,11 @@ namespace RadiantPool.Game
             GUILayout.Space(6);
             bool fullscreen = GUILayout.Toggle(_fullscreen, " Fullscreen (borderless)");
             bool vsync = GUILayout.Toggle(_vsync, " VSync");
+            if (GUILayout.Button($"GRAPHICS — {GraphicsNames[_graphics]}"))
+            {
+                _graphics = (_graphics + 1) % GraphicsNames.Length;
+                Apply();
+            }
 
             if (!Mathf.Approximately(uiScale, Ui.UserScale))
                 Ui.UserScale = uiScale;
@@ -94,7 +107,7 @@ namespace RadiantPool.Game
             }
 
             GUILayout.Space(8);
-            GUILayout.Label("<color=#cbbb9c>WASD move · RMB camera · E talk · I bags · " +
+            GUILayout.Label("<color=#cbbb9c>WASD move · Shift sprint · RMB camera · E talk · I bags · " +
                 "J journal · M map · F5 save (host)\nIn combat: click to walk, click an " +
                 "enemy to attack, Space ends your turn.</color>", Theme.Body);
 

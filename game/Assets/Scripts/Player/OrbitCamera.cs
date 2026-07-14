@@ -27,6 +27,9 @@ namespace RadiantPool.Game
         [SerializeField] private Vector3 targetOffset = new Vector3(0f, 1.6f, 0f);
         [SerializeField] private float panSpeed = 14f;      // metres/sec on the keys
         [SerializeField] private float maxPan = 40f;        // leash, so you can't get lost
+        [SerializeField] private float followSharpness = 16f;
+        [SerializeField] private float collisionRadius = 0.28f;
+        [SerializeField] private float collisionPadding = 0.18f;
 
         private Transform _target;
         private float _yaw;
@@ -34,6 +37,9 @@ namespace RadiantPool.Game
         private Vector3 _pan;         // world-space XZ offset of the focus point
         private bool _tacticalEase;   // one-shot board-view nudge at the start of a fight
         private bool _wasInCombat;
+        private Vector3 _smoothedFocus;
+        private bool _focusReady;
+        private readonly RaycastHit[] _cameraHits = new RaycastHit[16];
 
         public float Yaw => _yaw;
 
@@ -42,7 +48,11 @@ namespace RadiantPool.Game
 
         public void RecenterPan() => _pan = Vector3.zero;
 
-        public void SetTarget(Transform target) => _target = target;
+        public void SetTarget(Transform target)
+        {
+            _target = target;
+            _focusReady = false;
+        }
 
         private void LateUpdate()
         {
@@ -95,11 +105,41 @@ namespace RadiantPool.Game
             UpdatePan(inCombat);
 
             Quaternion rotation = Quaternion.Euler(_pitch, _yaw, 0f);
-            Vector3 focus = _target.position + targetOffset + _pan;
-            transform.position = focus - rotation * Vector3.forward * distance;
+            Vector3 rawFocus = _target.position + targetOffset + _pan;
+            if (!_focusReady)
+            {
+                _smoothedFocus = rawFocus;
+                _focusReady = true;
+            }
+            else
+            {
+                float follow = 1f - Mathf.Exp(-followSharpness * Time.unscaledDeltaTime);
+                _smoothedFocus = Vector3.Lerp(_smoothedFocus, rawFocus, follow);
+            }
+
+            Vector3 focus = _smoothedFocus;
+            Vector3 backwards = -(rotation * Vector3.forward);
+            float cameraDistance = CollisionDistance(focus, backwards, distance);
+            transform.position = focus + backwards * cameraDistance;
             transform.rotation = rotation;
 
             UpdateOcclusion(focus);
+        }
+
+        private float CollisionDistance(Vector3 focus, Vector3 direction, float wanted)
+        {
+            int count = Physics.SphereCastNonAlloc(focus, collisionRadius, direction,
+                _cameraHits, wanted, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            float nearest = wanted;
+            for (int i = 0; i < count; i++)
+            {
+                var hit = _cameraHits[i];
+                if (hit.collider == null) continue;
+                var t = hit.collider.transform;
+                if (_target != null && (t == _target || t.IsChildOf(_target))) continue;
+                nearest = Mathf.Min(nearest, hit.distance - collisionPadding);
+            }
+            return Mathf.Clamp(nearest, minDistance * 0.35f, wanted);
         }
 
         /// <summary>Free-look panning across the ground plane. Middle-mouse drags the view
