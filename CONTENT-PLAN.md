@@ -5,7 +5,7 @@ All names below are original — see IP-CHECKLIST.md for the audit.
 
 ---
 
-## 1. Setting premise (original lore, Pool of Radiance *structure*)
+## 1. Setting premise (original commission-driven reclamation structure)
 
 **Region:** The Sundered Coast.
 **Hub town:** **Aldenmere** — once the richest port on the coast, shattered a generation
