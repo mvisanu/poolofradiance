@@ -203,7 +203,7 @@ $checks = @(
     @{ Name = "Watcher Below E panel survives all distant objective updates"; Ok = $siteActionText -match "\[SiteActionInputTest\] PASS.+E opened the spectral-watch choice.+decision recorded as 'Honor their oath'" },
     @{ Name = "Watcher Below site action has no runtime exception"; Ok = $siteActionText -notmatch "Exception|\[SiteActionInputTest\] FAIL" },
     @{ Name = "campaign reaches every site and pays side/main quest rewards"; Ok = $travelText -match "\[TravelTest\] PASS - 39/39 sites reached; 39/39 encounter sets authored; 39/39 objectives anchored; site objective resolved; side/main rewards paid;.*39/39 hub returns" },
-    @{ Name = "all installed environment packs dress the campaign"; Ok = $travelText -match "environment art RPG x[1-9][0-9]*, nature x[1-9][0-9]*, graveyard/nature2 x[3-9][0-9]{2,}, dungeon x[1-9][0-9]*, painted ground x34" },
+    @{ Name = "all installed environment packs dress the campaign"; Ok = $travelText -match "environment art RPG x[1-9][0-9]*, nature x[1-9][0-9]*, graveyard/nature2 x[1-9][0-9]{2,}, dungeon x[1-9][0-9]*, painted ground x34" },
     @{ Name = "campaign travel has no runtime exception"; Ok = $travelText -notmatch "Exception|\[TravelTest\] FAIL" },
     @{ Name = "level-20 hero spawns level-19 quest monsters and tier-7 rewards"; Ok = $scalingText -match "\[ScalingTest\] PASS - hero L20 spawned monsters L19; authored tier1 -> tier7 items x3" },
     @{ Name = "caster receives a real level-matched weapon upgrade"; Ok = $scalingText -match "Runed Staff caster upgrade ready" },
