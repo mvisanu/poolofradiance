@@ -145,7 +145,9 @@ namespace RadiantPool.Rules
                       (13, "light_crossbow"), (12, "rapier"), (8, "studded_leather") }),
                 new LootTable("lt_sunken_vault", "10d6", 2, new (int, string?)[]
                     { (28, "potion_healing"), (20, "chain_mail"), (18, "longsword"),
-                      (14, "greatsword"), (12, "longbow"), (8, "splint") }),
+                      (14, "greatsword"), (12, "longbow"), (8, "splint"),
+                      // Vault treasure runs to enchanted pieces the roadside never sees.
+                      (8, "ring_protection_1"), (8, "half_plate_1") }),
                 new LootTable("lt_beast_den", "1d6", 1, new (int, string?)[]
                     { (80, null), (20, "potion_healing") }),
                 new LootTable("lt_goblin", "2d6", 1, new (int, string?)[]
@@ -153,20 +155,29 @@ namespace RadiantPool.Rules
                       (5, "potion_healing") }),
                 new LootTable("lt_warcamp", "8d6", 2, new (int, string?)[]
                     { (26, "potion_healing"), (20, "longsword"), (16, "scale_mail"),
-                      (14, "chain_mail"), (12, "greataxe"), (7, "warhammer"), (5, "half_plate") }),
+                      (14, "chain_mail"), (12, "greataxe"), (7, "warhammer"), (5, "half_plate"),
+                      // The warband hoards a champion's enchanted arms.
+                      (8, "greataxe_2"), (8, "splint_1") }),
                 // Turn-ins already pay their listed gold; these zero-gold tables are the
                 // equipment parcel. Tiers 1-4 follow CampaignRewardLibrary level bands.
                 new LootTable("lt_quest_tier1", "0", 1, new (int, string?)[]
                     { (40, "potion_healing"), (20, "shortbow"), (15, "leather_armor"),
-                      (15, "mace"), (10, "shield") }),
+                      (15, "mace"), (10, "shield"),
+                      (8, "apprentice_robe") }),   // the mage's first real defence
                 new LootTable("lt_quest_tier2", "0", 1, new (int, string?)[]
                     { (14, "potion_healing"), (16, "rapier"), (16, "studded_leather"),
                       (16, "warhammer"), (13, "scale_mail"), (10, "longsword"),
-                      (15, "runed_staff") }),
+                      (15, "runed_staff"),
+                      // First enchanted gear: a +1 for the light classes, a ring, a warded shield.
+                      (8, "dagger_1"), (8, "mace_1"), (8, "studded_leather_1"),
+                      (6, "ring_warding"), (6, "shield_1"), (6, "apprentice_robe") }),
                 new LootTable("lt_quest_tier3", "0", 1, new (int, string?)[]
                     { (14, "potion_healing"), (18, "greatsword"), (16, "longbow"),
                       (15, "greataxe"), (14, "half_plate"), (9, "studded_leather"),
-                      (14, "runed_staff") }),
+                      (14, "runed_staff"),
+                      (7, "rapier_1"), (7, "longsword_1"), (7, "warhammer_1"),
+                      (7, "chain_mail_1"), (6, "runed_staff_1"), (6, "ring_precision"),
+                      (6, "warding_orb") }),
                 new LootTable("lt_quest_tier4", "0", 2, new (int, string?)[]
                     { (10, "potion_healing"), (17, "greatsword"), (15, "longbow"),
                       (15, "greataxe"), (16, "half_plate"), (14, "splint"),
@@ -174,14 +185,23 @@ namespace RadiantPool.Rules
                 new LootTable("lt_quest_tier5", "0", 2, new (int, string?)[]
                     { (5, "potion_healing"), (20, "greatsword"), (18, "longbow"),
                       (18, "greataxe"), (16, "half_plate"), (16, "splint"),
-                      (7, "runed_staff") }),
+                      (7, "runed_staff"),
+                      // The enchanted tier proper: +1 martial gear, a warded robe, protection rings.
+                      (8, "half_plate_1"), (8, "longbow_1"), (8, "greatsword_1"),
+                      (8, "splint_1"), (6, "warded_robe"), (6, "ring_protection_1"),
+                      (6, "shield_2"), (6, "ring_warrior") }),
                 new LootTable("lt_quest_tier6", "0", 3, new (int, string?)[]
                     { (4, "potion_healing"), (21, "greatsword"), (18, "longbow"),
                       (18, "greataxe"), (18, "half_plate"), (18, "splint"),
-                      (3, "runed_staff") }),
+                      (3, "runed_staff"),
+                      (10, "greatsword_2"), (10, "greataxe_2"), (8, "runed_staff_2"),
+                      (8, "archmage_robe"), (8, "ring_protection_2"), (6, "splint_1") }),
                 new LootTable("lt_quest_tier7", "0", 3, new (int, string?)[]
                     { (2, "potion_healing"), (22, "greatsword"), (19, "longbow"),
-                      (19, "greataxe"), (19, "half_plate"), (19, "splint") }),
+                      (19, "greataxe"), (19, "half_plate"), (19, "splint"),
+                      // Endgame: the +2 two-handers, the AC-17+2 splint, the archmage's robe.
+                      (12, "splint_2"), (12, "greatsword_2"), (12, "greataxe_2"),
+                      (10, "ring_protection_2"), (8, "archmage_robe") }),
             };
             return tables.ToDictionary(t => t.Id);
         }

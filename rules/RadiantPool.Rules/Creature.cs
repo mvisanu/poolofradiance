@@ -19,6 +19,10 @@ namespace RadiantPool.Rules
         public int TempHp { get; private set; }
         public int Speed { get; set; } = 30;
         public int ProficiencyBonus { get; set; } = 2;
+        /// <summary>Flat bonus to every saving throw from worn magic (e.g. a ring of
+        /// protection). 0 for monsters and un-ringed PCs, so it changes nothing until an
+        /// item sets it. AC from the same items rides on BaseArmorClass instead.</summary>
+        public int MagicSaveBonus { get; set; }
         /// <summary>Runtime monster challenge level. PCs use CharacterSheet.Level; this
         /// value exists so scaled quest monsters can remain separate from canonical data.</summary>
         public int EncounterLevel { get; set; } = 1;
@@ -50,7 +54,8 @@ namespace RadiantPool.Rules
             BaseArmorClass + (Conditions.Has(ConditionType.Shielded) ? 5 : 0);
 
         public int SaveBonus(Ability a) =>
-            Abilities.Modifier(a) + (SaveProficiencies.Contains(a) ? ProficiencyBonus : 0);
+            Abilities.Modifier(a) + (SaveProficiencies.Contains(a) ? ProficiencyBonus : 0)
+            + MagicSaveBonus;
 
         public void GrantTempHp(int amount) => TempHp = Math.Max(TempHp, amount);
 

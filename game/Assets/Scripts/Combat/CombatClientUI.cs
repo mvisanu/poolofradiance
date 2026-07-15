@@ -762,14 +762,18 @@ namespace RadiantPool.Game
             if (roster.Count == 0) return;
             GUILayout.Space(3);
             GUILayout.Label($"<color={teamColor}><b>{title}</b></color>", Theme.Caps);
-            foreach (var u in roster)
+            for (int i = 0; i < roster.Count; i++)
             {
+                var u = roster[i];
                 bool active = u.Id == combat.ActiveUnitId;
                 string nameColor = u.Dead ? "#948a7c" : active ? "#f2ca50" : teamColor;
                 // State in words, never a dingbat: the fonts have no ✝/► glyph and a
                 // missing glyph renders as a tofu box.
                 string state = u.Dead ? "  (slain)" : u.Down ? "  (down)" : "";
-                GUILayout.Label($"{(active ? "> " : "")}<color={nameColor}>{u.Name}</color>" +
+                // Numbered within the group (1., 2., ...) so each side reads as its own
+                // ordered roster; the "> " marker still flags whose turn it is.
+                GUILayout.Label($"{(active ? "> " : "")}<color=#d0c5af>{i + 1}.</color> " +
+                    $"<color={nameColor}>{u.Name}</color>" +
                     $"<color=#d0c5af>{state}</color>", Theme.Body);
                 if (!u.Dead)
                 {

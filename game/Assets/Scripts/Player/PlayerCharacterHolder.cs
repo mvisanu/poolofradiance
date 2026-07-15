@@ -17,6 +17,14 @@ namespace RadiantPool.Game
         public readonly SyncVar<string> WeaponId = new SyncVar<string>("");
         public readonly SyncVar<string> ArmorId = new SyncVar<string>("");
         public readonly SyncVar<bool> ShieldEquipped = new SyncVar<bool>(false);
+        /// <summary>The off-hand item actually held (a shield, magical shield, or caster orb).
+        /// ShieldEquipped stays true only for a real shield, so the shield VISUAL and the
+        /// martial companion-matching keep their old meaning.</summary>
+        public readonly SyncVar<string> OffhandId = new SyncVar<string>("");
+        /// <summary>Two ring slots. Empty = no ring. Their boons (AC, saves, to-hit, damage)
+        /// sum with armour, shield, and each other.</summary>
+        public readonly SyncVar<string> Ring1Id = new SyncVar<string>("");
+        public readonly SyncVar<string> Ring2Id = new SyncVar<string>("");
 
         // Derived sheet stats mirrored to clients: the sheet itself is server-only, but
         // the inventory/equipment screen must show AC, HP and to-hit on every client.
@@ -141,7 +149,9 @@ namespace RadiantPool.Game
         }
 
         /// <summary>Server: equips an item onto the sheet and mirrors it to clients.
-        /// Returns the previously equipped item id (goes back to the stash), or null.</summary>
+        /// Returns the previously equipped item id (goes back to the stash), or null. Rings
+        /// fill an empty slot first, then bump ring 1; every case recomputes the magic AC,
+        /// saves, and attack bonuses from ALL worn gear so nothing is double-counted.</summary>
         public string ServerEquip(GameItem item)
         {
             string previous = null;
@@ -156,13 +166,61 @@ namespace RadiantPool.Game
                     ArmorId.Value = item.Id;
                     Sheet.EquipArmor(item.Armor);
                     break;
-                case ItemSlot.Shield:
-                    if (ShieldEquipped.Value) previous = "shield";
-                    ShieldEquipped.Value = true;
-                    Sheet.SetShield(true);
+                case ItemSlot.Shield:   // the off-hand slot (shield, magical shield, or orb)
+                    previous = OffhandId.Value;
+                    OffhandId.Value = item.Id;
+                    break;
+                case ItemSlot.Ring:
+                    if (string.IsNullOrEmpty(Ring1Id.Value)) Ring1Id.Value = item.Id;
+                    else if (string.IsNullOrEmpty(Ring2Id.Value)) Ring2Id.Value = item.Id;
+                    else { previous = Ring1Id.Value; Ring1Id.Value = item.Id; }
                     break;
             }
+            RecomputeMagic();
             return string.IsNullOrEmpty(previous) ? null : previous;
+        }
+
+        /// <summary>Server: re-derives every worn-magic effect and pushes it onto the sheet.
+        /// The one place AC/saves from the off hand, enchanted armour, and rings are summed —
+        /// so a re-equip can never leave a stale bonus behind. ShieldEquipped mirrors only a
+        /// REAL shield (not a caster orb), keeping the shield visual and companion parity intact.
+        /// Weapon/ring attack and damage plus is read live by <see cref="BasicAttack"/>.</summary>
+        public void RecomputeMagic()
+        {
+            if (Sheet == null) return;
+            var offhand = GameItem.Get(OffhandId.Value);
+            bool realShield = offhand != null && offhand.Slot == ItemSlot.Shield
+                              && !offhand.CasterOffhand;
+            int orbAc = offhand != null && offhand.CasterOffhand ? offhand.MagicBonus : 0;
+
+            var armor = GameItem.Get(ArmorId.Value);
+            int armorMagic = armor != null ? armor.MagicBonus : 0;   // enchanted metal; robes 0
+
+            var r1 = GameItem.Get(Ring1Id.Value);
+            var r2 = GameItem.Get(Ring2Id.Value);
+            int ringAc = (r1?.RingAc ?? 0) + (r2?.RingAc ?? 0);
+            int ringSave = (r1?.RingSave ?? 0) + (r2?.RingSave ?? 0);
+
+            Sheet.SetShield(realShield, realShield ? offhand.OffhandAcBonus : 2);
+            Sheet.SetMagicDefense(armorMagic + orbAc + ringAc, ringSave);
+            ShieldEquipped.Value = realShield;
+        }
+
+        /// <summary>Total to-hit / to-damage plus from the weapon's enchantment and both rings.</summary>
+        private int WeaponAttackBonus()
+        {
+            var w = GameItem.Get(WeaponId.Value);
+            var r1 = GameItem.Get(Ring1Id.Value);
+            var r2 = GameItem.Get(Ring2Id.Value);
+            return (w?.MagicBonus ?? 0) + (r1?.RingAttack ?? 0) + (r2?.RingAttack ?? 0);
+        }
+
+        private int WeaponDamageBonus()
+        {
+            var w = GameItem.Get(WeaponId.Value);
+            var r1 = GameItem.Get(Ring1Id.Value);
+            var r2 = GameItem.Get(Ring2Id.Value);
+            return (w?.MagicBonus ?? 0) + (r1?.RingDamage ?? 0) + (r2?.RingDamage ?? 0);
         }
 
         /// <summary>Server: copy the recruiting player's equipment quality. Exact gear is
@@ -195,10 +253,12 @@ namespace RadiantPool.Game
             WeaponId.Value = weapon != null && weapon.UsableBy(Sheet.Class) ? weapon.Id : "dagger";
             ArmorId.Value = armor != null && armor.UsableBy(Sheet.Class) ? armor.Id : "";
             shield = shield && GameItem.Get("shield").UsableBy(Sheet.Class);
-            ShieldEquipped.Value = shield;
+            OffhandId.Value = shield ? "shield" : "";
+            Ring1Id.Value = "";
+            Ring2Id.Value = "";
             Sheet.EquipArmor(armor != null && armor.UsableBy(Sheet.Class)
                 ? armor.Armor : ArmorDefinition.Unarmored);
-            Sheet.SetShield(shield);
+            RecomputeMagic();
         }
 
         /// <summary>Server: mirror the starting gear CreateSheetFromBuild equipped.</summary>
@@ -208,10 +268,10 @@ namespace RadiantPool.Game
             {
                 case CharacterClass.Fighter:
                     WeaponId.Value = "longsword"; ArmorId.Value = "chain_mail";
-                    ShieldEquipped.Value = true; break;
+                    OffhandId.Value = "shield"; ShieldEquipped.Value = true; break;
                 case CharacterClass.Cleric:
                     WeaponId.Value = "mace"; ArmorId.Value = "scale_mail";
-                    ShieldEquipped.Value = true; break;
+                    OffhandId.Value = "shield"; ShieldEquipped.Value = true; break;
                 case CharacterClass.Wizard:
                     WeaponId.Value = "quarterstaff"; break;
                 default:
@@ -322,11 +382,15 @@ namespace RadiantPool.Game
                        ?? GameItem.Get("dagger");   // bare minimum fallback
             int strMod = sheet.Abilities.Modifier(Ability.Str);
             int dexMod = sheet.Abilities.Modifier(Ability.Dex);
-            int mod = item.Finesse || item.RangeFeet > 5
+            int abilityMod = item.Finesse || item.RangeFeet > 5
                 ? System.Math.Max(strMod, dexMod) : strMod;
-            string dmg = mod == 0 ? item.Damage
-                : mod > 0 ? $"{item.Damage}+{mod}" : $"{item.Damage}{mod}";
-            return new AttackDefinition(item.Name, sheet.ProficiencyBonus + mod,
+            // The weapon's own plus and any ring boons ride on top of the ability modifier:
+            // the enchantment lifts BOTH the roll to hit and the damage it deals.
+            int hitMod = abilityMod + WeaponAttackBonus();
+            int dmgMod = abilityMod + WeaponDamageBonus();
+            string dmg = dmgMod == 0 ? item.Damage
+                : dmgMod > 0 ? $"{item.Damage}+{dmgMod}" : $"{item.Damage}{dmgMod}";
+            return new AttackDefinition(item.DisplayName, sheet.ProficiencyBonus + hitMod,
                 dmg, item.DamageType, item.RangeFeet);
         }
     }

@@ -81,6 +81,19 @@ mouse and the self-test drive the very same code.
   `Progression.PrimaryAbility`. **Loot gets better as the campaign deepens** (`LootLibrary`,
   mirrored in `content/loot`): rapier/studded leather mid-campaign, greatsword/splint in the
   vault, greataxe/half plate in the warcamp — `LootProgressionTests` pins that gradient.
+  **Magic gear scales that gradient to level 20**: "+N" weapons/armour, caster robes (cloth
+  body armour — the wizard's only defence), off-hand pieces beyond the shield (magical
+  shields, a caster warding orb), and rings fill the higher tiers. Each variant is DERIVED in
+  `GameItems.cs` from a mundane base by id (`longsword_1`): `BaseId` carries class
+  proficiency + hand model, `MagicBonus` lifts weapon to-hit+damage / armour+shield AC, rings
+  carry `RingAc/RingSave/RingAttack/RingDamage`. `PlayerCharacterHolder.RecomputeMagic` sums
+  every worn source into one `CharacterSheet.SetShield(bool,bonus)` + `SetMagicDefense(ac,save)`
+  so nothing double-counts; `BasicAttack` reads weapon+ring plus live. Two ring slots
+  (`Ring1Id/Ring2Id`) + generalized off hand (`OffhandId`; `ShieldEquipped` = a REAL shield,
+  for visual + companion parity). Woven into quest tiers 2/3/5/6/7 + vault/warcamp caches —
+  **leave tier 4 alone**: `LootProgressionTests.RequiredFightCache` pins its weights (total
+  100, `runed_staff` last so `FixedRng(70,100)` lands on it). New items go in BOTH
+  `GameItems.cs` and `content/items/items.json` (tables reference the json) + `SellValue`.
   **Party roles live in `PartyComposition.cs`**: the sellswords Veresk musters are picked
   by ROLE, never by class order — a healer first, then damage dealers of two *different*
   classes, counting whoever is already being played (so nobody is handed a second cleric
@@ -100,64 +113,48 @@ mouse and the self-test drive the very same code.
 - `game/Assets/Scripts` — runtime (FishNet networking). Server-authoritative: clients
   send intents (`Cmd*` ServerRpcs), server validates via the rules lib, broadcasts
   results (`Rpc*`). `CombatManager` = explicit `BattleState` FSM + grid + one serial
-  `CombatActionQueue` (click-to-move via `CmdMoveTo`, controlled wind-up/impact/recovery
-  timelines, paced AI turns, glide movement). `CombatTargeting` and
-  `BattleResultEvaluator` live in the pure rules library; `GameDirector` = quests/party state/saves
-  (4-zone chain: docks → market → warcamp → temple; `ServerRecountZone` derives cleared
-  counts from `ConsumedEncounterIds` and `ServerRecheckZone` heals cleared-before-active
-  dead ends — both run on load, which repairs old saves); `SessionLauncher` = title screen
-  + host/join. `Theme.cs` = RPG & MMO UI 7 design system with a generated Gilded Quest
-  fallback, Academia palette (mahogany/oak panels, brass borders, parchment; bright gold =
-  active states only; text contrast ≥4.5:1), and one global OFL type hierarchy:
-  MedievalSharp display titles, Source Serif controls/tabs/buttons, Inter body/fields.
-  The UI7 package itself contains no font files. All IMGUI styling
-  flows through `Ui.Begin()` → `Theme.Apply()`; tune look there, never inline styles.
+  `CombatActionQueue` (click-to-move via `CmdMoveTo`, wind-up/impact/recovery timelines, paced
+  AI turns, glide). `CombatTargeting`/`BattleResultEvaluator` live in the pure rules library;
+  `GameDirector` = quests/party/saves (4-zone chain docks → market → warcamp → temple;
+  `ServerRecountZone` derives cleared counts from `ConsumedEncounterIds`, `ServerRecheckZone`
+  heals cleared-before-active dead ends — both run on load, repairing old saves);
+  `SessionLauncher` = title + host/join. `Theme.cs` = RPG & MMO UI 7 design system with a
+  generated Gilded Quest fallback, Academia palette (mahogany/oak panels, brass borders,
+  parchment; bright gold = active only; contrast ≥4.5:1), one global OFL type hierarchy
+  (MedievalSharp titles, Source Serif controls, Inter body; UI7 ships no fonts). All IMGUI
+  styling flows through `Ui.Begin()` → `Theme.Apply()`; tune there, never inline.
   `RpgMmoUi7Art` selectively imports the locally licensed **RPG & MMO UI 7** textures and
-  bakes 26 semantic runtime roles (panels, button states, fields, slots, bars, sliders,
-  toggles, tooltips, scrollbars, tabs, plus HUD art: `statbar_overlay` bar gloss,
-  `xpbar`/`xpbar_fill` XP bar, `currency_gold` coin, `divider`, `decoration`, `glow`) into
-  ignored `Resources/UI/RpgMmoUi7`. `Theme.Apply` consumes the chrome globally, while
-  `Theme.SlotStyle` covers compact hotbar/minimap controls, `Theme.TabStyle` covers character
-  tabs, and the HUD art flows through `Theme.Bar` (every HP/MP bar gets the pack gloss),
-  `Theme.XpBar`, `Theme.CurrencyGlyph`, `Theme.Divider`, `Theme.Glow`, and `Theme.Decoration`.
+  bakes 26 semantic runtime roles (panels, buttons, fields, slots, bars, sliders, toggles,
+  tooltips, scrollbars, tabs, plus HUD art: `statbar_overlay`, `xpbar`/`xpbar_fill`,
+  `currency_gold`, `divider`, `decoration`, `glow`) into ignored `Resources/UI/RpgMmoUi7`.
+  `Theme.Apply` consumes chrome globally; `Theme.SlotStyle`/`TabStyle` cover hotbar/minimap/tabs;
+  HUD art flows through `Theme.Bar`/`XpBar`/`CurrencyGlyph`/`Divider`/`Glow`/`Decoration`.
   **New roles need a `PreferredSuffix` entry (exact lowercased vendor path) in `RpgMmoUi7Art`
-  AND a name in `RpgMmoUi7Skin.Roles`** — the `-uiskincapture` gate asserts
+  AND a name in `RpgMmoUi7Skin.Roles`** — `-uiskincapture` asserts
   `LoadedRoleCount == Roles.Length`, so a role that fails to bake fails the smoke test. Bake
-  only what a `Theme.*` helper actually consumes; don't bake decorative art nothing draws.
-  No pack means the generated Gilded Quest fallback.
+  only what a `Theme.*` helper consumes. No pack ⇒ generated Gilded Quest fallback.
   **Gold lives on the HotBar** (`{PartyGold:N0}g`, always visible): it used to exist only
   inside the bags and the shops, so the purse never visibly moved and the total read like a
   placeholder. Format gold `:N0` everywhere — "1,234", never "1234".
-  `HotBar.cs` = persistent bottom action bar. **Attack is a first-class slot again**
+  `HotBar.cs` = persistent bottom action bar. **Attack is a first-class slot**
   (`CombatClientUI.PickAttack`, keyboard A), named spells delegate to `PickSpell`, and the
-  bar shrinks or wraps combat actions above utilities instead of overflowing (a cleric in
-  combat needs 13 slots). The old permanent combat instruction/info strip is gone; only a
-  temporary responsive target picker appears above the bar. It uses fixed-width two-line
-  target cards, column counts derived from `Ui.W`, and a capped scroll view. **Your HEALTH
-  rides above the bar** (`HotBar.DrawHealth`):
-  a slim strip with the bar, `hp/max` AND the percentage — the combat unit's HP while a fight
-  is on (instant, via `RpcHpSync`) and `PlayerCharacterHolder.CurrentHpSynced` between fights
-  (nothing used to tell the client how hurt it was out of combat). It stays when the bar is
-  stowed: the bar is furniture, hit points are not.
-  In combat: **click enemy = close in AND attack, one click, however far away**
-  (`CombatClientUI.ClickCell` is the ONE definition of what a click on the board means: in
-  reach it swings, out of reach it orders the walk and REMEMBERS the target, and
-  `TickAutoAttack` lands the blow the moment the body settles on its new cell. It used to
-  take two clicks — walk, then swing — and the second was the easiest thing in the game to
-  forget). A completed weapon attack **automatically ends that player's turn after impact
-  and recovery**; `CmdAttack` marks its queued action for handoff, so neither damage nor
-  presentation is cut short. Click ground = move, and Space remains the manual end-turn
-  control after movement, Dodge, or another choice. **WASD/middle-drag pans the
-  camera and F recentres** (the grid owns movement, so those keys are free).
-  Direct world clicks remain the fastest attack control, while the restored **Attack** slot
-  opens the same legal hostile-target path; both converge on `ClickCell`, so walk-and-strike
-  behavior cannot diverge. Each named spell remains a hotbar ability and opens only its legal
-  target picker (Backspace cancels). Every living monster has an exact `hp/max` bar above its
-  rendered head plus a deterministic generated triangle/square/circle/diamond/hex/cross icon;
-  the shapes are textures, never unsupported font glyphs. While a queued action is
-  resolving, input is locked until wind-up, configured impact, HP sync, and recovery finish.
-  Damage is applied at impact, not at button press. Victory/defeat are persistent modals;
-  defeat offers a server-validated retry of the same encounter.
+  bar shrinks/wraps combat actions above utilities instead of overflowing (a combat cleric
+  needs 13 slots). Only a temporary responsive target picker appears above the bar (fixed-width
+  two-line cards, columns from `Ui.W`, capped scroll). **Your HEALTH rides above the bar**
+  (`HotBar.DrawHealth`): bar + `hp/max` + percentage — the combat unit's HP in a fight
+  (`RpcHpSync`), `PlayerCharacterHolder.CurrentHpSynced` between fights. Stays when the bar is
+  stowed. In combat: **click enemy = close in AND attack, one click, however far away**
+  (`CombatClientUI.ClickCell` is the ONE definition of a board click: in reach it swings, out
+  of reach it walks and REMEMBERS the target, `TickAutoAttack` lands the blow when the body
+  settles). A completed weapon attack **auto-ends that player's turn after impact + recovery**
+  (`CmdAttack` marks its queued action for handoff). Click ground = move, Space = manual
+  end-turn, **WASD/middle-drag pans, F recentres** (the grid owns movement). The Attack slot
+  opens the same legal target path as a world click; both converge on `ClickCell`. Each spell
+  opens only its legal target picker (Backspace cancels). Every living monster has an exact
+  `hp/max` bar over its head + a generated triangle/square/circle/diamond/hex/cross texture
+  icon (never font glyphs). While a queued action resolves, input is locked through wind-up,
+  impact, HP sync, and recovery; damage applies at impact, not button press. Victory/defeat
+  are persistent modals; defeat offers a server-validated retry of the same encounter.
   `RadiantPool.exe -autohost -attacktest` opens Attack, asserts the picker/hotbar fit the
   logical canvas and the instruction window is absent, chooses the FURTHEST enemy, and proves
   walk, blow, and automatic turn handoff; `smoke-test.ps1` runs it in its OWN instance — a live fight
@@ -169,49 +166,38 @@ mouse and the self-test drive the very same code.
   one fades to a transparent clone of its own materials, shadows off. Kenney props have no
   colliders, so this tests renderer BOUNDS, not raycasts — and `bounds.Contains` is what
   catches a monster spawned *inside* a warehouse (encounter boxes overlap the buildings).
-- **Responsive UI (`Ui.cs`) — the rules every panel obeys.** The HUD is laid out on a
-  **logical canvas** (`Ui.W`/`Ui.H`, ~630 units tall), never `Screen.width/height`, so
-  1080p/1440p/4K get the same layout at bigger pixels. `Ui.Scale` is driven by height AND
-  width: a narrow or short window scales the whole UI DOWN instead of cropping the HUD off
-  the edges, and `Ui.UserScale` (Settings slider, PlayerPrefs) multiplies it. Size panels
-  with `Ui.Fit()`/`Ui.FitTop()` — they clamp to the space that actually exists; a raw
-  `new Rect(...)` with design-size constants WILL run off a small window. Long HUD text
-  sheds detail on a narrow canvas rather than overflowing (see the combat hint line).
-  `Ui.OpenPanel` makes inventory/journal/settings **mutually exclusive** (they used to
-  stack dead centre); Esc = back (closes what is open, only then opens Settings). Guard
-  every single-letter hotkey with `!Ui.Typing` — naming a character "Jim" used to open the
-  journal, the bags and the map on the way through.
-  **An open panel OWNS the screen (`Ui.PanelOpen`)**: hotbar, minimap, quest card, banner,
-  steering arrow, combat strip and the shop/NPC prompts all draw NOTHING while one is up —
-  the bags used to open with the whole HUD bleeding through them. Every HUD drawer checks
-  `Ui.PanelOpen` at the top of its `OnGUI`; nothing decides for itself when it is in the way.
-  **The hotbar itself stows (`Ui.BarCollapsed`, H or its chevron button, PlayerPrefs)** down
-  to a `SHOW BAR (H)` handle — never a one-way door, same rule as the map pill and the quest
-  card. `BarRect` still reports the handle, so combat clicks can't fall through it.
+- **Responsive UI (`Ui.cs`) — the rules every panel obeys.** The HUD lays out on a **logical
+  canvas** (`Ui.W`/`Ui.H`, ~630 units tall), never `Screen.width/height`, so 1080p/1440p/4K
+  share one layout at bigger pixels. `Ui.Scale` follows height AND width (a narrow/short window
+  scales DOWN, never crops); `Ui.UserScale` (Settings, PlayerPrefs) multiplies it. Size panels
+  with `Ui.Fit()`/`Ui.FitTop()` — a raw `new Rect(...)` with design constants runs off a small
+  window. Long HUD text sheds detail rather than overflowing. `Ui.OpenPanel` makes
+  inventory/journal/settings **mutually exclusive**; Esc = back (closes what's open, then opens
+  Settings). Guard every single-letter hotkey with `!Ui.Typing`. **An open panel OWNS the
+  screen (`Ui.PanelOpen`)**: hotbar, minimap, quest card, banner, arrow, combat strip, shop/NPC
+  prompts draw NOTHING while one is up — every HUD drawer checks `Ui.PanelOpen` atop its
+  `OnGUI`. **The hotbar stows** (`Ui.BarCollapsed`, H/chevron, PlayerPrefs) to a `SHOW BAR (H)`
+  handle; `BarRect` still reports the handle so combat clicks can't fall through it.
 - `SessionPanel.cs` — status + invite code, opened/closed from a **hotbar icon** (generated
   texture, not a font glyph). `SessionLauncher` still OWNS that state (`Status`/`HostCode`
   statics) and draws only the title screen; the old permanent top-left strip is gone, which
   is what freed the corner for the quest card.
-- **Wayfinding** — the player must always know what to do and where. `QuestTracker` =
-  quest card top-left, **collapsible to a title pill via Hide/Show (remembered in
-  PlayerPrefs)** (active quest + `[x]/[ ]` checklist of what is left), centre banner,
-  big gold steering arrow above the hotbar (rotated into camera space: up = walk forward),
-  and a world beacon. While >26 m from the active quarter it aims at the QUARTER and names
-  it ("The Old Docks"); inside, it switches to the next fight. Bootstrap plants a lit
-  **district sign** over each quarter; `MiniMap` paints the quarter names on the map (gold
-  = active quest). After the campaign ends the tracker issues standing orders against any
-  encounters still standing, so there is never a questless state.
-  `NpcInteract` owns the quest giver's overhead state marker: a **yellow `!`** means Veresk
-  has the opening commission available, an accepted/active commission is a **gray `?`**,
-  and any `ObjectivesMet` commission takes priority as a **yellow `?`** ready for turn-in.
-  With no remaining commission the marker hides. The Inter Bold world-space glyph is
-  unlit, outlined, billboarded, gently bobbed (disabled by Reduced Motion), and derived
-  from replicated `MusterState`/`ZoneStates`; it never keeps a duplicate quest counter.
-  `CampaignTravel` consumes `QuestTracker.RecommendedTravelZoneIndex`: the Council
-  Waystone Network renders the tracked active quest's destination as a pale-green card
-  with a green **QUEST DESTINATION** label and green **Travel now** button. Multiple open
-  commissions follow the journal's saved Track waypoint choice; a ready turn-in highlights
-  no outbound site because the real target is Council Hall. Colour is reinforced by words.
+- **Wayfinding** — the player must always know what to do and where. `QuestTracker` = quest
+  card top-left, **collapsible to a title pill (Hide/Show, PlayerPrefs)** (active quest +
+  `[x]/[ ]` checklist), centre banner, gold steering arrow above the hotbar (camera-space: up =
+  forward), world beacon. >26 m from the active quarter it aims at + names the QUARTER ("The Old
+  Docks"); inside, it switches to the next fight. Bootstrap plants a lit **district sign** per
+  quarter; `MiniMap` paints quarter names (gold = active). After the campaign ends the tracker
+  issues standing orders against any encounters still standing — never a questless state.
+  `NpcInteract` owns the quest giver's overhead marker: **yellow `!`** = opening commission
+  available, **gray `?`** = accepted/active, **yellow `?`** = `ObjectivesMet` ready for
+  turn-in (priority); no commission ⇒ hidden. Inter Bold world-space glyph, unlit/outlined/
+  billboarded/bobbed (off under Reduced Motion), derived from replicated `MusterState`/
+  `ZoneStates`; never a duplicate counter. `CampaignTravel` consumes
+  `QuestTracker.RecommendedTravelZoneIndex`: the Waystone Network renders the tracked quest's
+  destination as a pale-green card + green **Travel now**. Multiple commissions follow the
+  journal's saved Track choice; a ready turn-in highlights no outbound site (target is Council
+  Hall). Colour is reinforced by words.
 - `MiniMap.cs` — docked in the **top-right corner itself** (`MapTop`) and **starts collapsed**
   (pref key `minimap.size2`). Three sizes via header **icon** buttons or `M`, which cycles
   **hidden → normal tactical map → maximized campaign atlas → hidden**, remembered in
@@ -219,93 +205,69 @@ mouse and the self-test drive the very same code.
   `MapRect.yMax`. The normal view remains the live north-up render: left-drag pans, RECENTER
   returns to the player, scroll zooms, and shape+colour markers distinguish enemies, quests,
   NPCs, vendors, smiths, locked gates, and party members.
-  The **maximized view is a world atlas, never a magnified tactical camera**. Six authored
+  The **maximized view is a world atlas, never a magnified tactical camera**: authored
   continent-like parent regions (Cinderwell Coast, Aldenmere, Emberwild, Drowned Observatory,
-  Mirewatch Reach, Ember Crown) contain all 27 playable destinations plus Council Hall.
-  Destination pins show open/done/locked state; **exactly one gold X** marks the next tracked
-  destination from `QuestTracker.TargetMapZoneId`, even when several commissions are active.
-  The normal map consumes the same selection, and a turn-in moves the X to Council Hall.
-  Dashed roads and sea lanes are derived from `ZoneConfig.PrerequisiteZoneIds`, and a separate
-  teal marker identifies the party's current destination. Coastlines, ocean grid, compass,
-  pins, and controls are procedural textures/original code-native art — no imported bitmap
-  or unsupported font glyphs.
-  `ValidateAtlas` logs `[WorldMap] PASS` only when the six regions contain every configured
-  zone exactly once; `smoke-test.ps1` gates on 27/27 coverage and no structural failure.
-  `-worldmapcapture <png>` is the input-free visual QA path and must not overwrite the
-  player's saved map-size preference.
-- `InventoryUI.cs` (I) — left column = the character sheet: **the six ABILITY SCORES first**
-  (score and modifier, from the `*Synced` SyncVars via `PlayerCharacterHolder.ModOf` — the one
-  definition the level-up screen also uses), then what they are WEARING (slot rows + each
-  piece's stat line + totals: AC with its breakdown, HP, attack, damage); right column =
-  stash, every item showing damage/protection and compared against what is equipped
-  ("upgrade: +2 AC"). Client display needs the derived stats, which the sheet cannot give
-  it (server-only) — `PlayerCharacterHolder` mirrors them as SyncVars on a slow poll.
-- `ProgressUI.cs` — **level and XP live on the CHARACTER SHEET (I), never on the main screen**
-  (`ProgressUI.XpBlock`, drawn by `InventoryUI`: level, bar, XP either side, MAX at the cap —
-  one definition, so sheet and screen cannot disagree) plus the
-  **level-up screen (L)** that spends ability points; each row says what
-  the ability buys *this* character, including that an odd score buys nothing until the next
-  point completes the modifier. Client asks (`CmdSpendAbilityPoint`), rules lib decides.
-- **Item icons** — `Editor/ItemIconBaker.cs` renders each item's OWN model
-  (`GameItem.HandModel` → `Resources/Weapons`) to `Resources/ItemIcons/<id>.png` during
-  bootstrap; armour has no model in any CC0 pack, so it is drawn in code **from the armour
-  KIND** (light/medium/heavy + AC), which means new gear needs no new art. `ItemIcon.Get`
-  caches and returns null when art is missing (rows fall back to text). The mace shows an axe
-  because the pack has no mace — the icon is honest about what the hand actually holds.
-- **Selling** — `CmdSellItem` sells ONE stash item at its `GameDirector.SellValue` (half
-  list price); `CmdSellAll` still dumps the salvage pile (and keeps potions). The Sell
-  buttons appear both in the vendor panel and on every bag row, and they need a buyer in
-  reach: `GameDirector.TraderNear` is the ONE definition of that (the UI greys the button
-  with it, the ServerRpc re-checks it with a little slack, so button and server cannot
-  disagree). `RadiantPool.exe -autohost -selltest` drives a real sale (bag → trader →
-  purse) and `smoke-test.ps1` asserts it — that is what caught the CharacterController
-  teleport trap below. Every `RpcNotice` is also written to Player.log.
+  Mirewatch Reach, Ember Crown) contain all playable destinations plus Council Hall. Pins show
+  open/done/locked; **exactly one gold X** marks the next tracked destination from
+  `QuestTracker.TargetMapZoneId` even with several commissions active (the normal map consumes
+  the same selection; a turn-in moves the X to Council Hall). Roads/sea lanes derive from
+  `ZoneConfig.PrerequisiteZoneIds`; a teal marker = current destination. All procedural
+  textures/code-native art — no bitmaps or font glyphs. `ValidateAtlas` logs `[WorldMap] PASS`
+  only when every region contains each configured zone exactly once; `smoke-test.ps1` gates on
+  full coverage. `-worldmapcapture <png>` must not overwrite the saved map-size preference.
+- `InventoryUI.cs` (I) — left column = character sheet: **six ABILITY SCORES first** (score +
+  modifier, from `*Synced` SyncVars via `PlayerCharacterHolder.ModOf` — the level-up screen's
+  definition too), then WORN slots (weapon/armor/off hand/two rings) with each piece's stat
+  line + totals (AC breakdown, HP, attack, damage); right column = stash, each item showing
+  damage/protection compared vs equipped ("upgrade: +2 AC", `ItemCompare`). Derived stats are
+  server-only, so `PlayerCharacterHolder` mirrors them as SyncVars on a slow poll.
+- `ProgressUI.cs` — **level and XP live on the CHARACTER SHEET (I), never the main screen**
+  (`ProgressUI.XpBlock` drawn by `InventoryUI`: level, bar, XP, MAX at cap — one definition)
+  plus the **level-up screen (L)** that spends ability points; each row says what the ability
+  buys *this* character (odd score buys nothing until the next point completes the modifier).
+  Client asks (`CmdSpendAbilityPoint`), rules lib decides.
+- **Item icons** — `Editor/ItemIconBaker.cs` renders each item's OWN model (`GameItem.HandModel`
+  → `Resources/Weapons`) to `Resources/ItemIcons/<id>.png` at bootstrap; armour+robes have no
+  model so they're drawn in code from the armour KIND (new gear needs no art). `ItemIcon.Get`
+  caches, falls back to `BaseId`'s icon for "+N" variants, returns null when missing (text
+  fallback). Rings have no icon (text).
+- **Selling** — `CmdSellItem` sells ONE stash item at `GameDirector.SellValue` (half list
+  price); `CmdSellAll` dumps salvage (keeps potions). Sell buttons in the vendor panel + every
+  bag row need a buyer in reach: `GameDirector.TraderNear` is the ONE definition (UI greys the
+  button, ServerRpc re-checks with slack). `-selltest` drives a real sale (bag → trader →
+  purse); `smoke-test.ps1` asserts it. Every `RpcNotice` also writes to Player.log.
 - `theme/` — Stitch design mockups, **gitignored**: they contain WotC placeholder
   names. Copy visuals only, never text.
-- Asset Store packs can't be fetched headlessly (editor sign-in required). Drop-in
-  slots instead: `Resources/SpellIcons/<id>.png`, `Resources/Music/{explore,combat,
-  zone_<zoneId>}`, `Resources/Characters/<Name>.prefab` (pipe-separated fallbacks in
-  `CombatManager.MonsterModels`). Import steps: `docs/asset-store-import.md`.
-  **The download is the only manual step**: once the editor has downloaded a pack it is
-  cached as a `.unitypackage` under `%APPDATA%\Unity\Asset Store-5.x\`, and
-  `scripts/import-assetstore.ps1` imports it in batchmode (`-importPackage`), converts it
-  to URP and re-bootstraps — no editor clicking to import.
-  For **RPG & MMO UI 7**, use `scripts/import-rpg-mmo-ui7.ps1`: it extracts only image/sprite
-  art and metadata into ignored `Assets/LocalLicensed`, excludes the legacy scripts/prefabs,
-  rebakes the 26-role IMGUI skin, and fails unless the skin and global typography stack are
-  complete. The skin applies to every screen through `Theme.Apply`, never per-panel.
-  For **PBR Graveyard and Nature Set 2.0**, run
-  `python scripts/install-graveyard-assets.py`; it dependency-closes 29 authored prefabs
-  from the cached 3.3 GB package and installs only their required models/materials/textures.
+- Asset Store packs can't be fetched headlessly (editor sign-in). Drop-in slots instead:
+  `Resources/SpellIcons/<id>.png`, `Resources/Music/{explore,combat,zone_<zoneId>}`,
+  `Resources/Characters/<Name>.prefab` (fallbacks in `CombatManager.MonsterModels`). Steps:
+  `docs/asset-store-import.md`. **Download is the only manual step**: cached as `.unitypackage`
+  under `%APPDATA%\Unity\Asset Store-5.x\`, then `scripts/import-assetstore.ps1` imports in
+  batchmode, converts to URP, re-bootstraps. **RPG & MMO UI 7**: `scripts/import-rpg-mmo-ui7.ps1`
+  extracts art/metadata into ignored `Assets/LocalLicensed`, rebakes the 26-role skin, fails
+  unless skin + typography are complete. **PBR Graveyard / Nature Set 2.0**:
+  `python scripts/install-graveyard-assets.py` dependency-closes 29 authored prefabs from the
+  cached 3.3 GB package.
 - `PolyPackArt.cs` — **environment art from the owned Asset Store packs**, wired
-  DISCOVERY-first, not by prefab name: it finds the pack wherever it imported, sorts every
-  prefab into buckets by the words in its name (`Tree/Pine/Rock/Cliff/Bush/Grass/Flower/
-  Mushroom/Log/House/Ruin/Grave/Fence/Tent/Prop`) and `DressWorld` composes from BUCKETS, never
-  from model names. That is what lets it work against a pack whose contents can't be read
-  until it is imported — and any similar low-poly pack drops into the same slots. Absent
-  ⇒ `Available == false` ⇒ Kenney fallback, so the world always builds. PBR Graveyard uses
-  authored prefabs only (never raw FBX submeshes) and supplies the dominant perimeter at all
-  22 remote sites. **Necropolis/Crypt sites are composed as designed graveyards, not a grave
-  ring** (`ProjectBootstrap.RemoteSite`, gated on `graveyard`): a walled cemetery perimeter
-  (`Kind.Ruin` walls, tangent-rotated) with two gaps — a gate lane on the front (−Z) axis and
-  a rear frame for the mausoleum (+Z) — a `church_tower` **mausoleum landmark placed OUTSIDE
-  the back wall as a backdrop** (never between camera and the fighting centre, or the combat
-  x-ray occlusion fades it to a translucent blob — that bit once), a warm gate lantern + violet
-  ritual light, flanking `death_statue`s, clustered graves varied in rotation/scale, and
-  storytelling props (`coffin_broken`, `rock_skull`, `dead_fern`/`Ivy_02`). All decoration is
-  collider-free, so grid combat is unaffected and nothing is network-spawned. **Haunted
-  non-cemetery themes (`Keep`/`Manor`/`Observatory` = Drowned Bastion, Blackbriar Manor, the
-  Observatory trio) get graveyard ACCENTS** (a `haunted` block: two grave clusters, a watching
-  statue, a skull-stone, corrupted ferns/ivy, one violet candle) over their own settlement/dungeon
-  dressing — small props only, never a walled necropolis. Verify with
+  DISCOVERY-first: it finds the pack wherever it imported, sorts prefabs into buckets by name
+  words (`Tree/Pine/Rock/Cliff/Bush/Grass/Flower/Mushroom/Log/House/Ruin/Grave/Fence/Tent/
+  Prop`), and `DressWorld` composes from BUCKETS, never model names — so any similar low-poly
+  pack drops in. Absent ⇒ `Available == false` ⇒ Kenney fallback. PBR Graveyard uses authored
+  prefabs only (never raw FBX submeshes), dominant at all 22 remote sites. **Necropolis/Crypt
+  sites are designed graveyards, not a grave ring** (`ProjectBootstrap.RemoteSite`, gated on
+  `graveyard`): walled perimeter (`Kind.Ruin` walls, tangent-rotated) with two gaps (front −Z
+  gate lane, rear +Z mausoleum frame), a `church_tower` mausoleum **OUTSIDE the back wall as a
+  backdrop** (never between camera and centre, or combat x-ray fades it), gate lantern + violet
+  light, flanking `death_statue`s, clustered graves, storytelling props (`coffin_broken`,
+  `rock_skull`, `dead_fern`/`Ivy_02`). **Haunted non-cemetery themes (`Keep`/`Manor`/
+  `Observatory`) get graveyard ACCENTS** (`haunted` block: two grave clusters, a statue, a
+  skull-stone, corrupted ferns/ivy, one violet candle) over their own dressing — small props,
+  never a walled necropolis. All decoration is collider-free and not network-spawned. Verify:
   `RadiantPool.exe -autohost -sitecapture <png> -sitezone lanternfall_necropolis` (or
-  `blackbriar_manor` / `drowned_bastion`). Asset Store packs ship
-  **legacy/proprietary materials that render MAGENTA or black under URP** —
-  `SetupMaterials()` reads serialized albedo/normal/metallic/occlusion slots even when the
-  source shader is missing, then converts all 40 selected PBR materials to URP Lit.
-  Buildings stay a **collider box with the model parented inside** (renderer off): the box
-  is gameplay (blocks movement, and the combat x-ray fades what hides a creature), the
-  model is only the look.
+  `blackbriar_manor`/`drowned_bastion`). Asset Store packs ship **materials that render MAGENTA
+  or black under URP** — `SetupMaterials()` reads serialized albedo/normal/metallic/occlusion
+  slots even with the shader missing, then converts all 40 to URP Lit. Buildings stay a
+  **collider box with the model parented inside** (renderer off): box is gameplay, model is look.
 - `game/Assets/Editor` — `ProjectBootstrap` regenerates the ENTIRE scene, prefabs, URP
   config, and materials from code (scene is disposable; never hand-edit it). Includes
   `DressWorld()` (seeded forests/scatter/wilds sites, sunny lighting) and the district

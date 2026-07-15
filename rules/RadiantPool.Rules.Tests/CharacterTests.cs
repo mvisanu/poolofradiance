@@ -63,6 +63,51 @@ namespace RadiantPool.Rules.Tests
         }
 
         [Fact]
+        public void MagicShield_AddsItsPlusOnTopOfTheBaseTwo()
+        {
+            var f = Fighter();                        // Dex 14 → +2, unarmored 12
+            f.EquipArmor(ArmorDefinition.ScaleMail);  // 14 + 2 = 16
+            f.SetShield(true, 4);                     // +2 base +2 magic
+            Assert.Equal(20, f.ArmorClass);
+            f.SetShield(false);                       // off hand emptied
+            Assert.Equal(16, f.ArmorClass);
+        }
+
+        [Fact]
+        public void MagicDefense_AddsToAcAndSaves_AndClearsToZero()
+        {
+            var f = Fighter();                        // AC 12, Str save +5
+            f.SetMagicDefense(2, 1);                  // ring of protection style
+            Assert.Equal(14, f.ArmorClass);
+            Assert.Equal(6, f.SaveBonus(Ability.Str));
+            Assert.Equal(2, f.SaveBonus(Ability.Wis)); // was +1, +1 ring
+            f.SetMagicDefense(0, 0);
+            Assert.Equal(12, f.ArmorClass);
+            Assert.Equal(5, f.SaveBonus(Ability.Str));
+        }
+
+        [Fact]
+        public void CasterRobe_GivesFlatBasePlusFullDex()
+        {
+            var w = Wizard();                          // Dex 16 → +3
+            Assert.Equal(13, w.ArmorClass);            // unarmored 10 + 3
+            w.EquipArmor(ArmorDefinition.ApprenticeRobe);
+            Assert.Equal(15, w.ArmorClass);            // 12 + 3 (uncapped Dex)
+            w.EquipArmor(ArmorDefinition.ArchmageRobe);
+            Assert.Equal(18, w.ArmorClass);            // 15 + 3
+        }
+
+        [Fact]
+        public void AcSources_Stack_Armor_Shield_AndMagic()
+        {
+            var f = Fighter();                          // Dex +2
+            f.EquipArmor(ArmorDefinition.HalfPlate);    // 15 + 2
+            f.SetShield(true, 3);                       // +3 magic shield
+            f.SetMagicDefense(2, 0);                    // +2 ring
+            Assert.Equal(22, f.ArmorClass);             // 15 + 2 + 3 + 2
+        }
+
+        [Fact]
         public void SpellSlots_FollowFullCasterTable()
         {
             var w = Wizard(1);

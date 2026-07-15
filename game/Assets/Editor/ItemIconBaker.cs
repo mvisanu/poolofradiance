@@ -139,6 +139,15 @@ namespace RadiantPool.EditorTools
             if (item.Id == "potion_healing") return Potion();
             if (item.Slot != ItemSlot.Armor || item.Armor == null) return null;
 
+            // A caster robe is cloth, not a cuirass — a mage-blue garment that deepens with AC.
+            if (item.CasterRobe)
+            {
+                float rt = Mathf.InverseLerp(12f, 15f, item.Armor.BaseAc);
+                var cloth = Color.Lerp(new Color32(0x3A, 0x3D, 0x8C, 0xFF),
+                                       new Color32(0x5B, 0x33, 0x8F, 0xFF), rt);
+                return Armor(cloth, new Color32(0xD9, 0xB4, 0x53, 0xFF), Weave.Stitched);
+            }
+
             switch (item.Armor.Kind)
             {
                 case ArmorKind.Light:

@@ -148,11 +148,15 @@ namespace RadiantPool.Game
             GUILayout.BeginVertical(Theme.ParchmentStyle);
             var weapon = GameItem.Get(holder.WeaponId.Value);
             var armor = GameItem.Get(holder.ArmorId.Value);
-            var shield = holder.ShieldEquipped.Value ? GameItem.Get("shield") : null;
+            var offhand = GameItem.Get(holder.OffhandId.Value);
+            var ring1 = GameItem.Get(holder.Ring1Id.Value);
+            var ring2 = GameItem.Get(holder.Ring2Id.Value);
 
             Slot("Weapon", weapon);
             Slot("Armor", armor);
-            Slot("Off hand", shield);
+            Slot("Off hand", offhand);
+            Slot("Ring 1", ring1);
+            Slot("Ring 2", ring2);
             GUILayout.EndVertical();
 
             int str = holder.StrModSynced.Value, dex = holder.DexModSynced.Value;
@@ -166,9 +170,13 @@ namespace RadiantPool.Game
             var baseArmor = armor?.Armor ?? ArmorDefinition.Unarmored;
             int dexUsed = Mathf.Min(dex, baseArmor.MaxDexBonus == int.MaxValue
                 ? dex : baseArmor.MaxDexBonus);
+            int offhandAc = offhand?.OffhandAcBonus ?? 0;
+            int magicAc = (armor?.MagicBonus ?? 0)
+                + (ring1?.RingAc ?? 0) + (ring2?.RingAc ?? 0);
             string acParts = $"{baseArmor.BaseAc} {baseArmor.Name.ToLowerInvariant()}"
                 + (dexUsed != 0 ? $" {Signed(dexUsed)} Dex" : "")
-                + (shield != null ? $" +{GameItem.ShieldAcBonus} shield" : "");
+                + (offhandAc != 0 ? $" +{offhandAc} off hand" : "")
+                + (magicAc != 0 ? $" +{magicAc} magic" : "");
             Stat("Armor Class", holder.ArmorClassSynced.Value.ToString(), acParts);
             Stat("Hit Points", holder.MaxHpSynced.Value.ToString(),
                 $"level {holder.LevelSynced.Value}");
@@ -176,8 +184,12 @@ namespace RadiantPool.Game
             if (weapon != null)
             {
                 int mod = weapon.Finesse || weapon.RangeFeet > 5 ? Mathf.Max(str, dex) : str;
-                Stat("Attack", Signed(prof + mod), $"{weapon.Name.ToLowerInvariant()}");
-                Stat("Damage", $"{weapon.Damage}{(mod != 0 ? Signed(mod) : "")}",
+                int atkBonus = weapon.MagicBonus
+                    + (ring1?.RingAttack ?? 0) + (ring2?.RingAttack ?? 0);
+                int dmgBonus = weapon.MagicBonus
+                    + (ring1?.RingDamage ?? 0) + (ring2?.RingDamage ?? 0);
+                Stat("Attack", Signed(prof + mod + atkBonus), weapon.DisplayName.ToLowerInvariant());
+                Stat("Damage", $"{weapon.Damage}{(mod + dmgBonus != 0 ? Signed(mod + dmgBonus) : "")}",
                     weapon.DamageType.ToString().ToLowerInvariant());
             }
             GUILayout.EndVertical();
@@ -240,7 +252,7 @@ namespace RadiantPool.Game
             GUILayout.Space(4);
             GUILayout.BeginVertical();
             GUILayout.Label(item != null
-                ? $"<b>{item.Name}</b>"
+                ? $"<b>{item.DisplayName}</b>"
                 : "<color=#6b6257>— empty —</color>", new GUIStyle(Theme.BodyInk)
                     { fontSize = 12, richText = true, wordWrap = false });
             if (item != null) GUILayout.Label(item.StatLine(), _itemStat);
@@ -286,7 +298,7 @@ namespace RadiantPool.Game
             foreach (var g in groups)
             {
                 var item = GameItem.Get(g.Key);
-                string label = item != null ? item.Name : g.Key.Replace('_', ' ');
+                string label = item != null ? item.DisplayName : g.Key.Replace('_', ' ');
 
                 GUILayout.BeginHorizontal();
                 ItemIcon.Draw(g.Key, 38f);

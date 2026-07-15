@@ -20,6 +20,14 @@ namespace RadiantPool.Game
             if (!Cache.TryGetValue(itemId, out var tex))
             {
                 tex = Resources.Load<Texture2D>($"ItemIcons/{itemId}");
+                // An enchanted variant has no art of its own — a Longsword +1 is drawn with
+                // the Longsword's icon (same object, plus a glow the name carries).
+                if (tex == null)
+                {
+                    string baseId = GameItem.Get(itemId)?.BaseId;
+                    if (!string.IsNullOrEmpty(baseId))
+                        tex = Resources.Load<Texture2D>($"ItemIcons/{baseId}");
+                }
                 Cache[itemId] = tex;   // null is cached too: don't hit Resources every frame
             }
             return tex;

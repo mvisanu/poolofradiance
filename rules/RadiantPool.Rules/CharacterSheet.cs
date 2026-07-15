@@ -33,6 +33,17 @@ namespace RadiantPool.Rules
             new ArmorDefinition("chain_mail", "Chain Mail", ArmorKind.Heavy, 16, 0);
         public static readonly ArmorDefinition Splint =
             new ArmorDefinition("splint", "Splint", ArmorKind.Heavy, 17, 0);
+
+        // Caster cloth. Wizards have no armour proficiency, so their protection comes from
+        // enchanted robes that behave like unarmoured defence: a flat base plus the FULL Dex
+        // bonus (Kind.None keeps MaxDexBonus uncapped). These scale the mage across 1-20 the
+        // way plate scales the fighter. The archmage robe mirrors the SRD's AC-15 robe.
+        public static readonly ArmorDefinition ApprenticeRobe =
+            new ArmorDefinition("apprentice_robe", "Apprentice Robe", ArmorKind.None, 12, int.MaxValue);
+        public static readonly ArmorDefinition WardedRobe =
+            new ArmorDefinition("warded_robe", "Warded Robe", ArmorKind.None, 13, int.MaxValue);
+        public static readonly ArmorDefinition ArchmageRobe =
+            new ArmorDefinition("archmage_robe", "Archmage Robe", ArmorKind.None, 15, int.MaxValue);
     }
 
     /// <summary>A player character: identity + build + derived stats. Extends Creature with
@@ -45,6 +56,15 @@ namespace RadiantPool.Rules
         public int Xp { get; private set; }
         public ArmorDefinition Armor { get; private set; }
         public bool HasShield { get; private set; }
+
+        /// <summary>AC the equipped shield contributes (SRD 5.1 base +2; a magical shield adds
+        /// its plus on top). Zero when nothing is in the off hand.</summary>
+        public int ShieldAcBonus { get; private set; }
+
+        /// <summary>AC from worn magic that is NOT the armour or the shield — enchanted metal
+        /// armour's plus, a ring of protection, a warding charm — summed by the caller into one
+        /// number. Rings/charms also feed <see cref="Creature.MagicSaveBonus"/> for saves.</summary>
+        public int MagicArmorBonus { get; private set; }
         public List<string> KnownSpells { get; } = new List<string>();
 
         // Remaining spell slots by slot level (index 0 = 1st-level slots).
@@ -100,16 +120,30 @@ namespace RadiantPool.Rules
             RecomputeAc();
         }
 
-        public void SetShield(bool equipped)
+        /// <summary>Plain shield: SRD +2. Overload below carries a magical shield's plus.</summary>
+        public void SetShield(bool equipped) => SetShield(equipped, 2);
+
+        public void SetShield(bool equipped, int totalAcBonus)
         {
             HasShield = equipped;
+            ShieldAcBonus = equipped ? Math.Max(0, totalAcBonus) : 0;
+            RecomputeAc();
+        }
+
+        /// <summary>Sets the aggregate magic AC/save bonus from rings, charms, and enchanted
+        /// armour. The caller sums every worn source; this is the one number AC and saves read,
+        /// so no bonus is applied twice.</summary>
+        public void SetMagicDefense(int acBonus, int saveBonus)
+        {
+            MagicArmorBonus = acBonus;
+            MagicSaveBonus = saveBonus;
             RecomputeAc();
         }
 
         private void RecomputeAc()
         {
             int dex = Math.Min(Abilities.Modifier(Ability.Dex), Armor.MaxDexBonus);
-            BaseArmorClass = Armor.BaseAc + dex + (HasShield ? 2 : 0);
+            BaseArmorClass = Armor.BaseAc + dex + ShieldAcBonus + MagicArmorBonus;
         }
 
         public Ability? SpellcastingAbility => ClassData.SpellcastingAbility(Class);

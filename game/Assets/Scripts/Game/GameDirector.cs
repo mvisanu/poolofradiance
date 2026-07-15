@@ -90,7 +90,18 @@ namespace RadiantPool.Game
             { "longbow", 25 },
             { "leather_armor", 5 }, { "studded_leather", 22 }, { "scale_mail", 25 },
             { "half_plate", 375 }, { "chain_mail", 37 }, { "splint", 100 },
-            { "shield", 5 }, { "potion_healing", 25 }, { "torch", 1 }
+            { "shield", 5 }, { "potion_healing", 25 }, { "torch", 1 },
+            // Enchanted loot — half of list price, same rule as the mundane gear above.
+            { "dagger_1", 100 }, { "mace_1", 125 }, { "warhammer_1", 200 },
+            { "rapier_1", 250 }, { "longsword_1", 200 }, { "runed_staff_1", 200 },
+            { "runed_staff_2", 600 }, { "longbow_1", 450 }, { "greatsword_1", 500 },
+            { "greatsword_2", 1500 }, { "greataxe_2", 1250 },
+            { "studded_leather_1", 250 }, { "chain_mail_1", 400 }, { "half_plate_1", 750 },
+            { "splint_1", 600 }, { "splint_2", 2000 },
+            { "apprentice_robe", 100 }, { "warded_robe", 300 }, { "archmage_robe", 1500 },
+            { "shield_1", 150 }, { "shield_2", 450 }, { "warding_orb", 250 },
+            { "ring_warding", 150 }, { "ring_precision", 200 }, { "ring_protection_1", 500 },
+            { "ring_warrior", 600 }, { "ring_protection_2", 1500 }
         };
         public const int PotionBuyPrice = 50;
 
@@ -919,8 +930,20 @@ namespace RadiantPool.Game
                               + (shield ? GameItem.ShieldAcBonus : 0);
                         score = item.AcWith(dex, shield) - current;
                     }
-                    else if (item.Slot == ItemSlot.Shield && !hero.ShieldEquipped.Value)
-                        score = GameItem.ShieldAcBonus;
+                    else if (item.Slot == ItemSlot.Shield)
+                    {
+                        int cur = GameItem.Get(hero.OffhandId.Value)?.OffhandAcBonus ?? 0;
+                        score = item.OffhandAcBonus - cur;
+                    }
+                    else if (item.Slot == ItemSlot.Ring)
+                    {
+                        // A free ring finger is a clean gain; a boon ring beats no ring. To hit
+                        // and damage are worth a little less per point than raw AC here.
+                        bool freeSlot = string.IsNullOrEmpty(hero.Ring1Id.Value)
+                                        || string.IsNullOrEmpty(hero.Ring2Id.Value);
+                        score = (item.RingAc + 0.6f * (item.RingAttack + item.RingDamage)
+                                 + 0.4f * item.RingSave) * (freeSlot ? 1f : 0.5f);
+                    }
 
                     if (score > bestScore
                         || (System.Math.Abs(score - bestScore) < 0.001f
@@ -2294,8 +2317,9 @@ namespace RadiantPool.Game
             Stash.RemoveAt(idx);
             string previous = holder.ServerEquip(item);
             if (previous != null) Stash.Add(previous);
-            RpcNotice($"{holder.Sheet.Name} equips {item.Name}" +
-                      (item.Slot == ItemSlot.Armor ? $" (AC {holder.Sheet.ArmorClass})" : "") + ".");
+            RpcNotice($"{holder.Sheet.Name} equips {item.DisplayName}" +
+                      (item.Slot == ItemSlot.Armor || item.Slot == ItemSlot.Shield
+                       || item.Slot == ItemSlot.Ring ? $" (AC {holder.Sheet.ArmorClass})" : "") + ".");
             ServerSaveCampaign();
             return true;
         }

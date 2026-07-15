@@ -34,9 +34,28 @@ namespace RadiantPool.Game
             }
 
             if (item.Slot == ItemSlot.Shield)
-                return holder.ShieldEquipped.Value
-                    ? ("already equipped", Verdict.Same)
-                    : Delta(GameItem.ShieldAcBonus, "AC");
+            {
+                // The off hand: a shield's +2 (plus its enchantment) or a caster orb's plus,
+                // measured against whatever is already held there.
+                int cur = GameItem.Get(holder.OffhandId.Value)?.OffhandAcBonus ?? 0;
+                return Delta(item.OffhandAcBonus - cur, "AC");
+            }
+
+            if (item.Slot == ItemSlot.Ring)
+            {
+                bool free = string.IsNullOrEmpty(holder.Ring1Id.Value)
+                            || string.IsNullOrEmpty(holder.Ring2Id.Value);
+                if (free)
+                {
+                    string boons = item.StatLine();
+                    return (string.IsNullOrEmpty(boons) ? "a ring" : $"gain {boons}",
+                        Verdict.Better);
+                }
+                // Both fingers taken: the fair swap is against the weaker ring's AC.
+                int weaker = Mathf.Min(GameItem.Get(holder.Ring1Id.Value)?.RingAc ?? 0,
+                    GameItem.Get(holder.Ring2Id.Value)?.RingAc ?? 0);
+                return Delta(item.RingAc - weaker, "AC");
+            }
 
             if (item.Slot == ItemSlot.Weapon)
             {
