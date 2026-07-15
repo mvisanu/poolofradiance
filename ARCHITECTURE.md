@@ -93,6 +93,13 @@ RadiantPool.Rules/
   Loot.cs            // roll on LootTable JSON → item instances + gold
 ```
 
+Quest combat scales from the strongest connected human hero. Runtime monsters are one
+level below that hero (level 1 floor), while their canonical SRD definitions remain
+unchanged. `Difficulty.cs` applies the small level-based HP/stat adjustments at spawn and
+attack resolution. Required fights can reveal a level-matched challenge cache, and quest
+turn-ins resolve their equipment tier from the current hero level; when that tier contains
+a class-legal improvement, the server guarantees one upgrade before adding random rolls.
+
 Key contract: `TurnEngine.ExecuteAction` returns an **ordered event list**
 (`AttackRolled`, `DamageApplied`, `ConditionAdded`, `UnitDowned` …). The server applies
 events to authoritative state and broadcasts them; clients replay events for

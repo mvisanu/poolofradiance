@@ -19,6 +19,9 @@ namespace RadiantPool.Rules
         public int TempHp { get; private set; }
         public int Speed { get; set; } = 30;
         public int ProficiencyBonus { get; set; } = 2;
+        /// <summary>Runtime monster challenge level. PCs use CharacterSheet.Level; this
+        /// value exists so scaled quest monsters can remain separate from canonical data.</summary>
+        public int EncounterLevel { get; set; } = 1;
         public ConditionSet Conditions { get; } = new ConditionSet();
         public HashSet<Ability> SaveProficiencies { get; } = new HashSet<Ability>();
         public HashSet<DamageType> Resistances { get; } = new HashSet<DamageType>();

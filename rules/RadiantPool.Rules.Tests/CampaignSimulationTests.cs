@@ -91,7 +91,9 @@ namespace RadiantPool.Rules.Tests
             string[] monsterIds, IRng rng)
         {
             var monsters = monsterIds
-                .Select((id, i) => MonsterLibrary.Get(id).Spawn($"m{i}_{id}", rng))
+                .Select((id, i) => MonsterLibrary.Get(id).Spawn($"m{i}_{id}", rng,
+                    encounterLevel: Difficulty.TargetMonsterLevel(
+                        Math.Max(fighter.Level, cleric.Level))))
                 .ToList();
             var all = new List<Creature> { fighter, cleric };
             all.AddRange(monsters);

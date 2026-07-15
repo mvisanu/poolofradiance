@@ -17,15 +17,21 @@ namespace RadiantPool.Rules
         public string LootTable { get; set; } = "";
         public string SrdRef { get; set; } = "";   // per IP-CHECKLIST guardrail
 
-        public Creature Spawn(string instanceId, IRng rng, bool averageHp = false)
+        public Creature Spawn(string instanceId, IRng rng, bool averageHp = false,
+            int encounterLevel = 1)
         {
             var expr = DiceExpression.Parse(HpDice);
-            int hp = Difficulty.EaseMonsterHp(
-                averageHp ? expr.Average : expr.Roll(rng).Total);
-            var c = new Creature(instanceId, Name, Abilities, ArmorClass, System.Math.Max(1, hp))
+            int hp = Difficulty.ScaleMonsterHp(
+                averageHp ? expr.Average : expr.Roll(rng).Total, encounterLevel);
+            int level = System.Math.Max(1, encounterLevel);
+            var c = new Creature(instanceId, Name, Abilities,
+                ArmorClass + Difficulty.MonsterArmorBonus(level), System.Math.Max(1, hp))
             {
                 Speed = Speed,
-                IsPlayerCharacter = false
+                IsPlayerCharacter = false,
+                EncounterLevel = level,
+                ProficiencyBonus = ClassData.ProficiencyBonus(
+                    System.Math.Min(Progression.MaxLevel, level))
             };
             return c;
         }

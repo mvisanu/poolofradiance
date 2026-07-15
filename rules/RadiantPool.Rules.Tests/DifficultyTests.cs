@@ -43,5 +43,45 @@ namespace RadiantPool.Rules.Tests
             Assert.False(monsterMiss.Hit);
             Assert.Equal(12 - Difficulty.MonsterToHitPenalty, monsterMiss.Total);
         }
+
+        [Theory]
+        [InlineData(1, 1)]
+        [InlineData(2, 1)]
+        [InlineData(3, 2)]
+        [InlineData(4, 3)]
+        [InlineData(5, 4)]
+        [InlineData(99, 4)]
+        public void QuestMonsterLevel_IsOneBelowHero_WithLevelOneFloor(int hero, int monster)
+        {
+            Assert.Equal(monster, Difficulty.TargetMonsterLevel(hero));
+        }
+
+        [Fact]
+        public void HigherEncounterLevel_ScalesRuntimeStats_NotCanonicalDefinition()
+        {
+            var def = MonsterLibrary.Get("marsh_skulker");
+            int canonicalAc = def.ArmorClass;
+            var scaled = def.Spawn("scaled", new FixedRng(8, 8), encounterLevel: 4);
+
+            Assert.Equal(4, scaled.EncounterLevel);
+            Assert.Equal(Difficulty.ScaleMonsterHp(18, 4), scaled.MaxHp);
+            Assert.Equal(canonicalAc + Difficulty.MonsterArmorBonus(4), scaled.BaseArmorClass);
+            Assert.Equal(canonicalAc, def.ArmorClass); // source stat block stayed canonical
+        }
+
+        [Fact]
+        public void HigherEncounterLevel_AddsAttackPressureAndDamage()
+        {
+            var monster = new Creature("m", "Scaled monster",
+                new AbilityScores(10, 10, 10, 10, 10, 10), 12, 10)
+            { EncounterLevel = 4 };
+            var attack = new AttackDefinition("Claw", 5, "1d6", DamageType.Slashing);
+            var result = CombatMath.ResolveAttack(monster, Target(ac: 2), attack,
+                new FixedRng(10, 4));
+
+            Assert.Equal(10 + 5 - Difficulty.MonsterToHitPenalty
+                         + Difficulty.MonsterToHitBonus(4), result.Total);
+            Assert.Equal(4 + Difficulty.MonsterDamageBonus(4), result.DamageDealt);
+        }
     }
 }

@@ -119,6 +119,20 @@ Stop-Process -Id $travelProc.Id -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 $travelText = Get-Content $travelLog -Raw
 
+# Dynamic encounter/reward scaling gets a dedicated process because it raises its hero
+# to level 5 and starts a fight, which would interfere with the other self-tests.
+Write-Host "Starting encounter scaling instance (-scalingtest)..."
+$scalingLog = Join-Path $logDir "scaling.log"
+Remove-Item $scalingLog -ErrorAction SilentlyContinue
+$scalingSave = Join-Path $logDir "scalingsave"
+Remove-Item -Recurse -Force $scalingSave -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $scalingSave | Out-Null
+$scalingProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Iria","-autohost","-scalingtest","-savedir",$scalingSave,"-logFile",$scalingLog -PassThru
+Start-Sleep -Seconds 14
+Stop-Process -Id $scalingProc.Id -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+$scalingText = Get-Content $scalingLog -Raw
+
 # -attacktest gets its OWN host: it starts a real encounter, and a fight running underneath
 # the sell/level checks would fight them for the turn clock. One click on the FURTHEST enemy
 # must both close the distance and land the blow.
@@ -175,6 +189,9 @@ $checks = @(
     @{ Name = "campaign reaches every site and pays side/main quest rewards"; Ok = $travelText -match "\[TravelTest\] PASS - 27/27 sites reached; 27/27 encounter sets authored; 27/27 objectives anchored; site objective resolved; side/main rewards paid;.*27/27 hub returns" },
     @{ Name = "all installed environment packs dress the campaign"; Ok = $travelText -match "environment art RPG x[1-9][0-9]*, nature x[1-9][0-9]*, dungeon x[1-9][0-9]*, painted ground x22" },
     @{ Name = "campaign travel has no runtime exception"; Ok = $travelText -notmatch "Exception|\[TravelTest\] FAIL" },
+    @{ Name = "level-5 hero spawns level-4 quest monsters and tier-4 rewards"; Ok = $scalingText -match "\[ScalingTest\] PASS - hero L5 spawned monsters L4; authored tier1 -> tier4 items x2" },
+    @{ Name = "caster receives a real level-matched weapon upgrade"; Ok = $scalingText -match "Runed Staff caster upgrade ready" },
+    @{ Name = "encounter scaling has no runtime exception"; Ok = $scalingText -notmatch "Exception|\[ScalingTest\] FAIL" },
     @{ Name = "one click on a distant enemy closes in and attacks"; Ok = $fightText -match "\[AttackTest\] PASS" },
     @{ Name = "no failed attack assertion";        Ok = $fightText -notmatch "\[AttackTest\] FAIL" },
     @{ Name = "combat attack produces graphics and sound feedback"; Ok = $fightText -match "presentation FX/SFX" },
@@ -190,6 +207,6 @@ foreach ($c in $checks) {
     if ($c.Ok) { Write-Host "  PASS  $($c.Name)" -ForegroundColor Green }
     else { Write-Host "  FAIL  $($c.Name)" -ForegroundColor Red; $failed++ }
 }
-Write-Host "Logs: $hostLog | $clientLog | $recruitLog | $recruitRestoreLog | $migrationLog | $siteActionLog | $travelLog | $fightLog"
+Write-Host "Logs: $hostLog | $clientLog | $recruitLog | $recruitRestoreLog | $migrationLog | $siteActionLog | $travelLog | $scalingLog | $fightLog"
 if ($failed -gt 0) { exit 1 }
 Write-Host "Smoke test passed - two instances hosted, joined, and spawned characters." -ForegroundColor Green

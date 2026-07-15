@@ -85,7 +85,7 @@ namespace RadiantPool.Game
             new System.Collections.Generic.Dictionary<string, int>
         {
             { "dagger", 1 }, { "shortsword", 5 }, { "longsword", 7 }, { "mace", 2 },
-            { "quarterstaff", 1 }, { "light_crossbow", 12 }, { "shortbow", 12 },
+            { "quarterstaff", 1 }, { "runed_staff", 5 }, { "light_crossbow", 12 }, { "shortbow", 12 },
             { "rapier", 12 }, { "warhammer", 7 }, { "greatsword", 25 }, { "greataxe", 15 },
             { "longbow", 25 },
             { "leather_armor", 5 }, { "studded_leather", 22 }, { "scale_mail", 25 },
@@ -187,6 +187,8 @@ namespace RadiantPool.Game
                 StartCoroutine(RecruitmentRestoreSelfTest());
             if (System.Array.IndexOf(args, "-traveltest") >= 0)
                 StartCoroutine(CampaignTravelSelfTest());
+            if (System.Array.IndexOf(args, "-scalingtest") >= 0)
+                StartCoroutine(EncounterScalingSelfTest());
             if (System.Array.IndexOf(args, "-siteactiontest") >= 0)
                 StartCoroutine(SiteActionInputSelfTest());
             if (questLampCapture >= 0 && questLampCapture + 1 < args.Length)
@@ -861,21 +863,97 @@ namespace RadiantPool.Game
                     (items.Count > 0 ? $", {string.Join(", ", items)}" : "") + ".");
         }
 
-        /// <summary>Rolls a location-tiered quest parcel once, on the server. Table errors
-        /// are logged and contained so malformed content can never escape an RPC and kick
-        /// the player who turned in the quest.</summary>
+        private int PartyRewardLevel()
+        {
+            var levels = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .Where(p => !p.IsCompanion && p.Sheet != null)
+                .Select(p => p.Sheet.Level).ToArray();
+            return levels.Length == 0 ? 1 : levels.Max();
+        }
+
+        /// <summary>Find the strongest class-legal improvement in this reward tier for a
+        /// human hero. Already-stashed items are skipped so successive quests distribute
+        /// different options instead of repeatedly paying the same unequipped sword.</summary>
+        private string BestPartyUpgrade(LootTable table)
+        {
+            var heroes = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .Where(p => !p.IsCompanion && p.Sheet != null).ToArray();
+            string bestId = null;
+            float bestScore = 0.05f;
+            foreach (string id in table.Entries.Where(e => e.ItemId != null)
+                         .Select(e => e.ItemId).Distinct())
+            {
+                if (Stash.Contains(id)) continue;
+                var item = GameItem.Get(id);
+                if (item == null) continue;
+                foreach (var hero in heroes)
+                {
+                    if (!item.UsableBy(hero.Sheet.Class)) continue;
+                    int str = hero.Sheet.Abilities.Modifier(Ability.Str);
+                    int dex = hero.Sheet.Abilities.Modifier(Ability.Dex);
+                    float score = 0f;
+                    if (item.Slot == ItemSlot.Weapon)
+                    {
+                        var worn = GameItem.Get(hero.WeaponId.Value);
+                        score = item.AverageDamage(str, dex)
+                                - (worn?.AverageDamage(str, dex) ?? 0f);
+                    }
+                    else if (item.Slot == ItemSlot.Armor)
+                    {
+                        var worn = GameItem.Get(hero.ArmorId.Value);
+                        bool shield = hero.ShieldEquipped.Value;
+                        int current = worn != null
+                            ? worn.AcWith(dex, shield)
+                            : ArmorDefinition.Unarmored.BaseAc + dex
+                              + (shield ? GameItem.ShieldAcBonus : 0);
+                        score = item.AcWith(dex, shield) - current;
+                    }
+                    else if (item.Slot == ItemSlot.Shield && !hero.ShieldEquipped.Value)
+                        score = GameItem.ShieldAcBonus;
+
+                    if (score > bestScore
+                        || (System.Math.Abs(score - bestScore) < 0.001f
+                            && string.CompareOrdinal(id, bestId) < 0))
+                    {
+                        bestScore = score;
+                        bestId = id;
+                    }
+                }
+            }
+            return bestId;
+        }
+
+        /// <summary>Rolls a hero-level-matched quest parcel once, on the server. When the
+        /// tier contains a real equipment upgrade, the first item is guaranteed to be one;
+        /// remaining rolls stay random. Errors are contained so no RPC can kick a player.</summary>
         [Server]
         private string ServerAwardRewardLoot(string tableId)
         {
             if (string.IsNullOrEmpty(tableId)) return "";
             try
             {
+                int heroLevel = PartyRewardLevel();
+                string resolvedTable = LootLibrary.IsQuestTable(tableId)
+                    ? LootLibrary.QuestTableForCharacterLevel(heroLevel) : tableId;
                 var rng = new SeededRng(System.Environment.TickCount ^ PartyGold.Value
                     ^ CompletedSiteActions.Count ^ Stash.Count);
-                var roll = LootLibrary.Get(tableId).Roll(rng);
+                var table = LootLibrary.Get(resolvedTable);
+                var roll = table.Roll(rng);
+                var awarded = roll.ItemIds.ToList();
+                if (LootLibrary.IsQuestTable(resolvedTable))
+                {
+                    string upgrade = BestPartyUpgrade(table);
+                    if (!string.IsNullOrEmpty(upgrade) && !awarded.Contains(upgrade))
+                    {
+                        if (awarded.Count == 0) awarded.Add(upgrade);
+                        else awarded[0] = upgrade;
+                    }
+                }
                 PartyGold.Value += roll.Gold;
-                foreach (string item in roll.ItemIds) Stash.Add(item);
-                return string.Join(", ", roll.ItemIds.Select(id =>
+                foreach (string item in awarded) Stash.Add(item);
+                Debug.Log($"[QuestReward] hero L{heroLevel}: {tableId} -> {resolvedTable}; " +
+                          $"awarded {string.Join(",", awarded)}");
+                return string.Join(", ", awarded.Select(id =>
                 {
                     var item = GameItem.Get(id);
                     return item == null ? id.Replace('_', ' ') : item.Name;
@@ -1366,8 +1444,12 @@ namespace RadiantPool.Game
             bool walked = now != null && now.Cell != from;
             // The blow itself, in the combat log's own words — a spent action alone would
             // only prove that SOMETHING was done with it.
+            // Enemy HUD labels include the new runtime level suffix, while combat
+            // narration deliberately keeps the natural creature name.
+            int levelSuffix = enemy.Name.LastIndexOf(" (L", System.StringComparison.Ordinal);
+            string narratedEnemy = levelSuffix > 0 ? enemy.Name.Substring(0, levelSuffix) : enemy.Name;
             string blow = combat.Log.LastOrDefault(
-                l => l.Contains(mine.Name) && l.Contains(enemy.Name)) ?? "";
+                l => l.Contains(mine.Name) && l.Contains(narratedEnemy)) ?? "";
             bool struck = !combat.ActionLeft && blow.Length > 0;
             bool visualFeedback = CombatFx.Instance != null
                                   && CombatFx.Instance.CombatPresentationReady
@@ -1552,6 +1634,57 @@ namespace RadiantPool.Game
                       $"environment art RPG x{rpgPolyArt}, nature x{natureArt}, " +
                       $"dungeon x{dungeonArt}, painted ground x{paintedGround}; " +
                       $"{returned}/{Zones.Length} hub returns");
+        }
+
+        /// <summary>Built-player proof for the complete dynamic loop: a level-5 hero
+        /// receives tier-4 gear from an authored tier-1 quest parcel and spawns level-4
+        /// quest monsters. Kept isolated from attacktest because it starts its own fight.</summary>
+        private System.Collections.IEnumerator EncounterScalingSelfTest()
+        {
+            yield return new WaitForSeconds(8f);
+            var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => !p.IsCompanion && p.Sheet != null);
+            var combat = CombatManager.Instance;
+            if (holder == null || combat == null)
+            {
+                Debug.Log("[ScalingTest] FAIL - player or combat manager missing");
+                yield break;
+            }
+
+            ServerGrantXp(holder, ClassData.XpThresholds[Progression.MaxLevel - 1]
+                                  - holder.Sheet.Xp);
+            int stashBefore = Stash.Count;
+            string reward = ServerAwardRewardLoot("lt_quest_tier1");
+            var tier4 = LootLibrary.Get("lt_quest_tier4").Entries
+                .Where(e => e.ItemId != null).Select(e => e.ItemId).ToHashSet();
+            var newItems = Stash.Skip(stashBefore).ToArray();
+            bool rewardScaled = newItems.Length == LootLibrary.Get("lt_quest_tier4").Rolls
+                                && newItems.All(tier4.Contains);
+            var staff = GameItem.Get("runed_staff");
+            var quarterstaff = GameItem.Get("quarterstaff");
+            bool casterUpgrade = staff != null && quarterstaff != null
+                && staff.UsableBy(CharacterClass.Wizard)
+                && staff.AverageDamage(0, 0) > quarterstaff.AverageDamage(0, 0);
+
+            var trigger = FindObjectsByType<EncounterTrigger>(FindObjectsSortMode.None)
+                .FirstOrDefault(t => t.RequiredForClear);
+            if (trigger == null)
+            {
+                Debug.Log("[ScalingTest] FAIL - required encounter missing");
+                yield break;
+            }
+            combat.StartEncounter(trigger);
+            yield return new WaitForSeconds(0.5f);
+            bool monsterScaled = combat.InCombat.Value
+                && combat.EncounterCharacterLevel == Progression.MaxLevel
+                && combat.EncounterMonsterLevel == Progression.MaxLevel - 1
+                && combat.AllSpawnedMonstersMatchEncounterLevel;
+            bool pass = holder.Sheet.Level == Progression.MaxLevel
+                        && rewardScaled && casterUpgrade && monsterScaled;
+            Debug.Log($"[ScalingTest] {(pass ? "PASS" : "FAIL")} - hero L{holder.Sheet.Level} " +
+                      $"spawned monsters L{combat.EncounterMonsterLevel}; authored tier1 -> " +
+                      $"tier4 items x{newItems.Length} ({reward}); Runed Staff caster upgrade " +
+                      $"{(casterUpgrade ? "ready" : "missing")}");
         }
 
         /// <summary>Regression for the exact E-key path at The Watchers Below. Every

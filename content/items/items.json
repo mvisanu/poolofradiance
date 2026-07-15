@@ -11,6 +11,8 @@
       "weapon": { "damage": "1d6", "damageType": "bludgeoning", "properties": [], "rangeFeet": 5 } },
     { "id": "quarterstaff", "name": "Quarterstaff", "slot": "mainhand", "costCp": 20, "weight": 4,
       "weapon": { "damage": "1d6", "damageType": "bludgeoning", "properties": ["versatile"], "rangeFeet": 5 } },
+    { "id": "runed_staff", "name": "Runed Staff", "slot": "mainhand", "costCp": 1000, "weight": 4,
+      "weapon": { "damage": "1d8", "damageType": "bludgeoning", "properties": ["versatile", "twoHanded"], "rangeFeet": 5 } },
     { "id": "light_crossbow", "name": "Light Crossbow", "slot": "mainhand", "costCp": 2500, "weight": 5,
       "weapon": { "damage": "1d8", "damageType": "piercing", "properties": ["ammunition", "loading", "twoHanded"], "rangeFeet": 80 } },
     { "id": "shortbow", "name": "Shortbow", "slot": "mainhand", "costCp": 2500, "weight": 2,

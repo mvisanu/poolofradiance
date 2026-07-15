@@ -26,10 +26,10 @@
     { "id": "lt_quest_tier1", "gold": "0", "rolls": 1,
       "entries": [ { "weight": 40, "item": "potion_healing" }, { "weight": 20, "item": "shortbow" }, { "weight": 15, "item": "leather_armor" }, { "weight": 15, "item": "mace" }, { "weight": 10, "item": "shield" } ] },
     { "id": "lt_quest_tier2", "gold": "0", "rolls": 1,
-      "entries": [ { "weight": 20, "item": "potion_healing" }, { "weight": 18, "item": "rapier" }, { "weight": 17, "item": "studded_leather" }, { "weight": 17, "item": "warhammer" }, { "weight": 15, "item": "scale_mail" }, { "weight": 13, "item": "longsword" } ] },
+      "entries": [ { "weight": 14, "item": "potion_healing" }, { "weight": 16, "item": "rapier" }, { "weight": 16, "item": "studded_leather" }, { "weight": 16, "item": "warhammer" }, { "weight": 13, "item": "scale_mail" }, { "weight": 10, "item": "longsword" }, { "weight": 15, "item": "runed_staff" } ] },
     { "id": "lt_quest_tier3", "gold": "0", "rolls": 1,
-      "entries": [ { "weight": 20, "item": "potion_healing" }, { "weight": 20, "item": "greatsword" }, { "weight": 18, "item": "longbow" }, { "weight": 17, "item": "greataxe" }, { "weight": 15, "item": "half_plate" }, { "weight": 10, "item": "studded_leather" } ] },
+      "entries": [ { "weight": 14, "item": "potion_healing" }, { "weight": 18, "item": "greatsword" }, { "weight": 16, "item": "longbow" }, { "weight": 15, "item": "greataxe" }, { "weight": 14, "item": "half_plate" }, { "weight": 9, "item": "studded_leather" }, { "weight": 14, "item": "runed_staff" } ] },
     { "id": "lt_quest_tier4", "gold": "0", "rolls": 2,
-      "entries": [ { "weight": 15, "item": "potion_healing" }, { "weight": 18, "item": "greatsword" }, { "weight": 17, "item": "longbow" }, { "weight": 17, "item": "greataxe" }, { "weight": 18, "item": "half_plate" }, { "weight": 15, "item": "splint" } ] }
+      "entries": [ { "weight": 10, "item": "potion_healing" }, { "weight": 17, "item": "greatsword" }, { "weight": 15, "item": "longbow" }, { "weight": 15, "item": "greataxe" }, { "weight": 16, "item": "half_plate" }, { "weight": 14, "item": "splint" }, { "weight": 13, "item": "runed_staff" } ] }
   ]
 }

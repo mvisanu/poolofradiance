@@ -69,9 +69,51 @@ namespace RadiantPool.Rules
     /// LootTests pins that gradient; if a table is retuned, the ceiling must not fall.</summary>
     public static class LootLibrary
     {
+        public const int BaseEncounterGearChance = 30;
+        public const int EncounterGearChancePerLevel = 10;
+
         public static readonly IReadOnlyDictionary<string, LootTable> All = Build();
 
         public static LootTable Get(string id) => All[id];
+
+        /// <summary>Reward tier follows the hero's resulting monster level: level 1-2
+        /// heroes receive tier 1, then each higher hero level advances one tier.</summary>
+        public static string QuestTableForCharacterLevel(int characterLevel)
+        {
+            int threat = Difficulty.TargetMonsterLevel(characterLevel);
+            if (threat <= 1) return "lt_quest_tier1";
+            if (threat == 2) return "lt_quest_tier2";
+            if (threat == 3) return "lt_quest_tier3";
+            return "lt_quest_tier4";
+        }
+
+        public static bool IsQuestTable(string tableId) =>
+            tableId != null && tableId.StartsWith("lt_quest_tier",
+                StringComparison.Ordinal);
+
+        public static int EncounterGearChancePercent(int characterLevel) =>
+            Math.Min(75, BaseEncounterGearChance
+                + Difficulty.TargetMonsterLevel(characterLevel) * EncounterGearChancePerLevel);
+
+        /// <summary>Required quest fights can add one level-matched gear item. This is a
+        /// single roll even when the turn-in table grants two items at tier 4.</summary>
+        public static LootResult RollScaledEncounterReward(int characterLevel, IRng rng)
+        {
+            if (rng.Next(1, 100) > EncounterGearChancePercent(characterLevel))
+                return new LootResult(0, Array.Empty<string>());
+            var table = Get(QuestTableForCharacterLevel(characterLevel));
+            int total = table.Entries.Sum(e => e.Weight);
+            int pick = rng.Next(1, total);
+            foreach (var entry in table.Entries)
+            {
+                pick -= entry.Weight;
+                if (pick > 0) continue;
+                return entry.ItemId == null
+                    ? new LootResult(0, Array.Empty<string>())
+                    : new LootResult(0, new[] { entry.ItemId });
+            }
+            return new LootResult(0, Array.Empty<string>());
+        }
 
         private static Dictionary<string, LootTable> Build()
         {
@@ -115,14 +157,17 @@ namespace RadiantPool.Rules
                     { (40, "potion_healing"), (20, "shortbow"), (15, "leather_armor"),
                       (15, "mace"), (10, "shield") }),
                 new LootTable("lt_quest_tier2", "0", 1, new (int, string?)[]
-                    { (20, "potion_healing"), (18, "rapier"), (17, "studded_leather"),
-                      (17, "warhammer"), (15, "scale_mail"), (13, "longsword") }),
+                    { (14, "potion_healing"), (16, "rapier"), (16, "studded_leather"),
+                      (16, "warhammer"), (13, "scale_mail"), (10, "longsword"),
+                      (15, "runed_staff") }),
                 new LootTable("lt_quest_tier3", "0", 1, new (int, string?)[]
-                    { (20, "potion_healing"), (20, "greatsword"), (18, "longbow"),
-                      (17, "greataxe"), (15, "half_plate"), (10, "studded_leather") }),
+                    { (14, "potion_healing"), (18, "greatsword"), (16, "longbow"),
+                      (15, "greataxe"), (14, "half_plate"), (9, "studded_leather"),
+                      (14, "runed_staff") }),
                 new LootTable("lt_quest_tier4", "0", 2, new (int, string?)[]
-                    { (15, "potion_healing"), (18, "greatsword"), (17, "longbow"),
-                      (17, "greataxe"), (18, "half_plate"), (15, "splint") }),
+                    { (10, "potion_healing"), (17, "greatsword"), (15, "longbow"),
+                      (15, "greataxe"), (16, "half_plate"), (14, "splint"),
+                      (13, "runed_staff") }),
             };
             return tables.ToDictionary(t => t.Id);
         }

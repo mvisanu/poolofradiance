@@ -65,10 +65,18 @@ namespace RadiantPool.Game
         private TurnEngine _engine;
         private IRng _rng;
         private EncounterTrigger _encounter;
+        private int _encounterCharacterLevel = 1;
+        private int _encounterMonsterLevel = 1;
         private Vector3 _origin;
         private bool _turnDone;
         private GameObject _overlay;
         private Material _gridMaterial;
+
+        public int EncounterCharacterLevel => _encounterCharacterLevel;
+        public int EncounterMonsterLevel => _encounterMonsterLevel;
+        public bool AllSpawnedMonstersMatchEncounterLevel => _server.Values
+            .Where(u => u.MonsterDef != null)
+            .All(u => u.Creature.EncounterLevel == _encounterMonsterLevel);
 
         private void Awake() => Instance = this;
         private void Start()
@@ -108,6 +116,13 @@ namespace RadiantPool.Game
                 .Where(p => p.Sheet != null && !p.Sheet.IsDead).ToList();
             if (players.Count == 0) return;
 
+            // Scale from the strongest connected hero, not an AI companion. This prevents
+            // a high-level player from bringing level-1 enemies into co-op while ensuring
+            // companions never raise the difficulty above their leader.
+            _encounterCharacterLevel = players.Where(p => !p.IsCompanion)
+                .Select(p => p.Sheet.Level).DefaultIfEmpty(players.Max(p => p.Sheet.Level)).Max();
+            _encounterMonsterLevel = Difficulty.TargetMonsterLevel(_encounterCharacterLevel);
+
             int i = 0;
             foreach (var p in players)
             {
@@ -124,7 +139,8 @@ namespace RadiantPool.Game
             foreach (var monsterId in encounter.MonsterIds)
             {
                 var def = MonsterLibrary.Get(monsterId);
-                var creature = def.Spawn($"m{m}_{monsterId}", _rng);
+                var creature = def.Spawn($"m{m}_{monsterId}", _rng,
+                    encounterLevel: _encounterMonsterLevel);
                 _server[creature.Id] = new ServerUnit
                 {
                     Id = creature.Id, Creature = creature, MonsterDef = def,
@@ -142,14 +158,16 @@ namespace RadiantPool.Game
             var ordered = _engine.InitiativeOrder.Select(c => _server[c.Id]).ToList();
             RpcCombatStarted(_origin,
                 ordered.Select(u => u.Id).ToArray(),
-                ordered.Select(u => u.Creature.Name).ToArray(),
+                ordered.Select(u => u.MonsterDef == null ? u.Creature.Name
+                    : $"{u.Creature.Name} (L{u.Creature.EncounterLevel})").ToArray(),
                 ordered.Select(u => u.Player != null).ToArray(),
                 ordered.Select(u => u.Creature.MaxHp).ToArray(),
                 ordered.Select(u => u.Creature.CurrentHp).ToArray(),
                 ordered.Select(u => u.Cell.x).ToArray(),
                 ordered.Select(u => u.Cell.y).ToArray(),
                 ordered.Select(u => u.Player != null ? u.Player.OwnerId : -1).ToArray());
-            ServerLog($"Ambush at {encounter.DisplayName}! Roll initiative.");
+            ServerLog($"Ambush at {encounter.DisplayName}! Level {_encounterMonsterLevel} " +
+                      $"enemies challenge the level-{_encounterCharacterLevel} party. Roll initiative.");
             RpcSfx("combat_start");
             StartCoroutine(TurnLoop());
         }
@@ -481,6 +499,18 @@ namespace RadiantPool.Game
                     var bonus = LootLibrary.Get(_encounter.BonusLootTable).Roll(_rng);
                     gold += bonus.Gold;
                     items.AddRange(bonus.ItemIds);
+                }
+                // Required quest fights can reveal one level-matched equipment cache in
+                // addition to canonical creature drops. The rules library owns the chance
+                // and tier so late play through an early branch still feels rewarding.
+                if (_encounter != null && _encounter.RequiredForClear)
+                {
+                    var scaled = LootLibrary.RollScaledEncounterReward(
+                        _encounterCharacterLevel, _rng);
+                    items.AddRange(scaled.ItemIds);
+                    if (scaled.ItemIds.Count > 0)
+                        ServerLog($"Challenge cache (level {_encounterCharacterLevel}): " +
+                                  string.Join(", ", scaled.ItemIds.Select(PrettyItem)) + ".");
                 }
                 GameDirector.Instance?.ServerAddLoot(gold, items);
                 GameDirector.Instance?.ServerEncounterCleared(_encounter);

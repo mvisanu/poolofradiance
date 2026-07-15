@@ -60,6 +60,34 @@ namespace RadiantPool.Rules.Tests
             Assert.Contains("half_plate", tier3);
             Assert.Contains("splint", tier4);
             Assert.Equal(2, LootLibrary.Get("lt_quest_tier4").Rolls);
+            Assert.Contains("runed_staff", tier2);
+        }
+
+        [Theory]
+        [InlineData(1, "lt_quest_tier1")]
+        [InlineData(2, "lt_quest_tier1")]
+        [InlineData(3, "lt_quest_tier2")]
+        [InlineData(4, "lt_quest_tier3")]
+        [InlineData(5, "lt_quest_tier4")]
+        public void RewardTier_FollowsHeroLevel(int level, string expected)
+        {
+            Assert.Equal(expected, LootLibrary.QuestTableForCharacterLevel(level));
+        }
+
+        [Fact]
+        public void RequiredFightCache_ImprovesInChanceAndTier()
+        {
+            Assert.True(LootLibrary.EncounterGearChancePercent(5)
+                        > LootLibrary.EncounterGearChancePercent(1));
+
+            // L5 chance is 70%; the pass roll then selects the final tier-4 entry.
+            var reward = LootLibrary.RollScaledEncounterReward(5, new FixedRng(70, 100));
+            Assert.Single(reward.ItemIds);
+            Assert.Equal("runed_staff", reward.ItemIds[0]);
+
+            // L1 chance is 40%; 41 misses and consumes no item roll.
+            Assert.Empty(LootLibrary.RollScaledEncounterReward(1,
+                new FixedRng(41)).ItemIds);
         }
 
         [Fact]
@@ -73,6 +101,7 @@ namespace RadiantPool.Rules.Tests
             Assert.Contains("warhammer", all);         // cleric: d8 blunt over the mace
             Assert.Contains("studded_leather", all);   // rogue: light AC 12 over leather
             Assert.Contains("greatsword", all);        // fighter: 2d6
+            Assert.Contains("runed_staff", all);       // wizard: d8 over quarterstaff d6
         }
 
         [Fact]

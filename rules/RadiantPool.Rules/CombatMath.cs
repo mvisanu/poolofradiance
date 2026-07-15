@@ -74,9 +74,12 @@ namespace RadiantPool.Rules
             var d20 = Dice.RollD20(rng, advantage);
             int blessBonus = attacker.Conditions.Has(ConditionType.Blessed)
                 ? rng.Next(1, 4) : 0;
-            // Monster-side difficulty easing (see Difficulty.cs); PCs attack at full SRD.
+            // Runtime quest scaling and global easing both live in Difficulty.cs. PCs
+            // continue to attack at full SRD values.
             int easing = attacker.IsPlayerCharacter ? 0 : Difficulty.MonsterToHitPenalty;
-            int total = d20.Value + attack.ToHitBonus + blessBonus - easing;
+            int scaling = attacker.IsPlayerCharacter ? 0
+                : Difficulty.MonsterToHitBonus(attacker.EncounterLevel);
+            int total = d20.Value + attack.ToHitBonus + blessBonus - easing + scaling;
 
             bool hit = !d20.IsNat1 && (d20.IsNat20 || total >= target.ArmorClass);
             bool crit = hit && (d20.IsNat20 || pointBlankOnHelpless);
@@ -86,6 +89,8 @@ namespace RadiantPool.Rules
 
             bool wasDown = target.IsDown;
             int damage = RollDamage(attack.Damage, crit, rng);
+            if (!attacker.IsPlayerCharacter)
+                damage += Difficulty.MonsterDamageBonus(attacker.EncounterLevel);
             var outcome = target.TakeDamage(damage, attack.DamageType);
             // Crit damage while at 0 HP = two failures total; TakeDamage recorded one.
             if (crit && wasDown && !target.IsDead)

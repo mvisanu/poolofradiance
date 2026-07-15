@@ -67,9 +67,9 @@ namespace RadiantPool.Game
             // a rapier is the rogue's over the shortsword. A fighter uses anything.
             ItemSlot.Weapon => c switch
             {
-                CharacterClass.Wizard => Id is "dagger" or "quarterstaff",
+                CharacterClass.Wizard => Id is "dagger" or "quarterstaff" or "runed_staff",
                 CharacterClass.Rogue => Finesse || Id is "shortbow" or "light_crossbow",
-                CharacterClass.Cleric => Id is "mace" or "warhammer" or "quarterstaff"
+                CharacterClass.Cleric => Id is "mace" or "warhammer" or "quarterstaff" or "runed_staff"
                                           or "light_crossbow" or "dagger",
                 _ => true
             },
@@ -105,6 +105,11 @@ namespace RadiantPool.Game
                     HandModel = "axe_1handed" },
                 new GameItem { Id = "quarterstaff", Name = "Quarterstaff", Slot = ItemSlot.Weapon,
                     Damage = "1d6", DamageType = DamageType.Bludgeoning,
+                    HandModel = "staff" },
+                // Its d8 is the SRD versatile quarterstaff die, represented as a
+                // dedicated two-handed adventuring staff for caster progression.
+                new GameItem { Id = "runed_staff", Name = "Runed Staff", Slot = ItemSlot.Weapon,
+                    Damage = "1d8", DamageType = DamageType.Bludgeoning,
                     HandModel = "staff" },
                 new GameItem { Id = "light_crossbow", Name = "Light Crossbow", Slot = ItemSlot.Weapon,
                     Damage = "1d8", DamageType = DamageType.Piercing, RangeFeet = 80,
@@ -172,7 +177,7 @@ namespace RadiantPool.Game
                 CharacterClass.Cleric => tier >= 2 ? "warhammer" : "mace",
                 CharacterClass.Rogue => tier >= 2 ? "rapier"
                     : source != null && source.RangeFeet > 5 ? "shortbow" : "shortsword",
-                CharacterClass.Wizard => "quarterstaff",
+                CharacterClass.Wizard => tier >= 2 ? "runed_staff" : "quarterstaff",
                 _ => "dagger"
             };
         }
@@ -199,7 +204,7 @@ namespace RadiantPool.Game
 
         public static int WeaponTier(string id) => id switch
         {
-            "rapier" or "warhammer" => 2,
+            "rapier" or "warhammer" or "runed_staff" => 2,
             "greatsword" or "greataxe" or "longbow" => 3,
             _ => 1
         };
