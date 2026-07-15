@@ -114,6 +114,8 @@ namespace RadiantPool.Game
                 ? args[capture + 1] : "";
             if (System.Array.IndexOf(args, "-creaturetest") >= 0 || capturePath.Length > 0)
                 StartCoroutine(CreatureVisualSelfTest(capturePath));
+            if (System.Array.IndexOf(args, "-animationtest") >= 0)
+                StartCoroutine(AnimationPackSelfTest());
         }
 
         private void OnDestroy()
@@ -831,14 +833,50 @@ namespace RadiantPool.Game
             _actionQueueRunning = false;
         }
 
+        private static string CombatAnimationTrigger(AttackDefinition attack)
+        {
+            if (attack.AnimationTrigger != "Attack") return attack.AnimationTrigger;
+
+            // Elemental/occult attacks read as a spell even when represented by a
+            // monster AttackDefinition. Physical missiles use the archer draw/release.
+            if (attack.DamageType is DamageType.Fire or DamageType.Cold
+                or DamageType.Lightning or DamageType.Thunder or DamageType.Acid
+                or DamageType.Radiant or DamageType.Necrotic or DamageType.Force
+                or DamageType.Psychic)
+                return "Cast";
+            string name = attack.Name.ToLowerInvariant();
+            // Ten-foot reach is still a melee swing (for example a giant's
+            // greatblade); true thrown spears at 30+ feet use the ranged motion.
+            if (attack.RangeFeet <= 10 && (name.Contains("great")
+                || name.Contains("cleaver") || name.Contains("staff")
+                || name.Contains("spear") || name.Contains("lance")))
+                return "Attack2H";
+            if (attack.RangeFeet > 5) return "AttackRanged";
+            return "Attack1H";
+        }
+
+        /// <summary>Minimum windups match the pack's authored Hit events: knight ~0.32 s,
+        /// archer ~0.40 s, mage ~0.56 s, and the weightier two-hander ~0.63 s.</summary>
+        private static double CombatAnimationImpactDelay(string trigger) => trigger switch
+        {
+            "Attack2H" => 0.63,
+            "AttackRanged" => 0.40,
+            "Cast" => 0.56,
+            "Attack1H" => 0.32,
+            _ => 0.25,
+        };
+
         [Server]
         private IEnumerator ResolvePhysicalAction(ServerUnit attacker, ServerUnit target,
             AttackDefinition attack)
         {
-            RpcAttackWindup(attacker.Id, target.Id, attack.AnimationTrigger,
+            string animationTrigger = CombatAnimationTrigger(attack);
+            RpcAttackWindup(attacker.Id, target.Id, animationTrigger,
                 attack.RequiresApproach);
+            double visualImpactDelay = Math.Max(attack.ImpactDelaySeconds,
+                CombatAnimationImpactDelay(animationTrigger));
             var timeline = new CombatActionTimeline(Time.time,
-                attack.ImpactDelaySeconds, Math.Max(2.0, attack.ImpactDelaySeconds + 1.5));
+                visualImpactDelay, Math.Max(2.0, visualImpactDelay + 1.5));
             while (!timeline.TryTakeImpact(Time.time))
             {
                 if (timeline.TimedOut(Time.time)) break;
@@ -885,8 +923,10 @@ namespace RadiantPool.Game
             bool healing = spell.Effects.Any(e => e.Kind == EffectOpKind.Heal);
             RpcSpellWindup(caster.Id, target.Id, spell.Id, spell.AnimationTrigger,
                 spell.SoundEffectId, healing, SpellColor(spell));
+            double visualImpactDelay = Math.Max(spell.ImpactDelaySeconds,
+                CombatAnimationImpactDelay(spell.AnimationTrigger));
             var timeline = new CombatActionTimeline(Time.time,
-                spell.ImpactDelaySeconds, Math.Max(2.0, spell.ImpactDelaySeconds + 1.5));
+                visualImpactDelay, Math.Max(2.0, visualImpactDelay + 1.5));
             while (!timeline.TryTakeImpact(Time.time))
             {
                 if (timeline.TimedOut(Time.time)) break;
@@ -1647,6 +1687,93 @@ namespace RadiantPool.Game
                 maxY = Mathf.Max(maxY, renderer.bounds.max.y);
             }
             return Mathf.Clamp(maxY - root.position.y + 0.25f, 1.25f, 4.5f);
+        }
+
+        private static bool HasAnimatorState(Animator animator, string state) =>
+            animator != null && animator.HasState(0,
+                Animator.StringToHash($"Base Layer.{state}"));
+
+        private static bool TriggerReachesState(Transform root, string trigger, string state)
+        {
+            var animator = CharacterVisuals.AnimatorOf(root);
+            if (animator == null) return false;
+            animator.Rebind();
+            animator.Update(0f);
+            CharacterVisuals.Trigger(root, trigger);
+            animator.Update(0.1f);
+            var current = animator.GetCurrentAnimatorStateInfo(0);
+            var next = animator.GetNextAnimatorStateInfo(0);
+            return current.IsName(state) || current.IsName($"Base Layer.{state}")
+                || next.IsName(state) || next.IsName($"Base Layer.{state}");
+        }
+
+        /// <summary>Built-player proof that licensed clips survived import/build,
+        /// humanoid retargeting is valid, and both a party body and a humanoid monster
+        /// body respond to the weapon-specific triggers used by real combat.</summary>
+        private IEnumerator AnimationPackSelfTest()
+        {
+            yield return new WaitForSeconds(8f);
+            var partyRoot = new GameObject("AnimationTest_Party");
+            var monsterRoot = new GameObject("AnimationTest_Monster");
+            partyRoot.transform.position = Vector3.down * 100f;
+            monsterRoot.transform.position = Vector3.down * 100f;
+            var partyVisual = CharacterVisuals.Attach(partyRoot.transform, "Knight");
+            // Ranger is the Marsh Skulker's actual humanoid monster model.
+            var monsterVisual = CharacterVisuals.Attach(monsterRoot.transform, "Ranger");
+            yield return null;
+
+            var partyAnimator = CharacterVisuals.AnimatorOf(partyRoot.transform);
+            var monsterAnimator = CharacterVisuals.AnimatorOf(monsterRoot.transform);
+            string[] expectedClips =
+            {
+                "Warrior_1H_Attack", "Warrior_2H_Attack",
+                "Warrior_Ranged_Attack", "Warrior_Cast"
+            };
+            var partyController = partyAnimator != null
+                ? partyAnimator.runtimeAnimatorController : null;
+            var monsterController = monsterAnimator != null
+                ? monsterAnimator.runtimeAnimatorController : null;
+            bool assets = partyController != null && monsterController != null
+                && expectedClips.All(name => partyController
+                    .animationClips.Any(clip => clip != null && clip.name == name))
+                && expectedClips.All(name => monsterController
+                    .animationClips.Any(clip => clip != null && clip.name == name));
+            bool humanoid = partyAnimator != null && partyAnimator.avatar != null
+                && partyAnimator.avatar.isValid && partyAnimator.avatar.isHuman
+                && monsterAnimator != null && monsterAnimator.avatar != null
+                && monsterAnimator.avatar.isValid && monsterAnimator.avatar.isHuman;
+            bool states = new[] { "Attack1H", "Attack2H", "AttackRanged", "Cast" }
+                .All(state => HasAnimatorState(partyAnimator, state)
+                           && HasAnimatorState(monsterAnimator, state));
+            bool partyAction = TriggerReachesState(partyRoot.transform,
+                "Attack1H", "Attack1H");
+            bool monsterAction = TriggerReachesState(monsterRoot.transform,
+                "AttackRanged", "AttackRanged");
+
+            bool styles = CombatAnimationTrigger(new AttackDefinition(
+                    "Longsword", 5, "1d8+3", DamageType.Slashing)) == "Attack1H"
+                && CombatAnimationTrigger(new AttackDefinition(
+                    "Greatsword", 5, "2d6+3", DamageType.Slashing)) == "Attack2H"
+                && CombatAnimationTrigger(new AttackDefinition(
+                    "Cinder Greatblade", 11, "6d6+7", DamageType.Slashing, 10)) == "Attack2H"
+                && CombatAnimationTrigger(new AttackDefinition(
+                    "Shortbow", 5, "1d6+3", DamageType.Piercing, 80)) == "AttackRanged"
+                && CombatAnimationTrigger(new AttackDefinition(
+                    "Stormglass Ray", 5, "3d8", DamageType.Lightning, 90)) == "Cast";
+            bool timings = Math.Abs(CombatAnimationImpactDelay("Attack1H") - 0.32) < 0.001
+                && Math.Abs(CombatAnimationImpactDelay("Attack2H") - 0.63) < 0.001
+                && Math.Abs(CombatAnimationImpactDelay("AttackRanged") - 0.40) < 0.001
+                && Math.Abs(CombatAnimationImpactDelay("Cast") - 0.56) < 0.001;
+            bool pass = partyVisual != null && monsterVisual != null && assets && humanoid
+                && states && partyAction && monsterAction && styles && timings;
+            Debug.Log($"[AnimationPackTest] {(pass ? "PASS" : "FAIL")} - " +
+                      $"licensed clips {(assets ? "4/4" : "MISSING")}, " +
+                      $"humanoid avatars {humanoid}, states {states}, " +
+                      $"party 1H {partyAction}, monster ranged {monsterAction}, " +
+                      $"styles {styles}, hit timings {timings}");
+
+            Destroy(partyRoot);
+            Destroy(monsterRoot);
         }
 
         /// <summary>Instantiates the actual ResolveVisual path for every rules-library

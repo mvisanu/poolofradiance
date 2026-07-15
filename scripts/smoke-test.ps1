@@ -30,7 +30,7 @@ Write-Host "Starting host instance..."
 # The host drives sale/progression/equipment/atmosphere checks plus a complete monster
 # gallery: every rules-library creature must resolve to supported visible renderers, valid
 # bounds above ground, and no capsule fallback.
-$hostProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Anna","-autohost","-selltest","-leveltest","-weapontest","-atmospheretest","-creaturetest","-questguidancetest","-savedir",$saveDir,"-logFile",$hostLog -PassThru
+$hostProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Anna","-autohost","-selltest","-leveltest","-weapontest","-atmospheretest","-creaturetest","-animationtest","-questguidancetest","-savedir",$saveDir,"-logFile",$hostLog -PassThru
 # Join before the host's delayed self-tests begin mutating scene state. Waiting until all
 # gallery/quest checks had run made a late client reconcile against a changed scene.
 Start-Sleep -Seconds 4
@@ -219,6 +219,8 @@ $checks = @(
     @{ Name = "world atlas hierarchy has no structural failure"; Ok = $hostText -notmatch "\[WorldMap\] FAIL" },
     @{ Name = "every creature mapping produces a visible real model"; Ok = $hostText -match "\[CreatureTest\] PASS - all creature visuals 23/23 visible, mappings 23/23" },
     @{ Name = "no failed creature visual or capsule fallback"; Ok = $hostText -notmatch "\[CreatureTest\] FAIL|falling back to a capsule" },
+    @{ Name = "Warrior Pack drives party and humanoid monster combat states"; Ok = $hostText -match "\[AnimationPackTest\] PASS - licensed clips 4/4, humanoid avatars True, states True, party 1H True, monster ranged True, styles True, hit timings True" },
+    @{ Name = "Warrior Pack integration has no failed assertion"; Ok = $hostText -notmatch "\[AnimationPackTest\] FAIL" },
     @{ Name = "armed combat NPC weapons are visible"; Ok = $fightText -match "\[WeaponTest\] PASS - combat NPCs" },
     @{ Name = "no failed combat weapon assertion"; Ok = $fightText -notmatch "\[WeaponTest\] FAIL" },
     @{ Name = "player explicitly chooses tank, healer, and damage companions"; Ok = $recruitText -match "\[RecruitTest\] PASS - chose tank/healer/damage" },

@@ -22,7 +22,7 @@ namespace RadiantPool.EditorTools
                 Debug.LogWarning("[Bootstrap] No KayKit assets found; characters stay capsules.");
                 return;
             }
-            SetupMaterialsAndImport();
+            SetupMaterialsAndImport(WarriorPackArt.Available);
             var controller = BuildAnimator();
             BuildPrefabs(controller);
             BuildWeaponPrefabs();
@@ -49,7 +49,7 @@ namespace RadiantPool.EditorTools
             }
         }
 
-        private static void SetupMaterialsAndImport()
+        private static void SetupMaterialsAndImport(bool useHumanoidRetargeting)
         {
             foreach (string folder in new[] { "Characters", "Skeletons" })
             {
@@ -80,6 +80,15 @@ namespace RadiantPool.EditorTools
 
                     var importer = (ModelImporter)AssetImporter.GetAtPath(path);
                     bool changed = false;
+                    // KayKit defaults to Generic. The Warrior Pack is Humanoid, so opt
+                    // party and skeleton bodies into Mecanim retargeting only when the
+                    // complete local licensed motion set is present.
+                    if (useHumanoidRetargeting
+                        && importer.animationType != ModelImporterAnimationType.Human)
+                    {
+                        importer.animationType = ModelImporterAnimationType.Human;
+                        changed = true;
+                    }
                     var embedded = AssetDatabase.LoadAllAssetsAtPath(path)
                         .OfType<Material>().Select(m => m.name).Distinct();
                     var map = importer.GetExternalObjectMap();
@@ -128,6 +137,13 @@ namespace RadiantPool.EditorTools
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
                 var importer = (ModelImporter)AssetImporter.GetAtPath(path);
+                bool importerChanged = false;
+                if (useHumanoidRetargeting
+                    && importer.animationType != ModelImporterAnimationType.Human)
+                {
+                    importer.animationType = ModelImporterAnimationType.Human;
+                    importerChanged = true;
+                }
                 var clips = importer.defaultClipAnimations;
                 if (clips.Length == 0) continue;
                 bool changed = false;
@@ -137,7 +153,7 @@ namespace RadiantPool.EditorTools
                         || clip.name.Contains("Running");
                     if (shouldLoop && !clip.loopTime) { clip.loopTime = true; changed = true; }
                 }
-                if (changed || importer.clipAnimations.Length == 0)
+                if (changed || importerChanged || importer.clipAnimations.Length == 0)
                 {
                     importer.clipAnimations = clips;
                     AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
@@ -169,6 +185,9 @@ namespace RadiantPool.EditorTools
             var controller = AnimatorController.CreateAnimatorControllerAtPath(ControllerPath);
             controller.AddParameter("Speed", AnimatorControllerParameterType.Float);
             controller.AddParameter("Attack", AnimatorControllerParameterType.Trigger);
+            controller.AddParameter("Attack1H", AnimatorControllerParameterType.Trigger);
+            controller.AddParameter("Attack2H", AnimatorControllerParameterType.Trigger);
+            controller.AddParameter("AttackRanged", AnimatorControllerParameterType.Trigger);
             controller.AddParameter("Cast", AnimatorControllerParameterType.Trigger);
             controller.AddParameter("Victory", AnimatorControllerParameterType.Trigger);
             controller.AddParameter("Hit", AnimatorControllerParameterType.Trigger);
@@ -183,14 +202,27 @@ namespace RadiantPool.EditorTools
             sm.defaultState = idle;
             var move = sm.AddState("Move");
             move.motion = FindClip(clips, "Walking_A", "Walking", "Running") ?? idle.motion;
+            // The public KayKit free tier has no melee clips. When the locally licensed
+            // Warrior Pack is installed, all four authored motions retarget onto these
+            // Humanoid bodies. Every state retains the old action fallback for clean
+            // builds on machines that do not own/import the pack.
+            var fallbackAttack = FindClip(clips, "1H_Melee_Attack_Slice", "1H_Melee_Attack",
+                "Melee_Attack", "Attack", "Throw", "Interact") ?? idle.motion;
             var attack = sm.AddState("Attack");
-            // Free tier ships no melee clip; Interact/Jump read as an action, and the
-            // lunge+weapon carry the rest. Never leave the state empty (it freezes).
-            attack.motion = FindClip(clips, "1H_Melee_Attack_Slice", "1H_Melee_Attack",
-                "Melee_Attack", "Attack", "Throw", "Interact")
-                ?? idle.motion;
+            attack.motion = WarriorPackArt.Get(WarriorPackArt.Motion.OneHanded)
+                ?? fallbackAttack;
+            var attack1H = sm.AddState("Attack1H");
+            attack1H.motion = WarriorPackArt.Get(WarriorPackArt.Motion.OneHanded)
+                ?? fallbackAttack;
+            var attack2H = sm.AddState("Attack2H");
+            attack2H.motion = WarriorPackArt.Get(WarriorPackArt.Motion.TwoHanded)
+                ?? fallbackAttack;
+            var attackRanged = sm.AddState("AttackRanged");
+            attackRanged.motion = WarriorPackArt.Get(WarriorPackArt.Motion.Ranged)
+                ?? fallbackAttack;
             var cast = sm.AddState("Cast");
-            cast.motion = FindClip(clips, "Spellcast", "Spell", "Magic", "Throw", "Interact")
+            cast.motion = WarriorPackArt.Get(WarriorPackArt.Motion.Cast)
+                ?? FindClip(clips, "Spellcast", "Spell", "Magic", "Throw", "Interact")
                 ?? attack.motion ?? idle.motion;
             var victory = sm.AddState("Victory");
             victory.motion = FindClip(clips, "Victory", "Cheer", "Dance", "Interact")
@@ -210,7 +242,9 @@ namespace RadiantPool.EditorTools
             toIdle.duration = 0.12f;
 
             Debug.Log($"[Bootstrap] Animator clips — idle:{idle.motion?.name} " +
-                $"move:{move.motion?.name} attack:{attack.motion?.name} " +
+                $"move:{move.motion?.name} 1h:{attack1H.motion?.name} " +
+                $"2h:{attack2H.motion?.name} ranged:{attackRanged.motion?.name} " +
+                $"cast:{cast.motion?.name} " +
                 $"hit:{hit.motion?.name} death:{dead.motion?.name}");
 
             var anyAttack = sm.AddAnyStateTransition(attack);
@@ -222,6 +256,10 @@ namespace RadiantPool.EditorTools
             attackDone.hasExitTime = true;
             attackDone.exitTime = 0.9f;
             attackDone.duration = 0.1f;
+
+            AddAction(sm, attack1H, idle, "Attack1H");
+            AddAction(sm, attack2H, idle, "Attack2H");
+            AddAction(sm, attackRanged, idle, "AttackRanged");
 
             var anyCast = sm.AddAnyStateTransition(cast);
             anyCast.AddCondition(AnimatorConditionMode.If, 0, "Cast");
@@ -266,6 +304,20 @@ namespace RadiantPool.EditorTools
             revive.duration = 0.1f;
 
             return controller;
+        }
+
+        private static void AddAction(AnimatorStateMachine sm, AnimatorState action,
+            AnimatorState idle, string trigger)
+        {
+            var enter = sm.AddAnyStateTransition(action);
+            enter.AddCondition(AnimatorConditionMode.If, 0, trigger);
+            enter.hasExitTime = false;
+            enter.duration = 0.05f;
+            enter.canTransitionToSelf = false;
+            var done = action.AddTransition(idle);
+            done.hasExitTime = true;
+            done.exitTime = 0.9f;
+            done.duration = 0.1f;
         }
 
         private static void BuildPrefabs(AnimatorController controller)

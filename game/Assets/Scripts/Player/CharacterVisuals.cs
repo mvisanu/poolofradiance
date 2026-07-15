@@ -144,9 +144,12 @@ namespace RadiantPool.Game
                 if (parameter.type == AnimatorControllerParameterType.Trigger
                     && parameter.name == trigger)
                 { found = true; break; }
-            // Imported models may not have the dedicated Cast trigger yet. Attack is the
-            // safe authored fallback and avoids Animator's noisy missing-parameter error.
-            if (!found && (trigger == "Cast" || trigger == "Victory"))
+            // Native creature rigs and clean clones without the licensed Warrior Pack
+            // may not expose the weapon-specific triggers. Their authored Attack state
+            // remains the safe fallback and avoids Animator missing-parameter errors.
+            if (!found && (trigger == "Cast" || trigger == "Victory"
+                           || trigger == "Attack1H" || trigger == "Attack2H"
+                           || trigger == "AttackRanged"))
             {
                 trigger = "Attack";
                 foreach (var parameter in animator.parameters)

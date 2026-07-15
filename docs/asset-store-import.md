@@ -28,6 +28,7 @@ small set of hand-painted ground textures in one command:
 ```powershell
 python scripts/install-environment-assets.py
 python scripts/install-graveyard-assets.py
+python scripts/install-warrior-animations.py
 ```
 
 The installers read Unity's local Asset Store cache and install RPG Poly Pack Lite,
@@ -42,6 +43,7 @@ clean, swamp, civic, or corrupted terrain for each site theme.
 
 | Pack | Wire-up |
 |---|---|
+| [Warrior Pack Bundle 2 FREE](https://assetstore.unity.com/packages/3d/animations/warrior-pack-bundle-2-free-42454) | Download only, then run `python scripts/install-warrior-animations.py`. It selectively extracts the one-handed, two-handed, archer, and mage attacks into ignored `Assets/LocalLicensed/WarriorPack2`; no legacy controller/input/demo code enters the project. Bootstrap retargets them to KayKit Humanoid bodies, and combat selects the matching motion for party members and humanoid monsters. `-animationtest` proves all four clips, both body roles, trigger states, and authored hit timings survived the player build. |
 | [RPG & MMO UI 7](https://assetstore.unity.com/packages/2d/gui/rpg-mmo-ui-7-114435) | In Package Manager > My Assets click **Download only**, close this project's editor, then run `scripts/import-rpg-mmo-ui7.ps1`. The selective installer preserves all 286 image assets locally, excludes the package's legacy scripts/prefabs/demo scenes, and `RpgMmoUi7Art` bakes 19 semantic IMGUI roles into ignored `Assets/Resources/UI/RpgMmoUi7`. `Theme.Apply()` carries the skin across title, character creation, inventory, journal, settings, level-up, session, vendor/smith/NPC/travel/objective panels, quest/minimap HUD, hotbar, and combat UI. The package has no live font files; all UI7 controls use the bundled OFL stack: MedievalSharp titles, Source Serif controls, Inter body/fields. Verify the built player with `RadiantPool.exe -uiskincapture <png>`; it logs `[UiSkinTest] PASS - 19/19 roles` plus the typography assertion. |
 | PBR Graveyard and Nature Set 2.0 | In Package Manager > My Assets click **Download only**, close this project's editor, then run `python scripts/install-graveyard-assets.py`. It installs 29 authored architecture, grave, rock, foliage, root, and tree prefabs plus only their dependencies. `PolyPackArt` uses authored prefabs (not internal FBX submeshes), recovers PBR maps from serialized material slots, converts them to URP Lit, and makes this pack the dominant remote-site perimeter. Crypt and necropolis sites also receive scaled grave rings. |
 | [FREE RPG Fantasy Spell Icons](https://assetstore.unity.com/packages/2d/gui/icons/free-rpg-fantasy-spell-icons-200511) | Overwrite the same-named PNGs in `Assets/Resources/SpellIcons/` (`fire_bolt.png`, `magic_missile.png`, `burning_hands.png`, `sleep.png`, `sacred_flame.png`, `guiding_bolt.png`, `cure_wounds.png`, `healing_word.png`, `bless.png`, `attack.png`, `dodge.png`, `cast.png`, `end_turn.png`). Current icons are CC-BY game-icons.net placeholders. |

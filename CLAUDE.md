@@ -28,6 +28,9 @@ scripts/build-installer.ps1
 # IP banned-term gate:
 scripts/ip-scan.ps1
 
+# Selectively install the owned Warrior Pack's four combat FBXs (licensed/gitignored):
+python scripts/install-warrior-animations.py
+
 # Rebuild the self-made beast models (bear, rat) — writes FBX + preview PNGs:
 & "C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" -b -P scripts/make_beasts.py
 ```
@@ -49,7 +52,9 @@ temporary quest states; it also asserts three simultaneous active commissions pr
 exactly one `[WorldMapObjectiveTest]` X. `-uiskincapture <png>` renders the title/character-creation screen,
 asserts all 26 RPG & MMO UI 7 skin roles are present, captures it without input, then quits;
 `-savedir <dir>` keeps a test run off the real campaign.
-Player log (first place to look when the user reports bugs):
+`-animationtest` verifies all four licensed clips, valid Humanoid retargeting, style
+selection/hit timing, and real party + monster trigger transitions. Player log (first
+place to look when the user reports bugs):
 `%USERPROFILE%\AppData\LocalLow\RadiantPool\Radiant Pool\Player.log`.
 
 **Verify gameplay with those flags — never by driving the window.** The user is at this
@@ -332,6 +337,14 @@ mouse and the self-test drive the very same code.
   already-downloaded `.blend` files via headless Blender
   (`blender -b file.blend -P blend2fbx.py`, FBX export with
   `bake_anim_use_all_actions`) over re-fetching FBX from Drive.
+- **Warrior Pack Bundle 2 FREE** stays licensed and gitignored. Run
+  `scripts/install-warrior-animations.py`, which extracts only Knight/2Handed/Archer/Mage
+  `Attack1` FBXs — never its legacy controllers, input code, demo scenes, or models.
+  `WarriorPackArt` assigns stable semantic clips and switches KayKit bodies to Humanoid
+  retargeting. The shared controller exposes `Attack1H`, `Attack2H`, `AttackRanged`, and
+  `Cast`; `CombatManager.CombatAnimationTrigger` chooses by damage/range/weapon words and
+  aligns impact to the pack's authored Hit event. Generic/native creature controllers
+  fall back through `CharacterVisuals.Trigger` to their own `Attack` state.
 - **PS 5.1 mangles embedded double quotes** passed to native exes — `git commit -m`
   with `"quoted"` text inside the message splits into bogus pathspecs. Keep commit
   messages free of double quotes.

@@ -36,6 +36,7 @@ namespace RadiantPool.EditorTools
             PolyPackArt.Invalidate();      // re-scan: the pack may have just been imported
             PolyPackArt.SetupMaterials();  // Asset Store packs ship Standard mats: magenta in URP
             KenneyArt.SetupMaterials();
+            WarriorPackArt.Setup();    // licensed humanoid attacks, if selectively installed
             KayKitArt.Setup();
             QuaterniusArt.Setup();
             GeneratedArt.Setup();   // bear + rat: the CC0 packs have neither
