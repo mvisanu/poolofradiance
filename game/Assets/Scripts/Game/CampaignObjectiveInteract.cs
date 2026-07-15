@@ -11,6 +11,13 @@ namespace RadiantPool.Game
         public int ZoneIndex = -1;
         public float InteractRange = 4.5f;
 
+        // There are objective anchors at every campaign site, but they all share one
+        // SiteAction panel. Only the anchor that opened it may close it; otherwise every
+        // distant anchor closes the local anchor's panel later in the same frame.
+        private static CampaignObjectiveInteract _panelOwner;
+
+        public bool OwnsOpenPanel => _panelOwner == this && Ui.IsOpen(Ui.Panel.SiteAction);
+
         private PlayerCharacterHolder LocalHolder() =>
             FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
                 .FirstOrDefault(p => p.IsOwner);
@@ -36,12 +43,42 @@ namespace RadiantPool.Game
             bool combat = CombatManager.Instance != null && CombatManager.Instance.InCombat.Value;
             if (combat || !InRange() || !Ready(director))
             {
-                Ui.Close(Ui.Panel.SiteAction);
+                if (_panelOwner == this) CloseOwnedPanel();
                 return;
             }
             if (!Input.GetKeyDown(KeyCode.E) || Ui.Typing) return;
-            if (Ui.PanelOpen && !Ui.IsOpen(Ui.Panel.SiteAction)) return;
-            Ui.Toggle(Ui.Panel.SiteAction);
+            TryInteract();
+        }
+
+        /// <summary>The one definition of pressing E at a campaign objective. Runtime
+        /// input and the built-player regression both use this method.</summary>
+        public bool TryInteract()
+        {
+            var director = GameDirector.Instance;
+            bool combat = CombatManager.Instance != null && CombatManager.Instance.InCombat.Value;
+            if (combat || !InRange() || !Ready(director)) return false;
+            if (Ui.PanelOpen && !Ui.IsOpen(Ui.Panel.SiteAction)) return false;
+
+            if (OwnsOpenPanel)
+                CloseOwnedPanel();
+            else
+            {
+                _panelOwner = this;
+                Ui.Show(Ui.Panel.SiteAction);
+            }
+            return true;
+        }
+
+        private void CloseOwnedPanel()
+        {
+            if (_panelOwner != this) return;
+            Ui.Close(Ui.Panel.SiteAction);
+            _panelOwner = null;
+        }
+
+        private void OnDisable()
+        {
+            if (_panelOwner == this) CloseOwnedPanel();
         }
 
         private void OnGUI()
@@ -64,6 +101,7 @@ namespace RadiantPool.Game
                 }
                 return;
             }
+            if (_panelOwner != this) return;
 
             var rect = Ui.Fit(520f, 320f);
             GUILayout.BeginArea(rect, Theme.PanelStyle);
@@ -71,7 +109,7 @@ namespace RadiantPool.Game
             GUILayout.Label(cfg.QuestName, Theme.Header);
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("X", GUILayout.Width(30f), GUILayout.Height(24f)))
-                Ui.Close(Ui.Panel.SiteAction);
+                CloseOwnedPanel();
             GUILayout.EndHorizontal();
             GUILayout.Space(12f);
             GUILayout.Label(cfg.SiteAction, Theme.Body);
@@ -96,7 +134,7 @@ namespace RadiantPool.Game
         private void Resolve(GameDirector director, int choice)
         {
             director.CmdResolveSiteAction(ZoneIndex, choice);
-            Ui.Close(Ui.Panel.SiteAction);
+            CloseOwnedPanel();
         }
     }
 }

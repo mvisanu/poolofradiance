@@ -187,6 +187,8 @@ namespace RadiantPool.Game
                 StartCoroutine(RecruitmentRestoreSelfTest());
             if (System.Array.IndexOf(args, "-traveltest") >= 0)
                 StartCoroutine(CampaignTravelSelfTest());
+            if (System.Array.IndexOf(args, "-siteactiontest") >= 0)
+                StartCoroutine(SiteActionInputSelfTest());
             if (questLampCapture >= 0 && questLampCapture + 1 < args.Length)
                 StartCoroutine(QuestLampCapture(args[questLampCapture + 1]));
             if (nextQuestCapture >= 0 && nextQuestCapture + 1 < args.Length)
@@ -969,7 +971,7 @@ namespace RadiantPool.Game
             yield return new WaitForSeconds(8f);   // a character has to spawn first
 
             var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
-                .FirstOrDefault(p => !p.IsCompanion && p.Owner != null && p.Owner.IsValid);
+                .FirstOrDefault(p => !p.IsCompanion && p.IsOwner);
             var vendor = FindFirstObjectByType<VendorInteract>();
             if (holder == null || vendor == null)
             {
@@ -986,7 +988,7 @@ namespace RadiantPool.Game
             yield return null;
             Debug.Log($"[SellTest] seller {Vector3.Distance(holder.transform.position, vendor.transform.position):0.0}m " +
                       $"from {vendor.VendorName}");
-            CmdSellItem(itemId);   // host: runs the same ServerRpc a client would send
+            CmdSellItem(itemId);   // host owner: the same ServerRpc a real client sends
             yield return new WaitForSeconds(0.5f);
 
             int expected = goldBefore + SellValue[itemId];
@@ -1017,7 +1019,7 @@ namespace RadiantPool.Game
             yield return new WaitForSeconds(8f);
 
             var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
-                .FirstOrDefault(p => !p.IsCompanion && p.Owner != null && p.Owner.IsValid);
+                .FirstOrDefault(p => !p.IsCompanion && p.IsOwner);
             if (holder == null || holder.Sheet == null)
             {
                 Debug.Log("[LevelTest] FAIL - no player character");
@@ -1046,7 +1048,7 @@ namespace RadiantPool.Game
             var ability = RadiantPool.Rules.Ability.Con;
             int before = sheet.Abilities[ability];
             int pointsBefore = sheet.PendingAbilityPoints;
-            CmdSpendAbilityPoint((int)ability);   // host: the same ServerRpc a client sends
+            CmdSpendAbilityPoint((int)ability); // host owner: same ServerRpc a client sends
             yield return new WaitForSeconds(0.3f);
 
             bool spent = sheet.Abilities[ability] == before + 1
@@ -1541,6 +1543,47 @@ namespace RadiantPool.Game
                       $"site objective {(actionResolved ? "resolved" : "failed")}; " +
                       $"side/main rewards {(rewardPaid ? "paid" : "failed")}; " +
                       $"{returned}/{Zones.Length} hub returns");
+        }
+
+        /// <summary>Regression for the exact E-key path at The Watchers Below. Every
+        /// campaign objective gets Update(), so this must survive a frame in which all
+        /// distant anchors also run before the spectral-watch choice is resolved.</summary>
+        private System.Collections.IEnumerator SiteActionInputSelfTest()
+        {
+            yield return new WaitForSeconds(8f);
+            int zone = System.Array.FindIndex(Zones, z => z.ZoneId == "drowned_bastion");
+            var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => !p.IsCompanion && p.Owner != null && p.Owner.IsValid);
+            var objective = FindObjectsByType<CampaignObjectiveInteract>(FindObjectsSortMode.None)
+                .FirstOrDefault(o => o.ZoneIndex == zone);
+            int anchors = FindObjectsByType<CampaignObjectiveInteract>(FindObjectsSortMode.None).Length;
+            if (zone < 0 || holder == null || objective == null)
+            {
+                Debug.Log("[SiteActionInputTest] FAIL - Drowned Bastion player or objective missing");
+                yield break;
+            }
+
+            Ui.CloseAll();
+            ZoneStates[zone] = (int)QuestState.Active;
+            ZoneClearedCounts[zone] = Zones[zone].RequiredEncounters;
+            Warp(holder.transform, objective.transform.position + Vector3.right * 1.5f);
+            yield return null;
+
+            bool accepted = objective.TryInteract();
+            yield return null; // every other CampaignObjectiveInteract.Update gets a turn
+            bool panelStayedOpen = objective.OwnsOpenPanel;
+            CmdResolveSiteAction(zone, 0, holder.Owner);
+            yield return new WaitForSeconds(0.25f);
+            bool resolved = IsSiteActionComplete(zone)
+                            && GetZoneState(zone) == QuestState.ObjectivesMet
+                            && SiteActionResult(zone) == Zones[zone].ChoiceA;
+            Ui.CloseAll();
+
+            bool pass = anchors > 1 && accepted && panelStayedOpen && resolved;
+            Debug.Log($"[SiteActionInputTest] {(pass ? "PASS" : "FAIL")} - " +
+                      $"E opened the spectral-watch choice and it survived {anchors - 1} " +
+                      $"distant objective updates; decision " +
+                      $"{(resolved ? $"recorded as '{SiteActionResult(zone)}'" : "NOT RECORDED")}");
         }
 
         /// <summary>Screenshot-only QA path: park north of the council forecourt, face the

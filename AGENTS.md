@@ -33,7 +33,8 @@ Build output: `game/Builds/Win64/RadiantPool.exe`. Exe flags for automation:
 `-name <n> -autohost` / `-name <n> -autojoin localhost`; **self-tests** `-selltest`
 (bag → trader → purse), `-leveltest` (XP → level → point spent), `-attacktest` (one click on
 a distant enemy → walk → blow), `-warpsmith` (park at the smithy so a shop panel can be
-LOOKED at); `-savedir <dir>` keeps a test run off the real campaign.
+LOOKED at), `-siteactiontest` (Watcher Below E panel → choice → saved decision);
+`-savedir <dir>` keeps a test run off the real campaign.
 Player log (first place to look when the user reports bugs):
 `%USERPROFILE%\AppData\LocalLow\RadiantPool\Radiant Pool\Player.log`.
 
@@ -295,6 +296,11 @@ mouse and the self-test drive the very same code.
   last sets it, so any panel that prints `GUI.tooltip` prints the *other* panel's hint — the
   hotbar spent a build rendering the minimap's "Show map (M)" across the health readout. Gate
   it on your own rect: `if (GUI.tooltip.Length > 0 && MyRect.Contains(Ui.Mouse))`.
+- **Shared panels need an owner.** Every `CampaignObjectiveInteract` runs `Update`, including
+  the 26 anchors the player is nowhere near. They used to all call `Ui.Close(SiteAction)`
+  when out of range, so the nearby spectral-watch objective opened on E and a distant anchor
+  closed it in the same frame. Only `CampaignObjectiveInteract._panelOwner` may close that
+  shared panel; input and `-siteactiontest` both drive `TryInteract`.
 - **A narrow IMGUI button has no room for its own icon.** The skin's padding is subtracted from
   the button's width, so a 24 px button hands its `GUIContent` image a ~4 px content box and the
   icon renders invisible (the 46 px slots next to it were fine). Draw the texture OVER the

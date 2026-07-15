@@ -90,6 +90,21 @@ Stop-Process -Id $migrationProc.Id -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 $migrationText = Get-Content $migrationLog -Raw
 
+# The Watchers Below gets its own input-path test. It opens the spectral-watch panel
+# through CampaignObjectiveInteract.TryInteract (the same method E calls), lets every
+# distant objective run Update once, then resolves the authored choice on the server.
+Write-Host "Starting site-action input instance (-siteactiontest)..."
+$siteActionLog = Join-Path $logDir "site-action.log"
+Remove-Item $siteActionLog -ErrorAction SilentlyContinue
+$siteActionSave = Join-Path $logDir "siteactionsave"
+Remove-Item -Recurse -Force $siteActionSave -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $siteActionSave | Out-Null
+$siteActionProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Galen","-autohost","-siteactiontest","-savedir",$siteActionSave,"-logFile",$siteActionLog -PassThru
+Start-Sleep -Seconds 14
+Stop-Process -Id $siteActionProc.Id -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+$siteActionText = Get-Content $siteActionLog -Raw
+
 # Campaign waystones move the whole party through a server-validated route. Keep this
 # isolated because it deliberately teleports the host out of, and back into, the hub.
 Write-Host "Starting campaign travel instance (-traveltest)..."
@@ -155,6 +170,8 @@ $checks = @(
     @{ Name = "completed four-zone save unlocks the next quest"; Ok = $migrationText -match "\[CampaignMigration\] PASS.+Beyond the Lightwell" },
     @{ Name = "new quest has a live Ashen Ward waypoint"; Ok = $migrationText -match "\[NextQuestWaypointTest\] PASS.+target 'The Ashen Ward'" },
     @{ Name = "save migration has no runtime exception"; Ok = $migrationText -notmatch "Exception|\[CampaignMigration\] FAIL" },
+    @{ Name = "Watcher Below E panel survives all distant objective updates"; Ok = $siteActionText -match "\[SiteActionInputTest\] PASS.+E opened the spectral-watch choice.+decision recorded as 'Honor their oath'" },
+    @{ Name = "Watcher Below site action has no runtime exception"; Ok = $siteActionText -notmatch "Exception|\[SiteActionInputTest\] FAIL" },
     @{ Name = "campaign reaches every site and pays side/main quest rewards"; Ok = $travelText -match "\[TravelTest\] PASS - 27/27 sites reached; 27/27 encounter sets authored; 27/27 objectives anchored; site objective resolved; side/main rewards paid; 27/27 hub returns" },
     @{ Name = "campaign travel has no runtime exception"; Ok = $travelText -notmatch "Exception|\[TravelTest\] FAIL" },
     @{ Name = "one click on a distant enemy closes in and attacks"; Ok = $fightText -match "\[AttackTest\] PASS" },
@@ -172,6 +189,6 @@ foreach ($c in $checks) {
     if ($c.Ok) { Write-Host "  PASS  $($c.Name)" -ForegroundColor Green }
     else { Write-Host "  FAIL  $($c.Name)" -ForegroundColor Red; $failed++ }
 }
-Write-Host "Logs: $hostLog | $clientLog | $recruitLog | $recruitRestoreLog | $migrationLog | $travelLog | $fightLog"
+Write-Host "Logs: $hostLog | $clientLog | $recruitLog | $recruitRestoreLog | $migrationLog | $siteActionLog | $travelLog | $fightLog"
 if ($failed -gt 0) { exit 1 }
 Write-Host "Smoke test passed - two instances hosted, joined, and spawned characters." -ForegroundColor Green
