@@ -151,4 +151,66 @@ namespace RadiantPool.Game
             return dict;
         }
     }
+
+    /// <summary>Maps the recruiting player's equipped gear onto each hire. Exact items are
+    /// copied whenever the hire's class can use them; otherwise the hire gets the closest
+    /// class-legal item from the same progression tier. That keeps the party equally geared
+    /// without putting a wizard in splint or handing a rogue a greataxe.</summary>
+    public static class CompanionLoadout
+    {
+        public static string WeaponFor(CharacterClass hireClass, string leaderWeaponId)
+        {
+            var source = GameItem.Get(leaderWeaponId);
+            if (source != null && source.Slot == ItemSlot.Weapon && source.UsableBy(hireClass))
+                return source.Id;
+
+            int tier = WeaponTier(leaderWeaponId);
+            return hireClass switch
+            {
+                CharacterClass.Fighter => tier >= 3 ? "greatsword"
+                    : tier >= 2 ? "warhammer" : "longsword",
+                CharacterClass.Cleric => tier >= 2 ? "warhammer" : "mace",
+                CharacterClass.Rogue => tier >= 2 ? "rapier"
+                    : source != null && source.RangeFeet > 5 ? "shortbow" : "shortsword",
+                CharacterClass.Wizard => "quarterstaff",
+                _ => "dagger"
+            };
+        }
+
+        public static string ArmorFor(CharacterClass hireClass, string leaderArmorId)
+        {
+            var source = GameItem.Get(leaderArmorId);
+            if (source == null || source.Slot != ItemSlot.Armor)
+                return "";
+            if (source.UsableBy(hireClass)) return source.Id;
+
+            int tier = ArmorTier(leaderArmorId);
+            return hireClass switch
+            {
+                CharacterClass.Rogue => tier >= 2 ? "studded_leather" : "leather_armor",
+                CharacterClass.Wizard => "",
+                _ => tier >= 4 ? "splint" : tier >= 3 ? "half_plate"
+                    : tier >= 2 ? "scale_mail" : "leather_armor"
+            };
+        }
+
+        public static bool ShieldFor(CharacterClass hireClass, bool leaderHasShield) =>
+            leaderHasShield && GameItem.Get("shield").UsableBy(hireClass);
+
+        public static int WeaponTier(string id) => id switch
+        {
+            "rapier" or "warhammer" => 2,
+            "greatsword" or "greataxe" or "longbow" => 3,
+            _ => 1
+        };
+
+        public static int ArmorTier(string id) => id switch
+        {
+            "studded_leather" => 2,
+            "half_plate" => 3,
+            "splint" => 4,
+            "leather_armor" or "scale_mail" or "chain_mail" => 1,
+            _ => 0
+        };
+    }
 }

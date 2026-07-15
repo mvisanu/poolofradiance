@@ -437,6 +437,15 @@ namespace RadiantPool.Game
             int needed = RadiantPool.Rules.PartyComposition.MaxPartySize - holders.Count;
             if (needed <= 0) { RpcNotice("The party is already full."); return; }
 
+            // The recruiting player's progression/loadout is the parity source. Server-side
+            // self-tests have no RPC connection, so fall back to the highest-level real PC.
+            var leader = holders.FirstOrDefault(h => !h.IsCompanion && h.Owner == conn)
+                         ?? holders.Where(h => !h.IsCompanion)
+                             .OrderByDescending(h => h.Sheet.Level)
+                             .ThenByDescending(h => h.Sheet.Xp)
+                             .FirstOrDefault();
+            if (leader == null) { RpcNotice("No adventurer is available to lead the hires."); return; }
+
             var classes = RadiantPool.Rules.PartyComposition.Recruits(
                 holders.Select(h => h.Sheet.Class), needed);
 
@@ -449,10 +458,8 @@ namespace RadiantPool.Game
             int spawned = 0;
             foreach (var cls in classes)
             {
-                var anchor = holders.FirstOrDefault(h => !h.IsCompanion);
-                Vector3 pos = anchor != null
-                    ? anchor.transform.position + new Vector3(1.5f + spawned, 0.2f, -1.5f)
-                    : new Vector3(0, 0.2f, -8);
+                Vector3 pos = leader.transform.position
+                    + new Vector3(1.5f + spawned, 0.2f, -1.5f);
                 var nob = Instantiate(CompanionPrefab, pos, Quaternion.identity);
                 var holder = nob.GetComponent<PlayerCharacterHolder>();
                 string name = spawned < namePool.Count
@@ -464,6 +471,7 @@ namespace RadiantPool.Game
                 // callbacks, permanently) exposed ClassIndex=-1, leaving the prefab's
                 // placeholder capsule visible instead of attaching the class model.
                 holder.ServerInitCompanion(name, (int)cls);
+                ServerMatchCompanionToLeader(holder, leader);
                 var identity = nob.GetComponent<PlayerIdentity>();
                 if (identity != null) identity.ServerSetName(name);
                 FishNet.InstanceFinder.ServerManager.Spawn(nob);   // no owner = server AI
@@ -889,6 +897,22 @@ namespace RadiantPool.Game
                 yield break;
             }
 
+            var leader = players[0];
+            int levelFiveXp = RadiantPool.Rules.ClassData.XpThresholds[4];
+            if (leader.Sheet.Xp < levelFiveXp)
+                ServerGrantXp(leader, levelFiveXp - leader.Sheet.Xp);
+            switch (leader.Sheet.Class)
+            {
+                case RadiantPool.Rules.CharacterClass.Fighter:
+                    leader.ServerSetEquipment("greatsword", "splint", false); break;
+                case RadiantPool.Rules.CharacterClass.Cleric:
+                    leader.ServerSetEquipment("warhammer", "half_plate", true); break;
+                case RadiantPool.Rules.CharacterClass.Rogue:
+                    leader.ServerSetEquipment("rapier", "studded_leather", false); break;
+                default:
+                    leader.ServerSetEquipment("quarterstaff", "", false); break;
+            }
+
             // Match the user's save: muster and every quest are complete, but the player
             // keeps clearing optional encounters under standing orders.
             MusterState.Value = (int)QuestState.Completed;
@@ -910,16 +934,36 @@ namespace RadiantPool.Game
                 return item != null && CharacterVisuals.HasHandItem(
                     p.transform, "r", item.HandModel);
             });
+            int levelMatched = hired.Count(p => p.Sheet.Level == leader.Sheet.Level
+                                                && p.Sheet.Xp == leader.Sheet.Xp);
+            int equipmentMatched = hired.Count(p =>
+                p.WeaponId.Value == CompanionLoadout.WeaponFor(
+                    p.Sheet.Class, leader.WeaponId.Value)
+                && p.ArmorId.Value == CompanionLoadout.ArmorFor(
+                    p.Sheet.Class, leader.ArmorId.Value)
+                && p.ShieldEquipped.Value == CompanionLoadout.ShieldFor(
+                    p.Sheet.Class, leader.ShieldEquipped.Value)
+                && GameItem.Get(p.WeaponId.Value).UsableBy(p.Sheet.Class)
+                && (p.ArmorId.Value.Length == 0
+                    || GameItem.Get(p.ArmorId.Value).UsableBy(p.Sheet.Class)));
             int party = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
                 .Count(p => p.Sheet != null);
+            bool parity = levelMatched == companions && equipmentMatched == companions;
             bool pass = offered == 3 && companions == 3
                         && modeled == companions && armed == companions
+                        && levelMatched == companions && equipmentMatched == companions
                         && party == RadiantPool.Rules.PartyComposition.MaxPartySize
                         && NpcInteract.AvailableRecruitSlots() == 0;
             Debug.Log($"[RecruitTest] {(pass ? "PASS" : "FAIL")} - post-campaign solo " +
                       $"offer {offered} slot(s), spawned {companions} companion(s), " +
+                      $"level/XP parity {levelMatched}/{companions} at level {leader.Sheet.Level}, " +
+                      $"equipment parity {equipmentMatched}/{companions}, " +
                       $"models {modeled}/{companions}, weapons {armed}/{companions}, " +
                       $"party {party}/{RadiantPool.Rules.PartyComposition.MaxPartySize}");
+            Debug.Log($"[RecruitParityTest] {(parity ? "PASS" : "FAIL")} - " +
+                string.Join("; ", hired.Select(p =>
+                    $"{p.Sheet.Name} L{p.Sheet.Level} {p.WeaponId.Value}/" +
+                    $"{(p.ArmorId.Value.Length > 0 ? p.ArmorId.Value : "unarmored")}")));
         }
 
         /// <summary>Unattended combat check (`RadiantPool.exe -autohost -attacktest`, asserted
@@ -977,7 +1021,15 @@ namespace RadiantPool.Game
             }
 
             bool blockedApproach = combat.ServerArrangeBlockedApproachForTest(mine.Id, enemy.Id);
-            yield return null;   // let the forced blocker reach the client-side board view
+            yield return new WaitForSeconds(0.2f); // board view + tactical light settle
+
+            var atmosphere = WorldAtmosphere.Instance;
+            bool combatLit = atmosphere != null && atmosphere.CombatVisibilityReady;
+            Debug.Log($"[CombatLightTest] {(combatLit ? "PASS" : "FAIL")} - " +
+                      $"fill {atmosphere?.CombatLightIntensity ?? 0f:0.00} at " +
+                      $"{atmosphere?.CombatLightRange ?? 0f:0.0}m covers " +
+                      $"{combat.ClientUnits.Count(u => !u.Dead && u.Visual != null)} living units; " +
+                      $"party torch {atmosphere?.PartyTorchIntensity ?? 0f:0.00}");
 
             var armedEnemies = combat.ClientUnits
                 .Where(u => !u.IsPc && CombatManager.WeaponModelForUnit(u.Id).Length > 0)
@@ -1015,13 +1067,15 @@ namespace RadiantPool.Game
                                   && CombatFx.Instance.AttackFeedbackEvents > feedbackBefore;
             bool soundFeedback = GameAudio.Instance != null
                                  && GameAudio.Instance.SfxEventsPlayed > sfxBefore;
-            bool pass = blockedApproach && weaponsVisible && struck && visualFeedback && soundFeedback
+            bool pass = blockedApproach && weaponsVisible && combatLit
+                        && struck && visualFeedback && soundFeedback
                         && (feet <= 5 || walked);   // in reach already? then no walk owed
             Debug.Log($"[AttackTest] {(pass ? "PASS" : "FAIL")} - one click at {feet} ft: " +
                       $"walked {(walked ? "into reach" : "NOWHERE")} " +
                       $"({from} to {(now != null ? now.Cell.ToString() : "?")}), attack " +
                       $"{(struck ? "resolved" : "NEVER LANDED")}, presentation " +
                       $"{(visualFeedback ? "FX" : "NO FX")}/{(soundFeedback ? "SFX" : "NO SFX")}, " +
+                      $"lighting {(combatLit ? "LIT" : "DARK")}, " +
                       $"blocked-path {(blockedApproach ? "detour" : "NOT ARRANGED")}");
             Debug.Log($"[AttackTest] the blow: {(blow.Length > 0 ? blow : "(no log line!)")}");
         }
@@ -1311,6 +1365,11 @@ namespace RadiantPool.Game
             Stash.RemoveAt(idx);
             string previous = holder.ServerEquip(item);
             if (previous != null) Stash.Add(previous);
+            // Hires keep pace with their leader's equipment after recruitment too. Exact
+            // copies are used where class-legal; otherwise CompanionLoadout maps the tier.
+            foreach (var companion in FindObjectsByType<PlayerCharacterHolder>(
+                         FindObjectsSortMode.None).Where(p => p.IsCompanion && p.Sheet != null))
+                companion.ServerMatchEquipment(holder);
             RpcNotice($"{holder.Sheet.Name} equips {item.Name}" +
                       (item.Slot == ItemSlot.Armor ? $" (AC {holder.Sheet.ArmorClass})" : "") + ".");
         }
@@ -1397,6 +1456,24 @@ namespace RadiantPool.Game
                     sheet.SpendAbilityPoint(RadiantPool.Rules.Ability.Con);
                 else break;
             }
+        }
+
+        /// <summary>Bring a fresh hire to the leader's exact XP/level, auto-spend the hire's
+        /// earned points, and copy the leader's equipment tier before the NetworkObject is
+        /// spawned. Equal XP awards thereafter keep the party level-locked naturally.</summary>
+        [Server]
+        private static void ServerMatchCompanionToLeader(PlayerCharacterHolder companion,
+            PlayerCharacterHolder leader)
+        {
+            if (companion?.Sheet == null || leader?.Sheet == null) return;
+            int delta = System.Math.Max(0, leader.Sheet.Xp - companion.Sheet.Xp);
+            companion.Sheet.GainXp(delta);
+            while (companion.Sheet.CanLevelUp)
+            {
+                var result = companion.Sheet.LevelUp();
+                ServerAutoSpend(companion.Sheet, result.AbilityPointsGranted);
+            }
+            companion.ServerMatchEquipment(leader);
         }
 
         [Server]

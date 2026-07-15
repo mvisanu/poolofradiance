@@ -126,6 +126,7 @@ $checks = @(
     @{ Name = "armed combat NPC weapons are visible"; Ok = $fightText -match "\[WeaponTest\] PASS - combat NPCs" },
     @{ Name = "no failed combat weapon assertion"; Ok = $fightText -notmatch "\[WeaponTest\] FAIL" },
     @{ Name = "post-campaign solo player can hire three NPC helpers"; Ok = $recruitText -match "\[RecruitTest\] PASS" },
+    @{ Name = "all three hires match leader level and equipment tier"; Ok = $recruitText -match "\[RecruitParityTest\] PASS" },
     @{ Name = "no failed solo recruitment assertion"; Ok = $recruitText -notmatch "\[RecruitTest\] FAIL" },
     @{ Name = "completed four-zone save unlocks the next quest"; Ok = $migrationText -match "\[CampaignMigration\] PASS.+Beyond the Lightwell" },
     @{ Name = "new quest has a live Ashen Ward waypoint"; Ok = $migrationText -match "\[NextQuestWaypointTest\] PASS.+target 'The Ashen Ward'" },
@@ -135,6 +136,7 @@ $checks = @(
     @{ Name = "one click on a distant enemy closes in and attacks"; Ok = $fightText -match "\[AttackTest\] PASS" },
     @{ Name = "no failed attack assertion";        Ok = $fightText -notmatch "\[AttackTest\] FAIL" },
     @{ Name = "combat attack produces graphics and sound feedback"; Ok = $fightText -match "presentation FX/SFX" },
+    @{ Name = "combat light covers every living unit"; Ok = $fightText -match "\[CombatLightTest\] PASS" },
     @{ Name = "no NullReference in combat log";    Ok = $fightText -notmatch "NullReferenceException" }
 )
 

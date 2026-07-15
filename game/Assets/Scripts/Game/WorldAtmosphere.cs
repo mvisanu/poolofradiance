@@ -18,6 +18,8 @@ namespace RadiantPool.Game
         // Unity point lights have a hard physical range, so this is also the visibility
         // circle's authoritative radius (nine 5-foot combat cells).
         public const float PartyTorchRadius = 13.5f;
+        public const float CombatLightRadius = 36f;
+        public const float CombatLightStrength = 4.8f;
 
         public static float NightWeight => Instance != null ? Instance._nightWeight : 0f;
         public static string ClockLabel => Instance != null
@@ -34,6 +36,22 @@ namespace RadiantPool.Game
         public float PartyTorchIntensity => _partyTorch != null && _partyTorch.enabled
             ? _partyTorch.intensity : 0f;
         public float PartyTorchRange => _partyTorch != null ? _partyTorch.range : 0f;
+        public float CombatLightIntensity => _combatLight != null && _combatLight.enabled
+            ? _combatLight.intensity : 0f;
+        public float CombatLightRange => _combatLight != null ? _combatLight.range : 0f;
+        public bool CombatVisibilityReady
+        {
+            get
+            {
+                var combat = CombatManager.Instance;
+                if (combat == null || !combat.InCombat.Value || _combatLight == null
+                    || !_combatLight.enabled || _combatLight.intensity < CombatLightStrength - 0.1f)
+                    return false;
+                var living = combat.ClientUnits.Where(u => !u.Dead && u.Visual != null).ToArray();
+                return living.Length > 0 && living.All(u => Vector3.Distance(
+                    _combatLight.transform.position, u.Visual.position) <= _combatLight.range * 0.92f);
+            }
+        }
         public float PartyTorchHorizontalOffset
         {
             get
@@ -48,6 +66,7 @@ namespace RadiantPool.Game
         private Light _sun;
         private Light _moon;
         private Light _partyTorch;
+        private Light _combatLight;
         private Transform _partyAnchor;
         private Material _sky;
         private ParticleSystem _motes;
@@ -70,6 +89,7 @@ namespace RadiantPool.Game
         {
             Instance = this;
             RefreshSceneReferences();
+            CreateCombatLight();
         }
 
         private void Start()
@@ -87,6 +107,7 @@ namespace RadiantPool.Game
         {
             if (Instance == this) Instance = null;
             if (_sky != null) Destroy(_sky);
+            if (_combatLight != null) Destroy(_combatLight.gameObject);
         }
 
         private void Update()
@@ -109,6 +130,7 @@ namespace RadiantPool.Game
             _ready = true;
             ApplyAtmosphere(_visualHour);
             UpdatePartyTorch();
+            UpdateCombatLight();
 
             if (!_syncLogged && GameDirector.Instance != null
                 && GameDirector.Instance.IsClientStarted)
@@ -167,6 +189,48 @@ namespace RadiantPool.Game
             _partyTorch.shadowBias = 0.06f;
             _partyTorch.renderMode = LightRenderMode.ForcePixel;
             _partyTorch.enabled = false;
+        }
+
+        private void CreateCombatLight()
+        {
+            if (_combatLight != null) return;
+            var root = new GameObject("Tactical Combat Fill Light");
+            _combatLight = root.AddComponent<Light>();
+            _combatLight.type = LightType.Point;
+            _combatLight.color = new Color(1f, 0.82f, 0.64f);
+            _combatLight.range = CombatLightRadius;
+            _combatLight.intensity = CombatLightStrength;
+            // A visibility fill must not be defeated by a warehouse wall or tree shadow;
+            // the combat x-ray still handles geometry that blocks the camera itself.
+            _combatLight.shadows = LightShadows.None;
+            _combatLight.renderMode = LightRenderMode.ForcePixel;
+            _combatLight.enabled = false;
+        }
+
+        /// <summary>Keep a broad, shadowless fill centered over every living combatant.
+        /// It is combat-only and client-local, so exploration keeps the authored day/night
+        /// mood while every tactical unit remains readable on every player's machine.</summary>
+        private void UpdateCombatLight()
+        {
+            if (_combatLight == null) CreateCombatLight();
+            var combat = CombatManager.Instance;
+            if (combat == null || !combat.InCombat.Value)
+            {
+                _combatLight.enabled = false;
+                return;
+            }
+
+            var living = combat.ClientUnits.Where(u => !u.Dead && u.Visual != null).ToArray();
+            Vector3 center = living.Length > 0
+                ? living.Aggregate(Vector3.zero, (sum, u) => sum + u.Visual.position) / living.Length
+                : combat.GridOrigin;
+            Vector3 desired = new Vector3(center.x, center.y + 7f, center.z);
+            float follow = 1f - Mathf.Exp(-10f * Time.unscaledDeltaTime);
+            _combatLight.transform.position = _combatLight.enabled
+                ? Vector3.Lerp(_combatLight.transform.position, desired, follow) : desired;
+            _combatLight.range = CombatLightRadius;
+            _combatLight.intensity = CombatLightStrength;
+            _combatLight.enabled = true;
         }
 
         /// <summary>The torch is client-local: each player sees a visibility circle around
@@ -277,21 +341,31 @@ namespace RadiantPool.Game
             fog = Color.Lerp(fog, duskFog, twilight * 0.42f);
             if (combat)
             {
-                sky *= 0.78f;
-                fog = Color.Lerp(fog, new Color(0.09f, 0.025f, 0.025f), 0.20f);
+                sky *= 0.90f;
+                fog = Color.Lerp(fog, new Color(0.12f, 0.055f, 0.045f), 0.12f);
             }
 
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = sky * (combat ? 0.68f : 0.82f);
+            RenderSettings.ambientSkyColor = combat
+                ? Color.Lerp(sky * 0.82f, new Color(0.20f, 0.17f, 0.15f), 0.70f)
+                : sky * 0.82f;
             RenderSettings.ambientEquatorColor = Color.Lerp(
                 new Color(0.045f, 0.060f, 0.090f), new Color(0.25f, 0.27f, 0.25f), daylight);
             RenderSettings.ambientGroundColor = Color.Lerp(
                 new Color(0.022f, 0.030f, 0.046f), new Color(0.12f, 0.13f, 0.11f), daylight);
+            if (combat)
+            {
+                RenderSettings.ambientEquatorColor = Color.Lerp(
+                    RenderSettings.ambientEquatorColor, new Color(0.17f, 0.14f, 0.13f), 0.65f);
+                RenderSettings.ambientGroundColor = Color.Lerp(
+                    RenderSettings.ambientGroundColor, new Color(0.10f, 0.085f, 0.075f), 0.60f);
+            }
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Exponential;
             RenderSettings.fogColor = fog;
-            RenderSettings.fogDensity = Mathf.Lerp(0.029f, 0.011f, daylight)
-                                        + twilight * 0.003f + combatWeight * 0.004f;
+            RenderSettings.fogDensity = Mathf.Max(0.008f,
+                Mathf.Lerp(0.029f, 0.011f, daylight)
+                + twilight * 0.003f - combatWeight * 0.004f);
 
             if (_sky != null)
             {
@@ -301,7 +375,7 @@ namespace RadiantPool.Game
                         new Color(0.18f, 0.19f, 0.17f), daylight));
                 if (_sky.HasProperty("_Exposure"))
                     _sky.SetFloat("_Exposure", Mathf.Lerp(0.34f, 0.82f, daylight)
-                        - combatWeight * 0.08f);
+                        + combatWeight * 0.06f);
                 if (_sky.HasProperty("_AtmosphereThickness"))
                     _sky.SetFloat("_AtmosphereThickness", Mathf.Lerp(0.45f, 0.85f, daylight));
             }
@@ -319,9 +393,9 @@ namespace RadiantPool.Game
 
             if (_partyTorch != null)
             {
-                // Off in full daylight; increasingly useful through dusk; warm and bright
-                // at night. Range never changes, preserving the promised visibility circle.
-                float torchWeight = Mathf.SmoothStep(0f, 1f,
+                // Combat always gets a close warm key around the party; exploration keeps
+                // the normal rule where the carried torch fades out in full daylight.
+                float torchWeight = combat ? 1f : Mathf.SmoothStep(0f, 1f,
                     Mathf.InverseLerp(0.08f, 0.72f, _nightWeight));
                 _partyTorch.enabled = _partyAnchor != null && torchWeight > 0.01f;
                 _partyTorch.range = PartyTorchRadius;

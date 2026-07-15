@@ -96,9 +96,10 @@ namespace RadiantPool.Game
         public void ServerInitCompanion(string name, int classIndex)
         {
             var build = CharacterBuild.Default(classIndex);
-            Sheet = GameDirector.Instance != null
-                ? GameDirector.Instance.ServerGetOrCreateSheet(name, build)
-                : CreateSheetFromBuild(name, build);
+            // Hires are session-owned AI, not reconnecting player identities. Always make
+            // a fresh sheet; reusing a same-named roster entry could resurrect a stale
+            // level/loadout from an earlier campaign before leader parity is applied.
+            Sheet = CreateSheetFromBuild(name, build);
             IsCompanionSynced.Value = true;
             ClassIndex.Value = (int)Sheet.Class;
             CharacterName.Value = Sheet.Name;
@@ -151,6 +152,42 @@ namespace RadiantPool.Game
                     break;
             }
             return string.IsNullOrEmpty(previous) ? null : previous;
+        }
+
+        /// <summary>Server: copy the recruiting player's equipment quality. Exact gear is
+        /// used when legal for this class; CompanionLoadout supplies a same-tier class-legal
+        /// counterpart otherwise. This is a direct loadout sync, so it never consumes or
+        /// duplicates items in the shared stash.</summary>
+        public void ServerMatchEquipment(PlayerCharacterHolder leader)
+        {
+            if (Sheet == null || leader == null || leader.Sheet == null) return;
+
+            string weaponId = CompanionLoadout.WeaponFor(Sheet.Class, leader.WeaponId.Value);
+            string armorId = CompanionLoadout.ArmorFor(Sheet.Class, leader.ArmorId.Value);
+            bool shield = CompanionLoadout.ShieldFor(Sheet.Class, leader.ShieldEquipped.Value);
+
+            ServerSetEquipment(weaponId, armorId, shield);
+            Debug.Log($"[RadiantPool] {Sheet.Name} matched {leader.Sheet.Name}: " +
+                      $"level {Sheet.Level}, {WeaponId.Value}, " +
+                      $"{(ArmorId.Value.Length > 0 ? ArmorId.Value : "unarmored")}, " +
+                      $"shield {(shield ? "yes" : "no")}");
+        }
+
+        /// <summary>Server-only direct loadout assignment used by companion parity and its
+        /// built-player regression. It validates every class restriction but never touches
+        /// the party stash.</summary>
+        public void ServerSetEquipment(string weaponId, string armorId, bool shield)
+        {
+            if (Sheet == null) return;
+            var weapon = GameItem.Get(weaponId);
+            var armor = GameItem.Get(armorId);
+            WeaponId.Value = weapon != null && weapon.UsableBy(Sheet.Class) ? weapon.Id : "dagger";
+            ArmorId.Value = armor != null && armor.UsableBy(Sheet.Class) ? armor.Id : "";
+            shield = shield && GameItem.Get("shield").UsableBy(Sheet.Class);
+            ShieldEquipped.Value = shield;
+            Sheet.EquipArmor(armor != null && armor.UsableBy(Sheet.Class)
+                ? armor.Armor : ArmorDefinition.Unarmored);
+            Sheet.SetShield(shield);
         }
 
         /// <summary>Server: mirror the starting gear CreateSheetFromBuild equipped.</summary>

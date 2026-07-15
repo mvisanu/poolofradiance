@@ -75,7 +75,11 @@ mouse and the self-test drive the very same code.
   by ROLE, never by class order — a healer first, then damage dealers of two *different*
   classes, counting whoever is already being played (so nobody is handed a second cleric
   while the party has no rogue). `GameDirector.CmdRecruitCompanions` only spawns what it
-  returns; `PartyCompositionTests` pins the guarantee.
+  returns; `PartyCompositionTests` pins the guarantee. **Hires match the recruiting PC's
+  exact XP/level and equipment tier before spawn** (`CompanionLoadout` copies exact items
+  when class-legal and selects a same-tier class counterpart otherwise). Later player
+  equips resync the hires; normal shared XP keeps them level-locked. `-recruittest` proves
+  all three in a built player.
 - `content/` — zones/quests/monsters/items/loot/dialogue as JSON. Cross-referenced and
   IP-scanned by `ContentValidationTests`. In-code mirrors: `MonsterLibrary`,
   `SpellLibrary`, `LootLibrary` (tests keep JSON and code aligned by id).
@@ -322,6 +326,11 @@ mouse and the self-test drive the very same code.
 - **Camera assists must be one-shot, not per-frame.** The combat "tactical assist" ran every
   frame and hauled pitch/zoom back the moment the mouse was released — the camera would not
   stay where the player put it. It now fires once per fight and any camera input cancels it.
+- **Combat must remain readable at every wall-clock hour.** `WorldAtmosphere` keeps a
+  shadowless tactical fill centered over every living combat unit and forces the party's
+  warm key light on during a fight; exploration still follows the normal day/night curve.
+  Do not reintroduce combat fog/darkening without keeping `CombatVisibilityReady` green.
+  `-attacktest` and the smoke gate assert full-unit light coverage in the built player.
 - **Read the save, not just the code**, when the user reports a stuck quest:
   `%USERPROFILE%\Saved Games\RadiantPool\campaign.json` holds `ZoneStates`,
   `ZoneClearedCounts` and `ConsumedEncounters` — it pinpointed the counter bug in one look.
