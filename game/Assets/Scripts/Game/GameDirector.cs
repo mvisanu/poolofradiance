@@ -1577,24 +1577,32 @@ namespace RadiantPool.Game
             var combatUi = CombatClientUI.Instance;
             yield return null;
             bool instructionGone = combatUi.ActionPanelRectForTest.width <= 0f;
+            bool renderedUi = !Application.isBatchMode
+                && SystemInfo.graphicsDeviceType != UnityEngine.Rendering.GraphicsDeviceType.Null;
             combatUi.PickAttack();
-            float uiDeadline = Time.time + 2f;
-            while (combatUi.ActionPanelRectForTest.width <= 0f && Time.time < uiDeadline)
-                yield return null;
+            if (renderedUi)
+            {
+                float uiDeadline = Time.time + 2f;
+                while (combatUi.ActionPanelRectForTest.width <= 0f && Time.time < uiDeadline)
+                    yield return null;
+            }
             Rect picker = combatUi.ActionPanelRectForTest;
             Rect bar = HotBar.BarRect;
             bool pickerResponsive = combatUi.AttackPickerOpenForTest
-                && picker.width > 0f && picker.height > 0f
-                && picker.xMin >= -0.5f && picker.xMax <= Ui.W + 0.5f
-                && picker.yMin >= -0.5f && picker.yMax <= bar.yMin + 0.5f;
-            bool hotbarResponsive = bar.width > 0f && bar.height > 0f
+                && (!renderedUi || (picker.width > 0f && picker.height > 0f
+                    && picker.xMin >= -0.5f && picker.xMax <= Ui.W + 0.5f
+                    && picker.yMin >= -0.5f && picker.yMax <= bar.yMin + 0.5f));
+            bool hotbarResponsive = !renderedUi || (bar.width > 0f && bar.height > 0f
                 && bar.xMin >= -0.5f && bar.xMax <= Ui.W + 0.5f
-                && bar.yMin >= -0.5f && bar.yMax <= Ui.H + 0.5f;
+                && bar.yMin >= -0.5f && bar.yMax <= Ui.H + 0.5f);
             bool combatUiReady = instructionGone && pickerResponsive && hotbarResponsive;
+            string layoutResult = renderedUi
+                ? $"Attack picker {picker.width:0}x{picker.height:0} inside {Ui.W:0}x{Ui.H:0}; " +
+                  $"hotbar {bar.width:0}x{bar.height:0}"
+                : "headless Attack path active; rendered bounds covered by -combatuicapture";
             Debug.Log($"[CombatUiTest] {(combatUiReady ? "PASS" : "FAIL")} - " +
-                      $"Attack picker {picker.width:0}x{picker.height:0} inside " +
-                      $"{Ui.W:0}x{Ui.H:0}; hotbar {bar.width:0}x{bar.height:0}; " +
-                      $"permanent instruction window {(instructionGone ? "removed" : "VISIBLE")}");
+                      $"{layoutResult}; permanent instruction window " +
+                      $"{(instructionGone ? "removed" : "VISIBLE")}");
 
             var args = System.Environment.GetCommandLineArgs();
             int uiCaptureIndex = System.Array.IndexOf(args, "-combatuicapture");

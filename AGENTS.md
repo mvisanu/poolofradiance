@@ -94,9 +94,11 @@ mouse and the self-test drive the very same code.
   (4-zone chain: docks → market → warcamp → temple; `ServerRecountZone` derives cleared
   counts from `ConsumedEncounterIds` and `ServerRecheckZone` heals cleared-before-active
   dead ends — both run on load, which repairs old saves); `SessionLauncher` = title screen
-  + host/join. `Theme.cs` = "Gilded Quest" design system, Academia palette (mahogany/oak panels,
-  brass borders, parchment; bright gold = active states only; text contrast ≥4.5:1;
-  MedievalSharp headers / Inter body, OFL, under `Resources/Fonts`). All IMGUI styling
+  + host/join. `Theme.cs` = RPG & MMO UI 7 design system with a generated Gilded Quest
+  fallback, Academia palette (mahogany/oak panels, brass borders, parchment; bright gold =
+  active states only; text contrast ≥4.5:1), and one global OFL type hierarchy:
+  MedievalSharp display titles, Source Serif controls/tabs/buttons, Inter body/fields.
+  The UI7 package itself contains no font files. All IMGUI styling
   flows through `Ui.Begin()` → `Theme.Apply()`; tune look there, never inline styles.
   `RpgMmoUi7Art` selectively imports the locally licensed **RPG & MMO UI 7** textures and
   bakes 19 semantic runtime roles (panels, button states, fields, slots, bars, sliders,
@@ -106,10 +108,13 @@ mouse and the self-test drive the very same code.
   **Gold lives on the HotBar** (`{PartyGold:N0}g`, always visible): it used to exist only
   inside the bags and the shops, so the purse never visibly moved and the total read like a
   placeholder. Format gold `:N0` everywhere — "1,234", never "1234".
-  `HotBar.cs` = persistent bottom action bar (named spell slots delegate to
-  `CombatClientUI.Instance.PickSpell`; the default attack has no button); its slots SHRINK to fit rather than
-  overflow (a cleric in combat needs 12). Combat HUD is a slim strip docked above it so
-  the battlefield stays visible. **Your HEALTH rides above the bar** (`HotBar.DrawHealth`):
+  `HotBar.cs` = persistent bottom action bar. **Attack is a first-class slot again**
+  (`CombatClientUI.PickAttack`, keyboard A), named spells delegate to `PickSpell`, and the
+  bar shrinks or wraps combat actions above utilities instead of overflowing (a cleric in
+  combat needs 13 slots). The old permanent combat instruction/info strip is gone; only a
+  temporary responsive target picker appears above the bar. It uses fixed-width two-line
+  target cards, column counts derived from `Ui.W`, and a capped scroll view. **Your HEALTH
+  rides above the bar** (`HotBar.DrawHealth`):
   a slim strip with the bar, `hp/max` AND the percentage — the combat unit's HP while a fight
   is on (instant, via `RpcHpSync`) and `PlayerCharacterHolder.CurrentHpSynced` between fights
   (nothing used to tell the client how hurt it was out of combat). It stays when the bar is
@@ -121,10 +126,13 @@ mouse and the self-test drive the very same code.
   take two clicks — walk, then swing — and the second was the easiest thing in the game to
   forget). Click ground = move, Space = end turn, **WASD/middle-drag pans the
   camera and F recentres** (the grid owns movement, so those keys are free).
-  There are **no generic Physical Attack / Magic Attack buttons**. Every living monster has
-  an exact overhead `hp/max` bar plus a deterministic generated target-shape texture.
-  `RadiantPool.exe -autohost -attacktest` drives that click on the FURTHEST enemy and asserts
-  both the walk and the blow; `smoke-test.ps1` runs it in its OWN instance — a live fight
+  Direct world clicks remain the fastest attack control, while the restored **Attack** slot
+  opens the same legal hostile-target path; both converge on `ClickCell`, so walk-and-strike
+  behavior cannot diverge. Every living monster has an exact overhead `hp/max` bar plus a
+  deterministic generated target-shape texture. `RadiantPool.exe -autohost -attacktest`
+  opens Attack, asserts the picker/hotbar fit the logical canvas and the instruction window
+  is absent, chooses the FURTHEST enemy, and proves both walk and blow. `smoke-test.ps1` runs
+  it in its OWN instance — a live fight
   under the sell/level self-tests would fight them for the turn clock.
   `OrbitCamera` **x-rays whatever hides a combatant**: every unit on the board gets a
   sight line in combat (just the player out of it), and any environment renderer blocking
@@ -223,16 +231,23 @@ mouse and the self-test drive the very same code.
   missing clips fall back to `AudioSynth`. Never commit the extracted WAVs or metas.
   For **RPG & MMO UI 7**, use `scripts/import-rpg-mmo-ui7.ps1`: it extracts only image/sprite
   art and metadata into ignored `Assets/LocalLicensed`, excludes the legacy scripts/prefabs,
-  rebakes the 19-role IMGUI skin, and fails unless the skin is complete.
-- `PolyPackArt.cs` — **environment art from the Asset Store RPG Poly Pack**, wired
+  rebakes the 19-role IMGUI skin, and fails unless the skin and global typography stack are
+  complete. The skin applies to every screen through `Theme.Apply`, never per-panel.
+  For **PBR Graveyard and Nature Set 2.0**, run
+  `python scripts/install-graveyard-assets.py`; it dependency-closes 29 authored prefabs
+  from the cached 3.3 GB package and installs only their required models/materials/textures.
+- `PolyPackArt.cs` — **environment art from the owned Asset Store packs**, wired
   DISCOVERY-first, not by prefab name: it finds the pack wherever it imported, sorts every
   prefab into buckets by the words in its name (`Tree/Pine/Rock/Cliff/Bush/Grass/Flower/
-  Mushroom/Log/House/Ruin/Fence/Tent/Prop`) and `DressWorld` composes from BUCKETS, never
+  Mushroom/Log/House/Ruin/Grave/Fence/Tent/Prop`) and `DressWorld` composes from BUCKETS, never
   from model names. That is what lets it work against a pack whose contents can't be read
   until it is imported — and any similar low-poly pack drops into the same slots. Absent
-  ⇒ `Available == false` ⇒ Kenney fallback, so the world always builds. Asset Store packs
-  ship **Standard-shader materials that render MAGENTA under URP** — `SetupMaterials()`
-  converts them (`_MainTex`→`_BaseMap`, `_Color`→`_BaseColor`) on every bootstrap.
+  ⇒ `Available == false` ⇒ Kenney fallback, so the world always builds. PBR Graveyard uses
+  authored prefabs only (never raw FBX submeshes) and supplies the dominant perimeter at all
+  22 remote sites plus grave rings at crypt/necropolis sites. Asset Store packs ship
+  **legacy/proprietary materials that render MAGENTA or black under URP** —
+  `SetupMaterials()` reads serialized albedo/normal/metallic/occlusion slots even when the
+  source shader is missing, then converts all 40 selected PBR materials to URP Lit.
   Buildings stay a **collider box with the model parented inside** (renderer off): the box
   is gameplay (blocks movement, and the combat x-ray fades what hides a creature), the
   model is only the look.

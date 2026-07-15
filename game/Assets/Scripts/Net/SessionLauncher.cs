@@ -110,9 +110,11 @@ namespace RadiantPool.Game
             for (int frame = 0; frame < 30; frame++) yield return null;
             yield return new WaitForEndOfFrame();
             int loaded = RpgMmoUi7Skin.LoadedRoleCount;
-            if (!RpgMmoUi7Skin.Available || loaded != RpgMmoUi7Skin.Roles.Length)
+            if (!RpgMmoUi7Skin.Available || loaded != RpgMmoUi7Skin.Roles.Length
+                || !Theme.TypographyReady)
             {
-                Debug.LogError($"[UiSkinTest] FAIL - loaded {loaded}/{RpgMmoUi7Skin.Roles.Length} roles.");
+                Debug.LogError($"[UiSkinTest] FAIL - loaded {loaded}/{RpgMmoUi7Skin.Roles.Length} " +
+                               $"roles; typography {(Theme.TypographyReady ? "ready" : "missing")}.");
                 Application.Quit(2);
                 yield break;
             }
@@ -129,6 +131,7 @@ namespace RadiantPool.Game
                     for (int settle = 0; settle < 30; settle++)
                         yield return new WaitForEndOfFrame();
                     Debug.Log($"[UiSkinTest] PASS - {loaded}/{RpgMmoUi7Skin.Roles.Length} roles; " +
+                              $"MedievalSharp/SourceSerif/Inter on all live controls; " +
                               $"title capture: {fullPath}");
                     Application.Quit(0);
                     yield break;

@@ -5,7 +5,8 @@ namespace RadiantPool.Game
 {
     /// <summary>The "Gilded Quest" design system from theme/ (Stitch mockups): charcoal
     /// stone panels with gold borders, parchment content cards, mage-blue primary
-    /// buttons, Source Serif 4 headers + Inter body, class accent colors, and glassy
+    /// buttons, MedievalSharp display titles + Source Serif controls + Inter body,
+    /// class accent colors, and glassy
     /// HP/MP bars. When the locally licensed RPG & MMO UI 7 pack is installed, its baked
     /// frames and controls replace the procedural surfaces globally; public builds retain
     /// the generated fallback. Fonts ship in Resources/Fonts (SIL OFL).</summary>
@@ -72,6 +73,15 @@ namespace RadiantPool.Game
         public static Font SerifSemi { get { LoadFonts(); return _serifSemi; } }
         public static Font BodyFont { get { LoadFonts(); return _body; } }
         public static Font BodyBold { get { LoadFonts(); return _bodyBold; } }
+        public static bool TypographyReady
+        {
+            get
+            {
+                LoadFonts();
+                return _serif != null && _serifSemi != null
+                    && _body != null && _bodyBold != null;
+            }
+        }
 
         // ---------- generated textures ----------
         private static readonly Dictionary<string, Texture2D> _texCache =
@@ -209,7 +219,8 @@ namespace RadiantPool.Game
             {
                 if (_btnPrimary != null) return _btnPrimary;
                 _btnPrimary = new GUIStyle(GUI.skin.button);
-                if (BodyBold != null) _btnPrimary.font = BodyBold; else _btnPrimary.fontStyle = FontStyle.Bold;
+                if (SerifSemi != null) _btnPrimary.font = SerifSemi;
+                else _btnPrimary.fontStyle = FontStyle.Bold;
                 _btnPrimary.fontSize = 12;
                 _btnPrimary.border = new RectOffset(12, 12, 12, 12);
                 _btnPrimary.padding = new RectOffset(14, 14, 8, 10);
@@ -235,6 +246,7 @@ namespace RadiantPool.Game
                     padding = new RectOffset(5, 5, 5, 5),
                     alignment = TextAnchor.MiddleCenter
                 };
+                if (BodyBold != null) _slot.font = BodyBold;
                 _slot.normal.background = SlotTex;
                 _slot.hover.background = RpgMmoUi7Skin.Get("tab_active", BtnStoneHoverTex);
                 _slot.active.background = BtnGoldTex;
@@ -258,6 +270,7 @@ namespace RadiantPool.Game
                 padding = new RectOffset(10, 10, 6, 7),
                 alignment = TextAnchor.MiddleCenter
             };
+            if (SerifSemi != null) cached.font = SerifSemi;
             Texture2D normal = RpgMmoUi7Skin.Get(selected ? "tab_active" : "tab",
                 selected ? BtnBlueTex : BtnStoneTex);
             cached.normal.background = normal;
@@ -381,8 +394,9 @@ namespace RadiantPool.Game
         private static bool _applied;
 
         /// <summary>Re-skins GUI.skin so every OnGUI inherits the theme: stone boxes,
-        /// gold-outlined stone buttons (gold when active), Inter labels, parchment
-        /// text fields. Called from Ui.Begin().</summary>
+        /// gold-outlined stone buttons (gold when active), the complete live typography
+        /// stack, and parchment text fields/areas. Called from Ui.Begin(), so every screen
+        /// and every GUIStyle cloned from GUI.skin inherits RPG & MMO UI 7.</summary>
         public static void Apply()
         {
             var skin = GUI.skin;
@@ -390,7 +404,20 @@ namespace RadiantPool.Game
             _applied = true;
             LoadFonts();
 
-            if (_body != null) { skin.label.font = _body; skin.button.font = _bodyBold; }
+            Font controlFont = _serifSemi != null ? _serifSemi : _bodyBold;
+            if (_body != null)
+            {
+                skin.label.font = _body;
+                skin.box.font = _body;
+                skin.textField.font = _body;
+                skin.textArea.font = _body;
+            }
+            if (controlFont != null)
+            {
+                skin.button.font = controlFont;
+                skin.toggle.font = controlFont;
+            }
+            if (_serif != null) skin.window.font = _serif;
             skin.label.normal.textColor = OnSurface;
             skin.label.richText = true;
 
@@ -398,6 +425,11 @@ namespace RadiantPool.Game
             skin.box.border = new RectOffset(8, 8, 8, 8);
             skin.box.padding = new RectOffset(10, 10, 8, 8);
             skin.box.normal.textColor = OnSurfaceMuted;
+
+            skin.window.normal.background = PanelTex;
+            skin.window.border = new RectOffset(16, 16, 16, 16);
+            skin.window.padding = new RectOffset(14, 14, 30, 14);
+            skin.window.normal.textColor = Gold;
 
             skin.button.border = new RectOffset(12, 12, 12, 12);
             skin.button.padding = new RectOffset(12, 12, 7, 8);
@@ -426,7 +458,14 @@ namespace RadiantPool.Game
             skin.textField.normal.textColor = Ink;
             skin.textField.focused.textColor = Ink;
             skin.textField.hover.textColor = Ink;
-            if (_body != null) skin.textField.font = _body;
+            skin.textArea.normal.background = FieldTex;
+            skin.textArea.focused.background = FieldTex;
+            skin.textArea.hover.background = FieldTex;
+            skin.textArea.border = new RectOffset(6, 6, 6, 6);
+            skin.textArea.padding = new RectOffset(8, 8, 6, 6);
+            skin.textArea.normal.textColor = Ink;
+            skin.textArea.focused.textColor = Ink;
+            skin.textArea.hover.textColor = Ink;
 
             skin.toggle.normal.textColor = OnSurface;
             skin.toggle.hover.textColor = Gold;
@@ -439,6 +478,10 @@ namespace RadiantPool.Game
             skin.verticalScrollbar.normal.background = scrollTrack;
             skin.horizontalScrollbarThumb.normal.background = scrollThumb;
             skin.verticalScrollbarThumb.normal.background = scrollThumb;
+            skin.horizontalScrollbarLeftButton.normal.background = BtnStoneTex;
+            skin.horizontalScrollbarRightButton.normal.background = BtnStoneTex;
+            skin.verticalScrollbarUpButton.normal.background = BtnStoneTex;
+            skin.verticalScrollbarDownButton.normal.background = BtnStoneTex;
 
             // Sliders were raw Unity gray and the thumb was a 10 px sliver — the settings
             // panel is the one place the mouse has to hit something small, so the thumb is
@@ -471,7 +514,9 @@ namespace RadiantPool.Game
 
             Debug.Log(RpgMmoUi7Ready
                 ? $"[RpgMmoUi7] READY - {RpgMmoUi7Skin.LoadedRoleCount}/" +
-                  $"{RpgMmoUi7Skin.Roles.Length} themed roles active on all UI screens."
+                  $"{RpgMmoUi7Skin.Roles.Length} themed roles and " +
+                  $"{(TypographyReady ? "MedievalSharp/SourceSerif/Inter typography" : "fallback typography")} " +
+                  $"active on all UI screens."
                 : "[RpgMmoUi7] licensed art unavailable; generated Gilded Quest fallback active.");
         }
 
