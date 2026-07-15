@@ -102,6 +102,9 @@ namespace RadiantPool.Rules.Tests
                 var root = doc.RootElement;
                 if (root.TryGetProperty("zone", out var zone))
                     Assert.Contains(zone.GetString()!, zoneIds);
+                if (root.TryGetProperty("zones", out var zones))
+                    foreach (var z in zones.EnumerateArray())
+                        Assert.Contains(z.GetString()!, zoneIds);
                 if (root.TryGetProperty("unlocks", out var unlocks))
                     foreach (var u in unlocks.EnumerateArray())
                         Assert.Contains(u.GetString()!, questIds);
@@ -184,17 +187,12 @@ namespace RadiantPool.Rules.Tests
                 .ToList();
             try
             {
-                Assert.Equal(new[]
-                {
-                    "q_muster", "q_clear_docks", "q_clear_market",
-                    "q_clear_warcamp", "q_clear_temple", "q_clear_ashen_ward"
-                }, quests.Select(d => d.RootElement.GetProperty("id").GetString()));
-                Assert.Equal(new[]
-                {
-                    "council_introduction", "urban_reclamation",
-                    "haunted_civic_reclamation", "enemy_alliance_disruption",
-                    "corrupted_seat_finale", "post_victory_containment"
-                }, quests.Select(d => d.RootElement.GetProperty("campaignRole").GetString()));
+                Assert.Equal(25, quests.Count); // 24 catalog quests plus the opening muster.
+                Assert.Equal(quests.Count, quests.Select(d =>
+                    d.RootElement.GetProperty("id").GetString()).Distinct().Count());
+                Assert.True(quests.Select(d => d.RootElement.GetProperty("campaignRole").GetString())
+                    .Distinct().Count() >= 20,
+                    "the full campaign must preserve varied quest structures");
 
                 foreach (var quest in quests.Where(d =>
                              d.RootElement.GetProperty("type").GetString() == "clear_zone"))
@@ -259,6 +257,18 @@ namespace RadiantPool.Rules.Tests
             Assert.True(commissions.Select(q => q.GetProperty("objectiveKind").GetString())
                 .Distinct().Count() >= 8, "campaign needs more than repeated clear-zone quests");
             Assert.Contains(commissions, q => q.GetProperty("locationIds").GetArrayLength() >= 3);
+
+            // A catalog entry is not implementation. Every non-hub place must have a
+            // concrete zone document, and every catalog quest must have journal content.
+            var zoneIds = Directory.EnumerateFiles(Path.Combine(ContentRoot, "zones"), "*.json")
+                .Select(f => JsonDocument.Parse(File.ReadAllText(f)).RootElement
+                    .GetProperty("id").GetString()!).ToHashSet();
+            Assert.Equal(27, zoneIds.Count);
+            Assert.Equal(locationIds.Where(id => id != "council_quarter").ToHashSet(), zoneIds);
+
+            var authoredQuestIds = QuestIds();
+            foreach (string questId in allQuestIds)
+                Assert.Contains(questId, authoredQuestIds);
         }
 
         [Fact]

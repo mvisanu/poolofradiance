@@ -656,7 +656,7 @@ namespace RadiantPool.EditorTools
             gateTemple.transform.position = new Vector3(35, 1.5f, 0);
             gateTemple.transform.localScale = new Vector3(1.2f, 3, 6);
             gateTemple.GetComponent<Renderer>().enabled = false;   // collider only
-            gateTemple.AddComponent<ZoneGate>().ZoneIndex = 2;
+            gateTemple.AddComponent<ZoneGate>().ZoneIndex = 3;
             var gateTempleVisual = KenneyArt.Place("Pirate", "castle-gate",
                 new Vector3(35, 0, 0), 90f, 7f);
             if (gateTempleVisual != null)
@@ -1175,6 +1175,240 @@ namespace RadiantPool.EditorTools
             Waystone("Glasslit Temple", new Vector3(38f, 0f, -13f), 3, false);
             Waystone("Ashen Ward", new Vector3(48f, 0f, 28f), 4, false);
 
+            // The expanded campaign lives in separated encounter cells beyond the city.
+            // They remain in one scene (cheap networking and save compatibility), while
+            // waystones make the separation feel like world travel rather than a long,
+            // empty walk. Every cell has its own palette, silhouette, label, arrival
+            // anchor, and three authored encounter spaces.
+            Color SiteColor(CampaignSiteTheme theme)
+            {
+                switch (theme)
+                {
+                    case CampaignSiteTheme.Wilds: return new Color(0.12f, 0.25f, 0.16f);
+                    case CampaignSiteTheme.Marsh: return new Color(0.10f, 0.23f, 0.22f);
+                    case CampaignSiteTheme.Anchorage: return new Color(0.09f, 0.19f, 0.28f);
+                    case CampaignSiteTheme.Crypt:
+                    case CampaignSiteTheme.Necropolis: return new Color(0.17f, 0.17f, 0.22f);
+                    case CampaignSiteTheme.Caves: return new Color(0.22f, 0.17f, 0.13f);
+                    case CampaignSiteTheme.Archive:
+                    case CampaignSiteTheme.Manor:
+                    case CampaignSiteTheme.Quarter: return new Color(0.30f, 0.21f, 0.17f);
+                    case CampaignSiteTheme.Observatory: return new Color(0.10f, 0.22f, 0.29f);
+                    case CampaignSiteTheme.Spire: return new Color(0.28f, 0.09f, 0.055f);
+                    default: return new Color(0.23f, 0.24f, 0.27f);
+                }
+            }
+
+            Color SiteAccent(CampaignSiteTheme theme)
+            {
+                switch (theme)
+                {
+                    case CampaignSiteTheme.Wilds: return new Color(0.32f, 0.86f, 0.43f);
+                    case CampaignSiteTheme.Marsh: return new Color(0.25f, 0.90f, 0.78f);
+                    case CampaignSiteTheme.Anchorage:
+                    case CampaignSiteTheme.Observatory: return new Color(0.22f, 0.72f, 1f);
+                    case CampaignSiteTheme.Crypt:
+                    case CampaignSiteTheme.Necropolis: return new Color(0.64f, 0.48f, 1f);
+                    case CampaignSiteTheme.Caves: return new Color(1f, 0.58f, 0.20f);
+                    case CampaignSiteTheme.Spire: return new Color(1f, 0.25f, 0.06f);
+                    default: return new Color(0.95f, 0.72f, 0.28f);
+                }
+            }
+
+            PolyPackArt.Kind SiteArt(CampaignSiteTheme theme)
+            {
+                switch (theme)
+                {
+                    case CampaignSiteTheme.Wilds: return PolyPackArt.Kind.Tree;
+                    case CampaignSiteTheme.Marsh: return PolyPackArt.Kind.Bush;
+                    case CampaignSiteTheme.Camp: return PolyPackArt.Kind.Tent;
+                    case CampaignSiteTheme.Anchorage: return PolyPackArt.Kind.Prop;
+                    case CampaignSiteTheme.Enclave:
+                    case CampaignSiteTheme.Manor:
+                    case CampaignSiteTheme.Quarter: return PolyPackArt.Kind.House;
+                    case CampaignSiteTheme.Caves: return PolyPackArt.Kind.Rock;
+                    default: return PolyPackArt.Kind.Ruin;
+                }
+            }
+
+            string SitePalette(CampaignSiteTheme theme)
+            {
+                switch (theme)
+                {
+                    case CampaignSiteTheme.Wilds: return "wild";
+                    case CampaignSiteTheme.Marsh: return "marsh";
+                    case CampaignSiteTheme.Anchorage:
+                    case CampaignSiteTheme.Observatory: return "aether";
+                    case CampaignSiteTheme.Crypt:
+                    case CampaignSiteTheme.Necropolis: return "grave";
+                    case CampaignSiteTheme.Caves: return "cave";
+                    case CampaignSiteTheme.Archive:
+                    case CampaignSiteTheme.Enclave:
+                    case CampaignSiteTheme.Manor:
+                    case CampaignSiteTheme.Quarter: return "civic";
+                    case CampaignSiteTheme.Spire: return "ember";
+                    default: return "stone";
+                }
+            }
+
+            void FallbackSiteArt(CampaignSitePlan site, int index, Vector3 pos)
+            {
+                float rot = index * 57f;
+                switch (site.Theme)
+                {
+                    case CampaignSiteTheme.Wilds:
+                        KenneyArt.Place("Nature", index % 2 == 0 ? "tree_oak" : "tree_pineTallA",
+                            pos, rot, 5.8f, true);
+                        break;
+                    case CampaignSiteTheme.Marsh:
+                        KenneyArt.Place("Nature", index % 2 == 0
+                            ? "tree_default_dark" : "plant_bushLarge", pos, rot,
+                            index % 2 == 0 ? 5f : 2.4f, true);
+                        break;
+                    case CampaignSiteTheme.Camp:
+                        KenneyArt.Place("Survival", index % 2 == 0 ? "tent-canvas" : "tent",
+                            pos, rot, 3.4f, false);
+                        break;
+                    case CampaignSiteTheme.Anchorage:
+                        KenneyArt.Place("Pirate", index % 3 == 0 ? "boat-row-small"
+                            : index % 2 == 0 ? "crate" : "barrel", pos, rot,
+                            index % 3 == 0 ? 4.5f : 1.4f, index % 3 != 0);
+                        break;
+                    case CampaignSiteTheme.Caves:
+                        KenneyArt.Place("Nature", index % 2 == 0
+                            ? "cliff_block_rock" : "rock_largeA", pos, rot,
+                            index % 2 == 0 ? 4.5f : 3f, false);
+                        break;
+                    case CampaignSiteTheme.Enclave:
+                    case CampaignSiteTheme.Manor:
+                    case CampaignSiteTheme.Quarter:
+                        KenneyArt.Place("FantasyTown", index % 2 == 0
+                            ? "wall-broken" : "pillar-stone", pos, rot,
+                            index % 2 == 0 ? 5f : 4.5f, index % 2 != 0);
+                        break;
+                    case CampaignSiteTheme.Necropolis:
+                    case CampaignSiteTheme.Crypt:
+                        KenneyArt.Place("FantasyTown", index % 2 == 0
+                            ? "pillar-stone" : "wall-broken", pos, rot, 4.5f,
+                            index % 2 == 0);
+                        KenneyArt.Place("Nature", "tree_thin_dark", pos + new Vector3(1.5f, 0f, 1f),
+                            rot + 31f, 3.8f, true);
+                        break;
+                    default:
+                        KenneyArt.Place("FantasyTown", index % 3 == 0
+                            ? "wall-doorway-round" : index % 2 == 0
+                                ? "wall-broken" : "pillar-stone", pos, rot,
+                            index % 2 == 0 ? 5f : 4.5f, index % 2 != 0);
+                        break;
+                }
+            }
+
+            void RemoteSite(CampaignSitePlan site, int zoneIndex, int siteIndex)
+            {
+                var baseColor = SiteColor(site.Theme);
+                var accent = SiteAccent(site.Theme);
+                string palette = SitePalette(site.Theme);
+                // Palette sharing keeps these repeated modular cells in the same render
+                // batches instead of manufacturing three materials per destination.
+                var groundSite = Mat($"M_Site_{palette}", baseColor);
+                var edgeSite = Mat($"M_SiteEdge_{palette}", Color.Lerp(baseColor, Color.black, 0.35f));
+                var glowSite = Mat($"M_SiteGlow_{palette}", accent * 0.45f);
+                glowSite.EnableKeyword("_EMISSION");
+                glowSite.SetColor("_EmissionColor", accent * 1.7f);
+
+                Box($"SiteGround_{site.ZoneId}", site.Center + Vector3.down * 0.18f,
+                    new Vector3(44f, 0.35f, 44f), groundSite);
+                Box($"SiteEdgeN_{site.ZoneId}", site.Center + new Vector3(0f, 0.55f, 22f),
+                    new Vector3(44f, 1.1f, 0.8f), edgeSite);
+                Box($"SiteEdgeS_{site.ZoneId}", site.Center + new Vector3(0f, 0.55f, -22f),
+                    new Vector3(44f, 1.1f, 0.8f), edgeSite);
+                Box($"SiteEdgeE_{site.ZoneId}", site.Center + new Vector3(22f, 0.55f, 0f),
+                    new Vector3(0.8f, 1.1f, 44f), edgeSite);
+                Box($"SiteEdgeW_{site.ZoneId}", site.Center + new Vector3(-22f, 0.55f, 0f),
+                    new Vector3(0.8f, 1.1f, 44f), edgeSite);
+
+                // Four bright architectural beats make each destination read as a
+                // deliberate MMO-style arena even when optional art packs are absent.
+                foreach (var corner in new[]
+                {
+                    new Vector3(-17f, 1.5f, -17f), new Vector3(17f, 1.5f, -17f),
+                    new Vector3(-17f, 1.5f, 17f), new Vector3(17f, 1.5f, 17f)
+                })
+                    Box($"SitePillar_{site.ZoneId}_{corner.x}_{corner.z}", site.Center + corner,
+                        new Vector3(1.2f, 3f, 1.2f), glowSite);
+
+                var titleGo = new GameObject($"SiteLabel_{site.ZoneId}");
+                titleGo.transform.position = site.Center + new Vector3(0f, 4.2f, 19f);
+                var title = titleGo.AddComponent<TextMesh>();
+                title.text = site.DisplayName;
+                title.characterSize = 0.075f;
+                title.fontSize = 48;
+                title.anchor = TextAnchor.LowerCenter;
+                title.color = accent;
+                titleGo.AddComponent<Billboard>();
+
+                var artKind = SiteArt(site.Theme);
+                for (int i = 0; i < 6; i++)
+                {
+                    float angle = i * Mathf.PI * 2f / 6f;
+                    var pos = site.Center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * 18f;
+                    if (PolyPackArt.Place(artKind, siteIndex * 11 + i, pos,
+                            i * 57f, site.Theme == CampaignSiteTheme.Wilds ? 4.8f : 3.4f,
+                            byHeight: site.Theme == CampaignSiteTheme.Wilds) == null)
+                        FallbackSiteArt(site, i, pos);
+                }
+
+                var offsets = new[]
+                {
+                    new Vector3(-10f, 1.5f, 4f), new Vector3(0f, 1.5f, 12f),
+                    new Vector3(10f, 1.5f, 4f)
+                };
+                for (int i = 0; i < site.Encounters.Length; i++)
+                {
+                    var fight = site.Encounters[i];
+                    var seal = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                    seal.name = $"EncounterSeal_{site.ZoneId}_{fight.Suffix}";
+                    seal.transform.position = site.Center + offsets[i] + Vector3.down * 1.42f;
+                    seal.transform.localScale = new Vector3(3.4f, 0.04f, 3.4f);
+                    Object.DestroyImmediate(seal.GetComponent<Collider>());
+                    seal.GetComponent<Renderer>().sharedMaterial = glowSite;
+                    Encounter($"enc_{site.ZoneId}_{fight.Suffix}", site.ZoneId,
+                        fight.DisplayName, site.Center + offsets[i], new Vector3(7f, 3f, 7f),
+                        true, fight.MonsterIds);
+                }
+
+                Waystone(site.DisplayName, site.Center + new Vector3(0f, 0f, -14f),
+                    zoneIndex, false);
+                var actionConfig = site.ToZoneConfig();
+                if (!string.IsNullOrEmpty(actionConfig.SiteAction))
+                {
+                    var objective = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                    objective.name = $"QuestObjective_{site.ZoneId}";
+                    objective.transform.position = site.Center + new Vector3(0f, 0.7f, 17f);
+                    objective.transform.localScale = new Vector3(0.8f, 0.7f, 0.8f);
+                    objective.GetComponent<Renderer>().sharedMaterial = glowSite;
+                    objective.AddComponent<CampaignObjectiveInteract>().ZoneIndex = zoneIndex;
+                }
+                var siteLight = new GameObject($"SiteLight_{site.ZoneId}").AddComponent<Light>();
+                siteLight.transform.position = site.Center + new Vector3(0f, 7f, 0f);
+                siteLight.type = LightType.Point;
+                siteLight.color = accent;
+                siteLight.intensity = 1.7f;
+                siteLight.range = 30f;
+            }
+
+            for (int i = 0; i < CampaignExpansionContent.Sites.Length; i++)
+                RemoteSite(CampaignExpansionContent.Sites[i], 5 + i, i);
+
+            // The market's second commission is an event rather than another map. Fold
+            // its Brass Auction decision into the reclaimed plaza after the hauntings.
+            var auction = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            auction.name = "QuestObjective_drowned_market_auction";
+            auction.transform.position = new Vector3(0f, 0.7f, 50f);
+            auction.transform.localScale = new Vector3(0.8f, 0.7f, 0.8f);
+            auction.GetComponent<Renderer>().sharedMaterial = waystoneMat;
+            auction.AddComponent<CampaignObjectiveInteract>().ZoneIndex = 1;
+
             // Vendor NPC by the council platform.
             var vendor = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             vendor.name = "The Salvage Exchange";
@@ -1233,7 +1467,7 @@ namespace RadiantPool.EditorTools
             systemsGo.AddComponent<CombatFx>();
             systemsGo.AddComponent<CombatManager>();
             var director = systemsGo.AddComponent<GameDirector>();
-            director.Zones = new[]
+            var zoneConfigs = new List<GameDirector.ZoneConfig>
             {
                 new GameDirector.ZoneConfig
                 {
@@ -1252,7 +1486,9 @@ namespace RadiantPool.EditorTools
                     Description = "The drowned dead haunt the flooded market NORTH of the " +
                         "hub. Lay all four hauntings to rest, then return SOUTH to Council Hall.",
                     RequiredEncounters = 4, XpEach = 900, Gold = 250,
-                    PrerequisiteZoneIds = new[] { "old_docks" }
+                    PrerequisiteZoneIds = new[] { "old_docks" },
+                    SiteAction = "Witness the Brass Auction and identify its winning faction.",
+                    ChoiceA = "Expose the ash cartel", ChoiceB = "Follow the masked buyer"
                 },
                 new GameDirector.ZoneConfig
                 {
@@ -1283,10 +1519,12 @@ namespace RadiantPool.EditorTools
                         "newly opened gate, seal all three breaches, then return SOUTHWEST " +
                         "to Council Hall.",
                     RequiredEncounters = 3, XpEach = 1200, Gold = 750,
-                    PrerequisiteZoneIds = new[] { "glasslit_temple" },
-                    FinalQuest = true
+                    PrerequisiteZoneIds = new[] { "glasslit_temple" }
                 }
             };
+            foreach (var site in CampaignExpansionContent.Sites)
+                zoneConfigs.Add(site.ToZoneConfig());
+            director.Zones = zoneConfigs.ToArray();
             director.CompanionPrefab = playerPrefab;
             systemsGo.AddComponent<CombatClientUI>();
             systemsGo.AddComponent<SettingsMenu>();

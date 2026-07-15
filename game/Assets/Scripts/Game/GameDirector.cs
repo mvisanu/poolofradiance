@@ -33,6 +33,11 @@ namespace RadiantPool.Game
             public string[] PrerequisiteZoneIds = System.Array.Empty<string>();
             public bool StartsAvailable;
             public bool FinalQuest;
+            /// <summary>Optional non-combat finale performed on site after its required
+            /// encounters: recovery, rescue, control, evidence, or an alliance choice.</summary>
+            public string SiteAction = "";
+            public string ChoiceA = "";
+            public string ChoiceB = "";
         }
 
         [Header("Zone chain (from content JSON, wired by bootstrap)")]
@@ -101,6 +106,23 @@ namespace RadiantPool.Game
         /// <summary>Cleared encounter ids, replicated so clients can point quest markers
         /// at the nearest block that still needs fighting.</summary>
         public readonly SyncList<string> ConsumedEncounterIds = new SyncList<string>();
+        public readonly SyncList<string> CompletedSiteActions = new SyncList<string>();
+
+        public bool IsSiteActionComplete(int zone)
+        {
+            if (zone < 0 || zone >= Zones.Length || string.IsNullOrEmpty(Zones[zone].SiteAction))
+                return true;
+            string prefix = Zones[zone].ZoneId + "|";
+            return CompletedSiteActions.Any(a => a.StartsWith(prefix));
+        }
+
+        public string SiteActionResult(int zone)
+        {
+            if (zone < 0 || zone >= Zones.Length) return "";
+            string prefix = Zones[zone].ZoneId + "|";
+            string entry = CompletedSiteActions.FirstOrDefault(a => a.StartsWith(prefix));
+            return entry == null ? "" : entry.Substring(prefix.Length);
+        }
 
         public override void OnStartServer()
         {
@@ -108,9 +130,10 @@ namespace RadiantPool.Game
             var args = System.Environment.GetCommandLineArgs();
             int questLampCapture = System.Array.IndexOf(args, "-questlampcapture");
             int nextQuestCapture = System.Array.IndexOf(args, "-nextquestcapture");
+            int siteCapture = System.Array.IndexOf(args, "-sitecapture");
             _allowWorldTimeOverride = System.Array.IndexOf(args, "-atmospheretest") >= 0
                                       || System.Array.IndexOf(args, "-atmospherecapture") >= 0
-                                      || questLampCapture >= 0;
+                                      || questLampCapture >= 0 || siteCapture >= 0;
             SyncFromComputerClock();
             Debug.Log($"[Atmosphere] host computer clock " +
                       $"{System.DateTime.Now:HH:mm:ss} ({System.TimeZoneInfo.Local.Id})");
@@ -138,6 +161,8 @@ namespace RadiantPool.Game
                 StartCoroutine(QuestLampCapture(args[questLampCapture + 1]));
             if (nextQuestCapture >= 0 && nextQuestCapture + 1 < args.Length)
                 StartCoroutine(NextQuestCapture(args[nextQuestCapture + 1]));
+            if (siteCapture >= 0 && siteCapture + 1 < args.Length)
+                StartCoroutine(CampaignSiteCapture(args[siteCapture + 1]));
 
             if (!SaveSystem.Exists) return;
             var save = SaveSystem.Read();
@@ -172,6 +197,10 @@ namespace RadiantPool.Game
                     .FirstOrDefault(t => t.EncounterId == id);
                 if (trigger != null) trigger.Consume();
             }
+            CompletedSiteActions.Clear();
+            foreach (var action in save.CompletedSiteActions
+                         ?? new System.Collections.Generic.List<string>())
+                if (!string.IsNullOrWhiteSpace(action)) CompletedSiteActions.Add(action);
             string savedDate = save.SavedAtUtc.Length >= 10
                 ? save.SavedAtUtc.Substring(0, 10) : save.SavedAtUtc;
             RpcNotice($"Campaign loaded (saved {savedDate}).");
@@ -300,6 +329,7 @@ namespace RadiantPool.Game
                 PartyGold = PartyGold.Value,
                 Stash = Stash.ToList(),
                 ConsumedEncounters = ConsumedEncounterIds.ToList(),
+                CompletedSiteActions = CompletedSiteActions.ToList(),
                 Roster = _roster.Select(kv =>
                     SaveSystem.Capture(kv.Value, _builds[kv.Key])).ToList()
             };
@@ -356,7 +386,8 @@ namespace RadiantPool.Game
             if (zone < 0 || zone >= Zones.Length) return;
             var cfg = Zones[zone];
             if (GetZoneState(zone) == QuestState.Active
-                && ZoneClearedCounts[zone] >= cfg.RequiredEncounters)
+                && ZoneClearedCounts[zone] >= cfg.RequiredEncounters
+                && IsSiteActionComplete(zone))
             {
                 ZoneStates[zone] = (int)QuestState.ObjectivesMet;
                 RpcNotice($"{cfg.DisplayName} has been cleared! Follow the gold marker to " +
@@ -514,6 +545,50 @@ namespace RadiantPool.Game
             }
             string place = destinationZone < 0 ? "Council Hall" : Zones[destinationZone].DisplayName;
             RpcNotice($"The party travels to {place}.");
+        }
+
+        /// <summary>Resolve a quest's authored on-site objective after its combat blocks.
+        /// The server validates ownership, proximity, progress, and the offered choice;
+        /// no exception may escape a ServerRpc because FishNet treats that as malformed input.</summary>
+        [ServerRpc(RequireOwnership = false)]
+        public void CmdResolveSiteAction(int zone, int choice, NetworkConnection conn = null)
+        {
+            try
+            {
+                if (zone < 0 || zone >= Zones.Length) return;
+                var cfg = Zones[zone];
+                if (string.IsNullOrEmpty(cfg.SiteAction) || IsSiteActionComplete(zone)) return;
+                if (GetZoneState(zone) != QuestState.Active)
+                { RpcNotice("That commission is not active."); return; }
+                if (zone >= ZoneClearedCounts.Count
+                    || ZoneClearedCounts[zone] < cfg.RequiredEncounters)
+                { RpcNotice("Secure the site before completing that objective."); return; }
+
+                var caller = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                    .FirstOrDefault(p => p.Owner == conn && !p.IsCompanion);
+                var objective = FindObjectsByType<CampaignObjectiveInteract>(FindObjectsSortMode.None)
+                    .FirstOrDefault(o => o.ZoneIndex == zone);
+                if (caller == null || objective == null
+                    || Vector3.Distance(caller.transform.position, objective.transform.position)
+                    > objective.InteractRange + 0.75f)
+                { RpcNotice("Reach the quest objective first."); return; }
+
+                bool hasChoice = !string.IsNullOrEmpty(cfg.ChoiceA)
+                                 && !string.IsNullOrEmpty(cfg.ChoiceB);
+                if (hasChoice && choice != 0 && choice != 1) return;
+                string result = hasChoice ? (choice == 0 ? cfg.ChoiceA : cfg.ChoiceB) : "completed";
+                CompletedSiteActions.Add(cfg.ZoneId + "|" + result);
+                RpcNotice(hasChoice
+                    ? $"Decision recorded: {result}."
+                    : $"Objective complete: {cfg.SiteAction}");
+                ServerRecheckZone(zone);
+                ServerSaveCampaign();
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[SiteAction] rejected safely: {e.Message}");
+                RpcNotice("That objective could not be resolved.");
+            }
         }
 
         [Server]
@@ -918,7 +993,8 @@ namespace RadiantPool.Game
         }
 
         /// <summary>Build-only regression for server-authoritative party travel: use the
-        /// same RPC as the waystone UI to visit the first commissioned site and return.</summary>
+        /// same RPC as the waystone UI to visit every commissioned site and return. This
+        /// also proves each live zone has exactly its configured required encounters.</summary>
         private System.Collections.IEnumerator CampaignTravelSelfTest()
         {
             yield return new WaitForSeconds(8f);
@@ -926,35 +1002,85 @@ namespace RadiantPool.Game
                 .FirstOrDefault(p => !p.IsCompanion && p.Owner != null && p.Owner.IsValid);
             var directory = FindObjectsByType<CampaignTravel>(FindObjectsSortMode.None)
                 .FirstOrDefault(t => t.IsDirectory);
-            var site = FindObjectsByType<CampaignDestination>(FindObjectsSortMode.None)
-                .FirstOrDefault(d => d.ZoneIndex == 0);
             var hub = FindObjectsByType<CampaignDestination>(FindObjectsSortMode.None)
                 .FirstOrDefault(d => d.ZoneIndex == -1);
-            if (holder == null || directory == null || site == null || hub == null)
+            if (holder == null || directory == null || hub == null)
             {
                 Debug.Log("[TravelTest] FAIL - player or waystone anchors missing");
                 yield break;
             }
 
             int oldMuster = MusterState.Value;
-            int oldZone = ZoneStates.Count > 0 ? ZoneStates[0] : (int)QuestState.Locked;
+            var oldZones = ZoneStates.ToArray();
+            var oldCounts = ZoneClearedCounts.ToArray();
+            var oldActions = CompletedSiteActions.ToArray();
             MusterState.Value = (int)QuestState.Completed;
-            if (ZoneStates.Count > 0) ZoneStates[0] = (int)QuestState.Active;
 
-            Warp(holder.transform, directory.transform.position + Vector3.right * 1.5f);
-            CmdTravelTo(0, holder.Owner);
-            yield return new WaitForSeconds(0.5f);
-            bool reachedSite = Vector3.Distance(holder.transform.position, site.transform.position) < 3f;
+            int reached = 0;
+            int authored = 0;
+            int objectiveAnchors = 0;
+            int returned = 0;
+            var triggers = FindObjectsByType<EncounterTrigger>(FindObjectsSortMode.None);
+            var actions = FindObjectsByType<CampaignObjectiveInteract>(FindObjectsSortMode.None);
+            for (int i = 0; i < Zones.Length; i++)
+            {
+                if (i < ZoneStates.Count) ZoneStates[i] = (int)QuestState.Active;
+                Warp(holder.transform, directory.transform.position + Vector3.right * 1.5f);
+                CmdTravelTo(i, holder.Owner);
+                yield return new WaitForSeconds(0.15f);
 
-            CmdTravelTo(-1, holder.Owner);
-            yield return new WaitForSeconds(0.5f);
-            bool reachedHub = Vector3.Distance(holder.transform.position, hub.transform.position) < 3f;
+                var site = FindObjectsByType<CampaignDestination>(FindObjectsSortMode.None)
+                    .FirstOrDefault(d => d.ZoneIndex == i);
+                if (site != null
+                    && Vector3.Distance(holder.transform.position, site.transform.position) < 3f)
+                    reached++;
+                if (triggers.Count(t => t.ZoneId == Zones[i].ZoneId && t.RequiredForClear)
+                    == Zones[i].RequiredEncounters)
+                    authored++;
+                if (string.IsNullOrEmpty(Zones[i].SiteAction)
+                    || actions.Count(a => a.ZoneIndex == i) == 1)
+                    objectiveAnchors++;
+
+                CmdTravelTo(-1, holder.Owner);
+                yield return new WaitForSeconds(0.15f);
+                if (Vector3.Distance(holder.transform.position, hub.transform.position) < 3f)
+                    returned++;
+            }
+
+            int actionZone = System.Array.FindIndex(Zones, z => !string.IsNullOrEmpty(z.SiteAction));
+            bool actionResolved = false;
+            if (actionZone >= 0)
+            {
+                var objective = actions.FirstOrDefault(a => a.ZoneIndex == actionZone);
+                if (objective != null)
+                {
+                    ZoneStates[actionZone] = (int)QuestState.Active;
+                    ZoneClearedCounts[actionZone] = Zones[actionZone].RequiredEncounters;
+                    Warp(holder.transform, objective.transform.position + Vector3.right * 1.5f);
+                    CmdResolveSiteAction(actionZone, 0, holder.Owner);
+                    yield return new WaitForSeconds(0.2f);
+                    actionResolved = IsSiteActionComplete(actionZone)
+                                     && GetZoneState(actionZone) == QuestState.ObjectivesMet;
+                }
+            }
 
             MusterState.Value = oldMuster;
-            if (ZoneStates.Count > 0) ZoneStates[0] = oldZone;
-            Debug.Log($"[TravelTest] {(reachedSite && reachedHub ? "PASS" : "FAIL")} - " +
-                      $"site {(reachedSite ? "reached" : "missed")}; " +
-                      $"hub {(reachedHub ? "reached" : "missed")}");
+            for (int i = 0; i < oldZones.Length && i < ZoneStates.Count; i++)
+                ZoneStates[i] = oldZones[i];
+            for (int i = 0; i < oldCounts.Length && i < ZoneClearedCounts.Count; i++)
+                ZoneClearedCounts[i] = oldCounts[i];
+            CompletedSiteActions.Clear();
+            foreach (string action in oldActions) CompletedSiteActions.Add(action);
+            bool pass = reached == Zones.Length && authored == Zones.Length
+                        && objectiveAnchors == Zones.Length
+                        && actionResolved
+                        && returned == Zones.Length;
+            Debug.Log($"[TravelTest] {(pass ? "PASS" : "FAIL")} - " +
+                      $"{reached}/{Zones.Length} sites reached; " +
+                      $"{authored}/{Zones.Length} encounter sets authored; " +
+                      $"{objectiveAnchors}/{Zones.Length} objectives anchored; " +
+                      $"site objective {(actionResolved ? "resolved" : "failed")}; " +
+                      $"{returned}/{Zones.Length} hub returns");
         }
 
         /// <summary>Screenshot-only QA path: park north of the council forecourt, face the
@@ -1019,6 +1145,47 @@ namespace RadiantPool.Game
             ScreenCapture.CaptureScreenshot(path);
             yield return new WaitForSeconds(2f);
             Debug.Log($"[NextQuestCapture] wrote Lightwell-to-Ashen-Ward waypoint frame to {path}");
+        }
+
+        /// <summary>Screenshot-only QA for the expansion's remote-cell composition.
+        /// Parks at the final spire with a real active quest, daylight, world label,
+        /// encounters, objective marker, and shared-palette environment all visible.</summary>
+        private System.Collections.IEnumerator CampaignSiteCapture(string path)
+        {
+            yield return new WaitForSeconds(8f);
+            var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => !p.IsCompanion && p.Owner != null && p.Owner.IsValid);
+            int zone = System.Array.FindIndex(Zones, z => z.ZoneId == "ember_crown_spire");
+            var destination = FindObjectsByType<CampaignDestination>(FindObjectsSortMode.None)
+                .FirstOrDefault(d => d.ZoneIndex == zone);
+            if (holder == null || zone < 0 || destination == null)
+            {
+                Debug.Log("[SiteCapture] FAIL - player or final site missing");
+                yield break;
+            }
+
+            int oldMuster = MusterState.Value;
+            var oldStates = ZoneStates.ToArray();
+            MusterState.Value = (int)QuestState.Completed;
+            for (int i = 0; i < ZoneStates.Count; i++) ZoneStates[i] = (int)QuestState.Locked;
+            ZoneStates[zone] = (int)QuestState.Active;
+            // Destination anchors sit 14 m south of each cell's centre. Move into the
+            // composition and look back across it so the camera is not outside the low
+            // perimeter wall or tucked behind the return stone.
+            Warp(holder.transform, destination.transform.position + new Vector3(0f, 0f, 14f));
+            holder.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+            var orbit = Camera.main != null ? Camera.main.GetComponent<OrbitCamera>() : null;
+            if (orbit != null) orbit.SetPresentationView(180f, 34f, 16f);
+            ServerSetWorldHourForTest(14f);
+            yield return new WaitForSeconds(2f);
+            string directory = System.IO.Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(directory)) System.IO.Directory.CreateDirectory(directory);
+            ScreenCapture.CaptureScreenshot(path);
+            yield return new WaitForSeconds(2f);
+            MusterState.Value = oldMuster;
+            for (int i = 0; i < oldStates.Length; i++) ZoneStates[i] = oldStates[i];
+            ServerClearWorldHourTestOverride();
+            Debug.Log($"[SiteCapture] wrote Ember Crown Spire frame to {path}");
         }
 
         /// <summary>A teleport that sticks. A CharacterController overwrites a direct
@@ -1260,6 +1427,15 @@ namespace RadiantPool.Game
                         ? cfg.Description + "\n" : $"Clear {cfg.DisplayName}. ")
                     + $"<b>Cleared {done}/{cfg.RequiredEncounters}</b> — the red X on the " +
                     "minimap marks the nearest fight.";
+                if (!string.IsNullOrEmpty(cfg.SiteAction))
+                {
+                    string result = SiteActionResult(i);
+                    detail += "\n" + (IsSiteActionComplete(i)
+                        ? $"<b>Site objective complete</b>" +
+                          (result == "completed" || string.IsNullOrEmpty(result)
+                              ? "." : $": {result}.")
+                        : $"<b>Site objective:</b> {cfg.SiteAction}");
+                }
                 DrawQuest(cfg.QuestName, GetZoneState(i), detail,
                     (float)done / cfg.RequiredEncounters, i);
             }

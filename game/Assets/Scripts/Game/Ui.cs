@@ -91,7 +91,7 @@ namespace RadiantPool.Game
         /// <summary>The big screens are mutually exclusive: opening one closes the others,
         /// so they can never stack into an unreadable pile (they used to overlap dead
         /// centre). Esc closes whatever is open before it reaches for Settings.</summary>
-        public enum Panel { None, Inventory, Journal, Settings, LevelUp, Session, Travel }
+        public enum Panel { None, Inventory, Journal, Settings, LevelUp, Session, Travel, SiteAction }
 
         public static Panel OpenPanel { get; private set; } = Panel.None;
 

@@ -153,7 +153,24 @@ namespace RadiantPool.Game
                 string zoneId = director.Zones[activeZone].ZoneId;
                 var zoneFights = candidates
                     .Where(t => t.ZoneId == zoneId && t.RequiredForClear).ToList();
-                if (zoneFights.Count == 0) return;
+                if (zoneFights.Count == 0)
+                {
+                    var cfg = director.Zones[activeZone];
+                    if (!string.IsNullOrEmpty(cfg.SiteAction)
+                        && !director.IsSiteActionComplete(activeZone))
+                    {
+                        var action = FindObjectsByType<CampaignObjectiveInteract>(
+                                FindObjectsSortMode.None)
+                            .FirstOrDefault(a => a.ZoneIndex == activeZone);
+                        if (action != null)
+                        {
+                            TargetPosition = action.transform.position;
+                            TargetLabel = $"{cfg.DisplayName} - {cfg.SiteAction}";
+                            HasTarget = true;
+                        }
+                    }
+                    return;
+                }
 
                 // "Retake the Old Docks" is meaningless if you don't know where the Old
                 // Docks are. While the party is still out of the quarter, steer them at
@@ -205,18 +222,29 @@ namespace RadiantPool.Game
                 var cfg = d.Zones[tracked];
                 int done = tracked < d.ZoneClearedCounts.Count ? d.ZoneClearedCounts[tracked] : 0;
                 int need = cfg.RequiredEncounters;
-                bool cleared = state == QuestState.ObjectivesMet || done >= need;
+                bool cleared = done >= need;
+                bool actionDone = d.IsSiteActionComplete(tracked);
 
                 steps.Add((cleared
                     ? $"Clear {cfg.DisplayName} — {need}/{need}"
                     : $"Clear {cfg.DisplayName} — {done}/{need} ({need - done} left)", cleared));
+                if (!string.IsNullOrEmpty(cfg.SiteAction))
+                {
+                    string result = d.SiteActionResult(tracked);
+                    steps.Add((actionDone
+                        ? (string.IsNullOrEmpty(result) || result == "completed"
+                            ? cfg.SiteAction : $"{cfg.SiteAction} - {result}")
+                        : cfg.SiteAction, actionDone));
+                }
                 if (state == QuestState.ObjectivesMet)
                 {
                     steps.Add(("TURN IN at Council Hall - speak with Councilor Veresk", false));
                     return ($"READY TO TURN IN: {cfg.QuestName}", steps);
                 }
 
-                steps.Add(("When clear: follow the gold marker back to Council Hall", false));
+                steps.Add((cleared && !actionDone
+                    ? "Complete the gold-marked objective at this site"
+                    : "When complete: follow the gold marker back to Council Hall", false));
                 return (cfg.QuestName, steps);
             }
 

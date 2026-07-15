@@ -16,11 +16,38 @@ namespace RadiantPool.Rules.Tests
     public class CampaignSimulationTests
     {
         private const int MusterXp = 50;
+        // One valid topological play order through every live location. Parallel Council
+        // commissions can be chosen differently in-game; the simulator needs only one
+        // deterministic order that respects the same prerequisite graph.
         private static readonly (string zone, int questXp)[] ZoneChain =
         {
-            ("old_docks", 300), ("drowned_market", 900),
-            ("sunken_warcamp", 1200), ("glasslit_temple", 3400),
-            ("ashen_ward", 1200)
+            ("old_docks", 300),
+            ("drowned_bastion", 500),
+            ("cinderwell_yard", 350),
+            ("drowned_market", 900),
+            ("sunken_warcamp", 1200),
+            ("cinderwell_undercroft", 450),
+            ("ember_archive", 650),
+            ("loomhouse_enclave", 700),
+            ("blackbriar_manor", 700),
+            ("glasslit_temple", 3400),
+            ("ashen_ward", 1200),
+            ("emberwild_expanse", 400),
+            ("wild_lairs", 650),
+            ("reedwind_encampment", 800),
+            ("goblin_delves", 850),
+            ("drowned_observatory_approach", 400),
+            ("drowned_observatory_underworks", 400),
+            ("drowned_observatory_crown", 1200),
+            ("gilded_quarter", 750),
+            ("mirewatch_citadel", 1000),
+            ("tidebreaker_anchorage", 1000),
+            ("iron_concord_redoubt", 1100),
+            ("lanternfall_necropolis", 1000),
+            ("cinder_gate", 1300),
+            ("crownless_citadel", 700),
+            ("thornmaze", 800),
+            ("ember_crown_spire", 2000)
         };
 
         private static string ContentRoot()
@@ -193,8 +220,9 @@ namespace RadiantPool.Rules.Tests
             Assert.Equal(5, cleric.Level);
             Assert.False(fighter.IsDead);
             Assert.False(cleric.IsDead);
-            // Difficulty sanity: basic tactics shouldn't wipe more than a few times total.
-            Assert.True(totalWipes <= 6, $"campaign too hard: {totalWipes} wipes at seed {seed}");
+            // Difficulty sanity across 81 required fights: basic tactics should still
+            // average well below one wipe per location.
+            Assert.True(totalWipes <= 18, $"campaign too hard: {totalWipes} wipes at seed {seed}");
         }
 
         [Fact]

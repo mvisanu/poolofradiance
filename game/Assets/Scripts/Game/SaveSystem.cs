@@ -19,6 +19,9 @@ namespace RadiantPool.Game
         public bool CampaignComplete;
         public List<string> Stash = new List<string>();
         public List<string> ConsumedEncounters = new List<string>();
+        /// <summary>Stable `zoneId|result` records for recoveries, rescues, controls,
+        /// and player choices. Empty in older saves, which correctly means unresolved.</summary>
+        public List<string> CompletedSiteActions = new List<string>();
         public List<SavedCharacter> Roster = new List<SavedCharacter>();
     }
 

@@ -62,15 +62,4 @@ namespace RadiantPool.Game
         }
     }
 
-    /// <summary>Keeps a transform facing the camera.</summary>
-    public class Billboard : MonoBehaviour
-    {
-        private void LateUpdate()
-        {
-            var cam = Camera.main;
-            if (cam == null) return;
-            transform.rotation = Quaternion.LookRotation(
-                transform.position - cam.transform.position);
-        }
-    }
 }

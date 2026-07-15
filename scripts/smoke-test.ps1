@@ -78,7 +78,7 @@ $travelSave = Join-Path $logDir "travelsave"
 Remove-Item -Recurse -Force $travelSave -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $travelSave | Out-Null
 $travelProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Fara","-autohost","-traveltest","-savedir",$travelSave,"-logFile",$travelLog -PassThru
-Start-Sleep -Seconds 14
+Start-Sleep -Seconds 22
 Stop-Process -Id $travelProc.Id -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 $travelText = Get-Content $travelLog -Raw
@@ -130,7 +130,7 @@ $checks = @(
     @{ Name = "completed four-zone save unlocks the next quest"; Ok = $migrationText -match "\[CampaignMigration\] PASS.+Beyond the Lightwell" },
     @{ Name = "new quest has a live Ashen Ward waypoint"; Ok = $migrationText -match "\[NextQuestWaypointTest\] PASS.+target 'The Ashen Ward'" },
     @{ Name = "save migration has no runtime exception"; Ok = $migrationText -notmatch "Exception|\[CampaignMigration\] FAIL" },
-    @{ Name = "campaign waystone reaches a site and returns to Council Hall"; Ok = $travelText -match "\[TravelTest\] PASS - site reached; hub reached" },
+    @{ Name = "campaign waystone reaches every authored site and returns to Council Hall"; Ok = $travelText -match "\[TravelTest\] PASS - 27/27 sites reached; 27/27 encounter sets authored; 27/27 objectives anchored; site objective resolved; 27/27 hub returns" },
     @{ Name = "campaign travel has no runtime exception"; Ok = $travelText -notmatch "Exception|\[TravelTest\] FAIL" },
     @{ Name = "one click on a distant enemy closes in and attacks"; Ok = $fightText -match "\[AttackTest\] PASS" },
     @{ Name = "no failed attack assertion";        Ok = $fightText -notmatch "\[AttackTest\] FAIL" },
