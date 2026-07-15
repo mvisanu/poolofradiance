@@ -33,7 +33,7 @@ Build output: `game/Builds/Win64/RadiantPool.exe`. Exe flags for automation:
 `-name <n> [-class Fighter|Wizard|Cleric|Rogue] -autohost` /
 `-name <n> -autojoin localhost`; **self-tests** `-selltest`
 (bag → trader → purse), `-leveltest` (XP → level → point spent), `-attacktest` (one click on
-a distant enemy → walk → blow), `-combatflowtest` (physical menu → enemy round →
+a distant enemy → walk → blow + monster HUD), `-combatflowtest` (direct world attack → enemy round →
 slotted magic → victory modal → defeat modal → retry), `-warpsmith` (park at the smithy so a shop panel can be
 LOOKED at); **visual QA** `-worldmapcapture <png>` opens the maximized campaign atlas through
 `MiniMap.ShowCampaignAtlasForTest`, captures it without desktop input, and restores the
@@ -93,8 +93,8 @@ mouse and the self-test drive the very same code.
   **Gold lives on the HotBar** (`{PartyGold:N0}g`, always visible): it used to exist only
   inside the bags and the shops, so the purse never visibly moved and the total read like a
   placeholder. Format gold `:N0` everywhere — "1,234", never "1234".
-  `HotBar.cs` = persistent bottom action bar (combat slots delegate to
-  `CombatClientUI.Instance.PickAttack/PickSpell`); its slots SHRINK to fit rather than
+  `HotBar.cs` = persistent bottom action bar (named spell slots delegate to
+  `CombatClientUI.Instance.PickSpell`; the default attack has no button); its slots SHRINK to fit rather than
   overflow (a cleric in combat needs 12). Combat HUD is a slim strip docked above it so
   the battlefield stays visible. **Your HEALTH rides above the bar** (`HotBar.DrawHealth`):
   a slim strip with the bar, `hp/max` AND the percentage — the combat unit's HP while a fight
@@ -108,8 +108,11 @@ mouse and the self-test drive the very same code.
   take two clicks — walk, then swing — and the second was the easiest thing in the game to
   forget). Click ground = move, Space = end turn, **WASD/middle-drag pans the
   camera and F recentres** (the grid owns movement, so those keys are free).
-  The turn strip also exposes **Physical Attack [A] / Magic Attack [C] / Backspace cancel**;
-  its target buttons converge on the same close-in-and-strike path. While a queued action is
+  There are **no generic Physical Attack / Magic Attack buttons**: the world is the default
+  attack control, while each named spell remains a hotbar ability and opens only its legal
+  target picker (Backspace cancels). Every living monster has an exact `hp/max` bar above its
+  rendered head plus a deterministic generated triangle/square/circle/diamond/hex/cross icon;
+  the shapes are textures, never unsupported font glyphs. While a queued action is
   resolving, input is locked until wind-up, configured impact, HP sync, and recovery finish.
   Damage is applied at impact, not at button press. Victory/defeat are persistent modals;
   defeat offers a server-validated retry of the same encounter.

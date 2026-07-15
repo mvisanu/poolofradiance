@@ -60,7 +60,7 @@ namespace RadiantPool.Game
             string[] spells = inCombat ? CombatClientUI.KnownSpells(cls)
                 : System.Array.Empty<string>();
 
-            int combatSlots = inCombat ? 3 + spells.Length : 0;   // attack, dodge, end
+            int combatSlots = inCombat ? 2 + spells.Length : 0;   // dodge, end + named spells
             const int utilSlots = 5;                    // potion, bag, journal, session, cog
             int slots = combatSlots + utilSlots;
 
@@ -95,7 +95,6 @@ namespace RadiantPool.Game
             if (inCombat)
             {
                 GUI.enabled = myTurn && combat.ActionLeft;
-                if (Btn("attack", "Attack")) CombatClientUI.Instance?.PickAttack();
                 if (Btn("dodge", "Dodge")) combat.CmdDodge();
 
                 foreach (var id in spells)

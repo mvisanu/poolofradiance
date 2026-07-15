@@ -6,14 +6,16 @@ Prereq: build per `docs/SETUP.md`, host + join two instances (`docs/playtest-pha
 1. Host and joiner both walk into a warehouse-yard encounter volume → both screens freeze
    explore movement, a checkerboard grid appears, all party members snap to cells,
    initiative list shows every unit in the same order on both machines.
-2. On your turn choose Physical Attack [A], then a distant enemy. The character closes in,
-   animates, applies damage at impact, and returns control without a second click.
-3. As a Cleric/Wizard choose Magic Attack [C], select a legal target, and cast Sacred Flame,
+2. Confirm every living monster has an exact HP bar above its head and a generated target
+   shape (triangle/square/circle/diamond/hexagon/cross).
+3. On your turn left-click a distant enemy. The character closes in, animates, applies damage
+   at impact, and returns control without a second click or an attack-mode button.
+4. As a Cleric/Wizard choose a named spell on the hotbar, select a legal target, and cast Sacred Flame,
    Fire Bolt, or a slotted spell. Confirm input is locked through wind-up/impact/recovery and
    the exact spell slot is deducted. Invalid/team/dead targets must not be offered.
-4. Confirm living enemies choose an authored melee/ranged action automatically and defeated
+5. Confirm living enemies choose an authored melee/ranged action automatically and defeated
    units receive no turns.
-5. Kill all monsters → the persistent Victory modal reports XP/loot and Continue returns to
+6. Kill all monsters → the persistent Victory modal reports XP/loot and Continue returns to
    exploration. Lose a fight → the Defeat modal offers Retry Battle / Return to Havenrock.
    Expect identical HP everywhere and no desync or exception after 3+ encounters.
 

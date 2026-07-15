@@ -1402,8 +1402,8 @@ namespace RadiantPool.Game
                 yield break;
             }
 
-            ui.PickAttack();
-            ui.PickTarget(physicalTarget.Id);
+            // Default attack has no mode button: the world click is the complete command.
+            ui.ClickCell(physicalTarget.Cell);
             deadline = Time.time + 15f;
             while (combat.InCombat.Value && (combat.ActionLeft || combat.ActionResolving)
                    && Time.time < deadline)
@@ -1550,6 +1550,27 @@ namespace RadiantPool.Game
             int sfxBefore = GameAudio.Instance != null ? GameAudio.Instance.SfxEventsPlayed : -1;
             int licensedBefore = GameAudio.Instance != null
                 ? GameAudio.Instance.LicensedSfxEventsPlayed : -1;
+            var hudEnemies = combat.ClientUnits.Where(u => !u.IsPc && !u.Dead).ToArray();
+            int distinctShapes = hudEnemies.Select(u => u.TargetShape).Distinct().Count();
+            bool rendererClick = Camera.main != null && hudEnemies.Any(u =>
+            {
+                if (u.Visual == null) return false;
+                Vector3 point = Camera.main.WorldToScreenPoint(u.Visual.position
+                    + Vector3.up * Mathf.Max(0.5f, u.LabelHeight * 0.5f));
+                return point.z > 0f && CombatClientUI.Instance.EnemyIdAtScreenPoint(point) == u.Id;
+            });
+            bool monsterHud = hudEnemies.Length > 0
+                              && hudEnemies.All(u => u.Visual != null && u.MaxHp > 0
+                                  && u.LabelHeight >= 1.25f
+                                  && CombatClientUI.TargetShapeTexture(u.TargetShape) != null)
+                              && distinctShapes == Mathf.Min(hudEnemies.Length,
+                                  CombatClientUI.TargetShapeCount)
+                              && rendererClick;
+            Debug.Log($"[MonsterHudTest] {(monsterHud ? "PASS" : "FAIL")} - " +
+                      $"health anchors {hudEnemies.Count(u => u.LabelHeight >= 1.25f)}/" +
+                      $"{hudEnemies.Length}, distinct generated target shapes {distinctShapes}, " +
+                      $"renderer click {(rendererClick ? "TARGETED" : "MISSED")}, " +
+                      $"last on-screen overlays {CombatClientUI.Instance.LastMonsterOverlayCount}");
             Debug.Log($"[AttackTest] one click on {enemy.Name} at {feet} ft " +
                       $"(move {combat.MoveLeft} ft, action {combat.ActionLeft})");
             CombatClientUI.Instance.ClickCell(enemy.Cell);
@@ -1599,7 +1620,7 @@ namespace RadiantPool.Game
                       $"Caves and Dungeons {GameAudio.Instance?.CavesTrackCount ?? 0}/5 zones");
             Debug.Log($"[SpellAudioTest] {(licensedSpell ? "PASS" : "FAIL")} - " +
                       $"fire cast + impact, last cue '{GameAudio.Instance?.LastLicensedCue ?? "none"}'");
-            bool pass = blockedApproach && weaponsVisible && combatLit
+            bool pass = blockedApproach && weaponsVisible && combatLit && monsterHud
                         && struck && visualFeedback && soundFeedback && assetAudio
                         && licensedWeapon && licensedSpell && battleMusic
                         && (feet <= 5 || walked);   // in reach already? then no walk owed

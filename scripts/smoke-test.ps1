@@ -148,8 +148,8 @@ Stop-Process -Id $fightProc.Id -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 $fightText = Get-Content $fightLog -Raw
 
-# The complete combat contract gets a Wizard and its own clean campaign: physical menu
-# action, enemy AI turn, magic action + spell-slot cost, victory modal, defeat modal, retry.
+# The complete combat contract gets a Wizard and its own clean campaign: direct world attack,
+# enemy AI turn, named magic action + spell-slot cost, victory modal, defeat modal, retry.
 Write-Host "Starting full combat-flow instance (-combatflowtest)..."
 $combatFlowLog = Join-Path $logDir "combat-flow.log"
 Remove-Item $combatFlowLog -ErrorAction SilentlyContinue
@@ -210,13 +210,15 @@ $checks = @(
     @{ Name = "encounter scaling has no runtime exception"; Ok = $scalingText -notmatch "Exception|\[ScalingTest\] FAIL" },
     @{ Name = "one click on a distant enemy closes in and attacks"; Ok = $fightText -match "\[AttackTest\] PASS" },
     @{ Name = "no failed attack assertion";        Ok = $fightText -notmatch "\[AttackTest\] FAIL" },
+    @{ Name = "monster overhead HP, target shapes, and renderer clicks work"; Ok = $fightText -match "\[MonsterHudTest\] PASS.+renderer click TARGETED" },
+    @{ Name = "no failed monster HUD assertion"; Ok = $fightText -notmatch "\[MonsterHudTest\] FAIL" },
     @{ Name = "combat attack produces graphics and sound feedback"; Ok = $fightText -match "presentation FX/SFX" },
     @{ Name = "licensed exploration and battle music are active"; Ok = $fightText -match "\[CombatAudioTest\] PASS.+Action RPG battle track.+Caves and Dungeons 5/5 zones" },
     @{ Name = "realistic weapon sounds are used"; Ok = $fightText -match "\[CombatAudioTest\] PASS.+licensed weapon SFX played" },
     @{ Name = "spell cast and impact sounds are used"; Ok = $fightText -match "\[SpellAudioTest\] PASS.+fire cast \+ impact" },
     @{ Name = "combat light covers every living unit"; Ok = $fightText -match "\[CombatLightTest\] PASS" },
     @{ Name = "no NullReference in combat log";    Ok = $fightText -notmatch "NullReferenceException" }
-    @{ Name = "full physical, enemy, magic, victory, defeat, and retry flow"; Ok = $combatFlowText -match "\[CombatFlowTest\] PASS" },
+    @{ Name = "full direct attack, enemy, magic, victory, defeat, and retry flow"; Ok = $combatFlowText -match "\[CombatFlowTest\] PASS" },
     @{ Name = "full combat flow has no failed assertion or runtime exception"; Ok = $combatFlowText -notmatch "\[CombatFlowTest\] FAIL|Exception" }
 )
 

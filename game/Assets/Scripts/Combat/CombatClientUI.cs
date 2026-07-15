@@ -5,14 +5,13 @@ using UnityEngine;
 
 namespace RadiantPool.Game
 {
-    /// <summary>IMGUI combat HUD for the gray-box phase: initiative order with HP,
-    /// combat log, and — on your turn — click-to-move on the grid, attack/spell target
-    /// pickers, Dodge and End Turn. Replaced by the themed UI at 3f.</summary>
+    /// <summary>Combat HUD: initiative, log, overhead enemy status, direct click-to-attack,
+    /// individual spell target pickers, Dodge and End Turn.</summary>
     public class CombatClientUI : MonoBehaviour
     {
         public static CombatClientUI Instance { get; private set; }
 
-        private enum Mode { Root, PickAttackTarget, PickSpell, PickSpellTarget }
+        private enum Mode { Root, PickSpellTarget }
         private Mode _mode = Mode.Root;
         private string _pendingSpell = "";
         private Vector2 _logScroll;
@@ -30,25 +29,12 @@ namespace RadiantPool.Game
         private void Awake() => Instance = this;
         private void OnDestroy() { if (Instance == this) Instance = null; }
 
-        /// <summary>HotBar hooks: begin target picking for the basic attack / a spell.</summary>
-        public void PickAttack()
-        {
-            _autoTarget = "";
-            _mode = Mode.PickAttackTarget;
-        }
-
+        /// <summary>HotBar hook: an individual spell opens its valid target picker.</summary>
         public void PickSpell(string spellId)
         {
             _autoTarget = "";
             _pendingSpell = spellId;
             _mode = Mode.PickSpellTarget;
-        }
-
-        public void PickMagic()
-        {
-            _autoTarget = "";
-            _pendingSpell = "";
-            _mode = Mode.PickSpell;
         }
 
         /// <summary>Shared target confirmation used by target buttons and unattended
@@ -57,14 +43,7 @@ namespace RadiantPool.Game
         {
             var combat = CombatManager.Instance;
             if (combat == null || !combat.CanAcceptPlayerInput) return;
-            if (_mode == Mode.PickAttackTarget)
-            {
-                var target = combat.ClientUnits.FirstOrDefault(u => u.Id == targetId);
-                _mode = Mode.Root;
-                if (target != null) ClickCell(target.Cell);
-                return;
-            }
-            else if (_mode == Mode.PickSpellTarget && _pendingSpell.Length > 0)
+            if (_mode == Mode.PickSpellTarget && _pendingSpell.Length > 0)
                 combat.CmdCast(_pendingSpell, targetId);
             else
                 return;
@@ -96,6 +75,56 @@ namespace RadiantPool.Game
         private static readonly System.Collections.Generic.Dictionary<string, Texture2D>
             IconCache = new System.Collections.Generic.Dictionary<string, Texture2D>();
 
+        public const int TargetShapeCount = 6;
+        private static readonly Texture2D[] TargetShapeIcons = new Texture2D[TargetShapeCount];
+        public int LastMonsterOverlayCount { get; private set; }
+        public int LastDistinctTargetShapeCount { get; private set; }
+        private GUIStyle _worldNameStyle;
+        private GUIStyle _worldHpStyle;
+
+        /// <summary>Generated geometry, not font glyphs: every encounter assigns enemies a
+        /// deterministic triangle, square, circle, diamond, hexagon, or cross marker.</summary>
+        public static Texture2D TargetShapeTexture(int shape)
+        {
+            shape = Mathf.Abs(shape) % TargetShapeCount;
+            if (TargetShapeIcons[shape] != null) return TargetShapeIcons[shape];
+
+            const int size = 24;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = $"TargetShape_{shape}",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            var pixels = new Color[size * size];
+            float center = (size - 1) * 0.5f;
+            float radius = size * 0.48f;
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float nx = (x - center) / radius;
+                float ny = (y - center) / radius;
+                float ax = Mathf.Abs(nx);
+                float ay = Mathf.Abs(ny);
+                bool inside = shape switch
+                {
+                    0 => ny >= -0.82f && ny <= 0.88f
+                         && ax <= (0.9f - ny) * 0.55f,
+                    1 => ax <= 0.74f && ay <= 0.74f,
+                    2 => nx * nx + ny * ny <= 0.58f,
+                    3 => ax + ay <= 0.98f,
+                    4 => ay <= 0.72f && ax <= 0.84f && ax + ay * 0.55f <= 1f,
+                    _ => Mathf.Max(ax, ay) <= 0.78f && (ax <= 0.22f || ay <= 0.22f)
+                };
+                pixels[y * size + x] = inside ? Color.white : Color.clear;
+            }
+            tex.SetPixels(pixels);
+            tex.Apply(false, true);
+            TargetShapeIcons[shape] = tex;
+            return tex;
+        }
+
         /// <summary>Action/spell icon from Resources/SpellIcons (game-icons.net, CC BY —
         /// see README). Swap the art by overwriting the same-named PNGs, e.g. with an
         /// imported Asset Store icon pack. Missing icons fall back to text-only.</summary>
@@ -107,12 +136,6 @@ namespace RadiantPool.Game
                 IconCache[id] = tex;   // caches null too
             }
             return tex;
-        }
-
-        private static GUIContent WithIcon(string id, string label)
-        {
-            var tex = Icon(id);
-            return tex != null ? new GUIContent(" " + label, tex) : new GUIContent(label);
         }
 
         /// <summary>Click-to-move: hover a grid cell to highlight it, click to walk
@@ -135,12 +158,9 @@ namespace RadiantPool.Game
             bool acting = combat != null && combat.CanAcceptPlayerInput && _mode == Mode.Root
                           && mine is { Down: false, Dead: false };
 
-            if (combat != null && combat.CanAcceptPlayerInput && !Ui.Typing && !Ui.PanelOpen)
-            {
-                if (Input.GetKeyDown(KeyCode.A)) PickAttack();
-                if (Input.GetKeyDown(KeyCode.C)) PickMagic();
-                if (Input.GetKeyDown(KeyCode.Backspace)) _mode = Mode.Root;
-            }
+            if (combat != null && combat.CanAcceptPlayerInput && !Ui.Typing && !Ui.PanelOpen
+                && Input.GetKeyDown(KeyCode.Backspace))
+                _mode = Mode.Root;
 
             // A walk ordered by an earlier click may have arrived: swing. This is deliberately
             // OUTSIDE the camera check below — the blow has to land in a headless run too
@@ -157,6 +177,24 @@ namespace RadiantPool.Game
                 _autoTarget = "";
                 combat.CmdEndTurn();
                 return;
+            }
+
+            // Prefer the monster's rendered bounds over ground projection. Projecting a
+            // click on a tall torso directly to the floor can land a square behind it.
+            if (Input.GetMouseButtonDown(0) && !IsMouseOverHud(combat))
+            {
+                string clickedId = EnemyIdAtScreenPoint(Input.mousePosition);
+                var clickedEnemy = combat.ClientUnits.FirstOrDefault(u => u.Id == clickedId);
+                if (clickedEnemy != null)
+                {
+                    ShowHover(true);
+                    SetHoverColor(new Color(0.9f, 0.25f, 0.2f));
+                    _hoverMarker.transform.position = combat.GridOrigin + new Vector3(
+                        clickedEnemy.Cell.x * CombatManager.CellSize, 0.05f,
+                        clickedEnemy.Cell.y * CombatManager.CellSize);
+                    ClickCell(clickedEnemy.Cell);
+                    return;
+                }
             }
 
             var plane = new Plane(Vector3.up, Vector3.zero);
@@ -180,6 +218,69 @@ namespace RadiantPool.Game
                 cell.x * CombatManager.CellSize, 0.05f, cell.y * CombatManager.CellSize);
 
             if (Input.GetMouseButtonDown(0)) ClickCell(cell);
+        }
+
+        /// <summary>The exact renderer/nameplate hit-test used by the real mouse path,
+        /// exposed so unattended verification can prove clicks do not rely on ground-only
+        /// projection.</summary>
+        public string EnemyIdAtScreenPoint(Vector3 pointer)
+        {
+            var combat = CombatManager.Instance;
+            var camera = Camera.main;
+            if (combat == null || camera == null) return "";
+            return EnemyUnderPointer(combat, camera, pointer)?.Id ?? "";
+        }
+
+        private static CombatManager.UnitView EnemyUnderPointer(CombatManager combat,
+            Camera camera, Vector3 pointer)
+        {
+            CombatManager.UnitView best = null;
+            float bestDepth = float.MaxValue;
+            foreach (var unit in combat.ClientUnits)
+            {
+                if (unit.IsPc || unit.Dead || unit.Visual == null) continue;
+                bool hasBounds = false;
+                float minX = float.MaxValue, minY = float.MaxValue;
+                float maxX = float.MinValue, maxY = float.MinValue;
+                float depth = float.MaxValue;
+                foreach (var renderer in unit.Visual.GetComponentsInChildren<Renderer>())
+                {
+                    if (renderer == null || !renderer.enabled) continue;
+                    Bounds b = renderer.bounds;
+                    for (int corner = 0; corner < 8; corner++)
+                    {
+                        var world = new Vector3(
+                            (corner & 1) == 0 ? b.min.x : b.max.x,
+                            (corner & 2) == 0 ? b.min.y : b.max.y,
+                            (corner & 4) == 0 ? b.min.z : b.max.z);
+                        Vector3 screen = camera.WorldToScreenPoint(world);
+                        if (screen.z <= 0f) continue;
+                        hasBounds = true;
+                        minX = Mathf.Min(minX, screen.x);
+                        maxX = Mathf.Max(maxX, screen.x);
+                        minY = Mathf.Min(minY, screen.y);
+                        maxY = Mathf.Max(maxY, screen.y);
+                        depth = Mathf.Min(depth, screen.z);
+                    }
+                }
+                if (!hasBounds) continue;
+
+                float padding = 8f * Ui.Scale;
+                var body = Rect.MinMaxRect(minX - padding, minY - padding,
+                    maxX + padding, maxY + padding);
+                Vector3 anchor = camera.WorldToScreenPoint(unit.Visual.position
+                    + Vector3.up * unit.LabelHeight);
+                float halfBar = 50f * Ui.Scale;
+                var nameplate = Rect.MinMaxRect(anchor.x - halfBar,
+                    anchor.y - 14f * Ui.Scale, anchor.x + halfBar,
+                    anchor.y + 24f * Ui.Scale);
+                if ((body.Contains(pointer) || nameplate.Contains(pointer)) && depth < bestDepth)
+                {
+                    best = unit;
+                    bestDepth = depth;
+                }
+            }
+            return best;
         }
 
         /// <summary>What a left-click on a square of the board MEANS — the one definition of
@@ -378,6 +479,75 @@ namespace RadiantPool.Game
             _hoverMat.SetColor("_EmissionColor", color * 0.9f);
         }
 
+        private static void DrawTargetShape(Rect rect, int shape, Color color)
+        {
+            var tex = TargetShapeTexture(shape);
+            Color old = GUI.color;
+            GUI.color = new Color(0.05f, 0.04f, 0.035f, 0.95f);
+            GUI.DrawTexture(new Rect(rect.x - 2f, rect.y - 2f,
+                rect.width + 4f, rect.height + 4f), tex, ScaleMode.StretchToFill, true);
+            GUI.color = color;
+            GUI.DrawTexture(rect, tex, ScaleMode.StretchToFill, true);
+            GUI.color = old;
+        }
+
+        /// <summary>Screen-space status stays legible at any camera angle while its anchor
+        /// follows the actual rendered model height. These are passive draw calls, so a click
+        /// through the marker still reaches ClickCell and performs the default attack.</summary>
+        private void DrawMonsterOverlays(CombatManager combat)
+        {
+            LastMonsterOverlayCount = 0;
+            LastDistinctTargetShapeCount = 0;
+            var camera = Camera.main;
+            if (camera == null) return;
+
+            if (_worldNameStyle == null)
+            {
+                _worldNameStyle = new GUIStyle(Theme.Caps)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    fontSize = 10,
+                    fontStyle = FontStyle.Bold,
+                    clipping = TextClipping.Clip
+                };
+                _worldHpStyle = new GUIStyle(Theme.Caps)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    fontSize = 9,
+                    fontStyle = FontStyle.Bold
+                };
+            }
+
+            var shapes = new HashSet<int>();
+            foreach (var unit in combat.ClientUnits)
+            {
+                if (unit.IsPc || unit.Dead || unit.Visual == null) continue;
+                Vector3 screen = camera.WorldToScreenPoint(unit.Visual.position
+                    + Vector3.up * unit.LabelHeight);
+                if (screen.z <= 0f) continue;
+
+                float x = screen.x / Ui.Scale;
+                float y = (Screen.height - screen.y) / Ui.Scale;
+                if (x < -80f || x > Ui.W + 80f || y < -40f || y > Ui.H + 40f) continue;
+
+                const float barWidth = 96f;
+                var marker = new Rect(x - barWidth * 0.5f, y - 19f, 16f, 16f);
+                Color markerColor = unit.Id == _autoTarget
+                    ? Theme.Gold : new Color(1f, 0.38f, 0.32f);
+                DrawTargetShape(marker, unit.TargetShape, markerColor);
+                GUI.Label(new Rect(x - barWidth * 0.5f + 19f, y - 20f,
+                    barWidth - 19f, 17f), unit.Name, _worldNameStyle);
+
+                var bar = new Rect(x - barWidth * 0.5f, y, barWidth, 12f);
+                Theme.Bar(bar, unit.MaxHp > 0 ? unit.DisplayHp / unit.MaxHp : 0f,
+                    Theme.HpRed);
+                GUI.Label(bar, $"{unit.Hp}/{unit.MaxHp}", _worldHpStyle);
+                LastMonsterOverlayCount++;
+                shapes.Add(unit.TargetShape);
+            }
+            LastDistinctTargetShapeCount = shapes.Count;
+        }
+
         private void OnGUI()
         {
             Ui.Begin();
@@ -391,6 +561,7 @@ namespace RadiantPool.Game
             DrawOutcomeBanner(combat);
             if (combat.ClientUnits.Count == 0) return;
 
+            DrawMonsterOverlays(combat);
             DrawInitiative(combat);
             DrawLog(combat);
             DrawMyCard(combat);
@@ -586,7 +757,7 @@ namespace RadiantPool.Game
         /// only while a target picker is open.</summary>
         private void DrawActions(CombatManager combat)
         {
-            float h = _mode == Mode.Root ? 88f : 112f;
+            float h = _mode == Mode.Root ? 58f : 112f;
             float w = Mathf.Min(740f, Ui.W - 24f);
             // Sits on the hotbar, wherever the hotbar ended up — it moves with the window.
             float barTop = HotBar.BarRect.height > 0f ? HotBar.BarRect.y : Ui.H - 82f;
@@ -609,70 +780,12 @@ namespace RadiantPool.Game
             GUILayout.Label(info, Theme.Body);
             GUILayout.EndHorizontal();
 
-            switch (_mode)
+            if (_mode == Mode.PickSpellTarget)
             {
-                case Mode.Root: DrawRootActions(combat); break;
-                case Mode.PickAttackTarget: DrawTargets(combat,
-                    CombatTargetType.Hostile, allowDowned: false,
-                    PickTarget); break;
-                case Mode.PickSpell: DrawSpells(combat); break;
-                case Mode.PickSpellTarget:
-                    var spell = SpellLibrary.Get(_pendingSpell);
-                    DrawTargets(combat, spell.TargetType, spell.AllowDownedTarget,
-                        PickTarget);
-                    break;
+                var spell = SpellLibrary.Get(_pendingSpell);
+                DrawTargets(combat, spell.TargetType, spell.AllowDownedTarget, PickTarget);
             }
             GUILayout.EndArea();
-        }
-
-        private void DrawRootActions(CombatManager combat)
-        {
-            var holder = LocalHolder();
-            bool ready = combat.CanAcceptPlayerInput;
-            bool hasMagic = holder != null && KnownSpells(holder.Class).Length > 0;
-            GUILayout.BeginHorizontal();
-            GUI.enabled = ready && combat.ActionLeft;
-            if (GUILayout.Button(WithIcon("attack", "Physical Attack  [A]"),
-                    GUILayout.Height(34f))) PickAttack();
-            GUI.enabled = ready && hasMagic && (combat.ActionLeft || combat.BonusLeft);
-            if (GUILayout.Button(WithIcon("cast", "Magic Attack  [C]"),
-                    GUILayout.Height(34f))) PickMagic();
-            GUI.enabled = ready;
-            if (GUILayout.Button(WithIcon("end_turn", "End Turn  [Space]"),
-                    GUILayout.Height(34f))) combat.CmdEndTurn();
-            GUI.enabled = true;
-            GUILayout.EndHorizontal();
-        }
-
-        private void DrawSpells(CombatManager combat)
-        {
-            var holder = LocalHolder();
-            if (holder == null) { _mode = Mode.Root; return; }
-            // One source of truth for who knows what: this used to fall back to the CLERIC
-            // list for anyone who wasn't a wizard, so a Fighter was offered Cure Wounds.
-            var known = KnownSpells(holder.Class);
-            if (known.Length == 0) { _mode = Mode.Root; return; }
-            int col = 0;
-            GUILayout.BeginHorizontal();
-            foreach (var id in known)
-            {
-                if (col == 3) { GUILayout.EndHorizontal(); GUILayout.BeginHorizontal(); col = 0; }
-                col++;
-                var spell = SpellLibrary.Get(id);
-                bool usable = combat.CanAcceptPlayerInput && (spell.Level == 0
-                    ? combat.ActionLeft
-                    : (spell.IsBonusAction ? combat.BonusLeft : combat.ActionLeft)
-                      && combat.MySlots[Mathf.Clamp(spell.Level - 1, 0, 2)] > 0);
-                GUI.enabled = usable;
-                if (GUILayout.Button(WithIcon(id, spell.Name), GUILayout.Height(32)))
-                {
-                    _pendingSpell = id;
-                    _mode = Mode.PickSpellTarget;
-                }
-            }
-            GUI.enabled = true;
-            if (GUILayout.Button("Back  [Backspace]")) _mode = Mode.Root;
-            GUILayout.EndHorizontal();
         }
 
         private void DrawTargets(CombatManager combat, CombatTargetType targetType,

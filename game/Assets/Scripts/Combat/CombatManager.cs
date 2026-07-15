@@ -35,6 +35,8 @@ namespace RadiantPool.Game
             public Transform Visual;          // player object or local monster capsule
             public bool Down, Dead;
             public float DisplayHp;
+            public float LabelHeight = 1.9f;
+            public int TargetShape;
         }
 
         public readonly List<UnitView> ClientUnits = new List<UnitView>();
@@ -1456,6 +1458,7 @@ namespace RadiantPool.Game
             LastRejection = "";
             OutcomeOpen = false;
             BannerTitle = "";
+            int monsterOrdinal = 0;
             for (int i = 0; i < ids.Length; i++)
             {
                 var view = new UnitView
@@ -1465,9 +1468,14 @@ namespace RadiantPool.Game
                     DisplayHp = hp[i],
                     Cell = new Vector2Int(cellX[i], cellY[i]), OwnerId = ownerIds[i]
                 };
+                if (!view.IsPc)
+                    view.TargetShape = monsterOrdinal++ % CombatClientUI.TargetShapeCount;
                 view.Visual = ResolveVisual(view);
                 if (view.Visual != null)
+                {
                     SnapVisual(view);
+                    view.LabelHeight = MeasureOverlayHeight(view.Visual);
+                }
                 ClientUnits.Add(view);
             }
             BuildOverlay();
@@ -1564,7 +1572,6 @@ namespace RadiantPool.Game
                         CharacterVisuals.SetHandItem(root.transform, "l",
                             loadout.shield ? "shield_badge" : "");
                     }
-                    AttachLabel(root.transform, view.Name);
                     return root.transform;
                 }
                 Destroy(root);
@@ -1582,8 +1589,18 @@ namespace RadiantPool.Game
                 ? new Vector3(1.35f, 1.35f, 1.35f) : new Vector3(0.9f, 0.9f, 0.9f);
             RuntimeArt.Paint(go, boss
                 ? new Color(0.55f, 0.1f, 0.12f) : new Color(0.75f, 0.25f, 0.2f));
-            AttachLabel(go.transform, view.Name);
             return go.transform;
+        }
+
+        private static float MeasureOverlayHeight(Transform root)
+        {
+            float maxY = root.position.y + 1.6f;
+            foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null || renderer.GetComponent<TextMesh>() != null) continue;
+                maxY = Mathf.Max(maxY, renderer.bounds.max.y);
+            }
+            return Mathf.Clamp(maxY - root.position.y + 0.25f, 1.25f, 4.5f);
         }
 
         /// <summary>Instantiates the actual ResolveVisual path for every rules-library
@@ -1669,20 +1686,6 @@ namespace RadiantPool.Game
 
             foreach (var entry in gallery)
                 if (entry.root != null) Destroy(entry.root.gameObject);
-        }
-
-        private static void AttachLabel(Transform parent, string text)
-        {
-            var label = new GameObject("Label");
-            label.transform.SetParent(parent, false);
-            label.transform.localPosition = new Vector3(0f, 1.9f, 0f);
-            var tm = label.AddComponent<TextMesh>();
-            tm.text = text;
-            tm.characterSize = 0.055f;
-            tm.fontSize = 40;
-            tm.anchor = TextAnchor.LowerCenter;
-            tm.color = new Color(1f, 0.7f, 0.6f);
-            label.AddComponent<Billboard>();
         }
 
         private void SnapVisual(UnitView view)

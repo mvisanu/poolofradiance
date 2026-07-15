@@ -59,12 +59,12 @@ Expected result:
 
 Player action:
 
-- The player selects an action from the combat menu.
+- The player either clicks an enemy for the default attack or selects a named hotbar ability.
 
 Required actions:
 
-- Physical Attack
-- Magic Attack
+- Direct default attack by left-clicking an enemy
+- Named spell abilities on the hotbar
 
 Expected result:
 
@@ -77,7 +77,8 @@ Expected result:
 
 Player action:
 
-- The player selects Physical Attack and chooses an enemy.
+- The player left-clicks an enemy in the world.
+- If needed, the character automatically moves next to the target before attacking.
 
 Expected result:
 
@@ -95,7 +96,7 @@ Expected result:
 
 Player action:
 
-- The player selects Magic Attack and chooses an enemy.
+- The player selects a named spell ability and chooses a legal target.
 
 Expected result:
 
@@ -328,11 +329,18 @@ Create the following UI components:
 
 ### Combat Action Menu
 
-- Physical Attack button
-- Magic Attack button
+- No generic Physical Attack or Magic Attack buttons
+- Left-clicking an enemy performs the default attack and automatically closes distance
+- Named spell abilities remain directly available on the hotbar
 - Back or Cancel button when applicable
 - Disabled state while an action is resolving
 - Keyboard navigation support
+
+### Monster Nameplates
+
+- Exact current/max health bar above every living monster's rendered head
+- Deterministic generated target shapes such as triangle, square, circle, and diamond
+- Shape and health presentation must remain readable at supported UI scales
 
 ### Target Selection UI
 
@@ -689,15 +697,15 @@ Produce:
 The completed sample must demonstrate this sequence:
 
 1. A battle begins with one player and at least two enemies.
-2. The player selects Physical Attack.
-3. The player chooses an enemy target.
-4. The attack animation plays.
+2. Every living enemy shows an overhead health bar and a distinct generated target shape.
+3. The player left-clicks a distant enemy once.
+4. The character automatically closes distance and the attack animation plays.
 5. The impact VFX appears at the correct animation frame.
 6. Damage is applied.
 7. The enemy health bar updates.
 8. The enemy performs its turn.
-9. The player selects Magic Attack.
-10. Magic points are deducted.
+9. The player selects a named spell ability from the hotbar.
+10. The appropriate spell slot is deducted.
 11. The casting animation and VFX play.
 12. The enemy is defeated when its health reaches zero.
 13. Defeated enemies no longer receive turns.

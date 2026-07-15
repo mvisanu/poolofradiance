@@ -15,8 +15,8 @@ Rules and presentation remain separate:
 - `game/Assets/Scripts/Combat/CombatManager.cs` is the authoritative network adapter. It
   accepts intents, validates range/ownership/resources, sequences one action, and broadcasts
   state plus presentation events.
-- `CombatClientUI.cs` owns action/target selection and status presentation. It never applies
-  damage or spends resources.
+- `CombatClientUI.cs` owns direct world attacks, individual spell target selection, overhead
+  monster HP/shape markers, and status presentation. It never applies damage or spends resources.
 - `CombatFx.cs`, `CharacterVisuals.cs`, and `GameAudio.cs` render replicated wind-up and
   impact events. Missing `Cast`/`Victory` parameters safely fall back to `Attack`.
 
@@ -45,8 +45,7 @@ classDiagram
       +Evaluate(combatants)
     }
     class CombatClientUI {
-      +PickAttack()
-      +PickMagic()
+      +PickSpell(id)
       +PickTarget(id)
       +ClickCell(cell)
     }
@@ -89,7 +88,7 @@ An action resolves in this order:
 
 ```mermaid
 flowchart LR
-    A[Menu or board input] --> B[Server validates actor, target, range, budget, slot]
+    A[Enemy world click or named ability] --> B[Server validates actor, target, range, budget, slot]
     B --> C[Enqueue one action and lock input]
     C --> D[Broadcast wind-up: face, move, attack or cast animation, audio and VFX]
     D --> E[Configured impact time or fallback timeout]
@@ -151,16 +150,20 @@ CombatClientUI
   Player status card (exact HP, smooth bar, spell-slot pips, defeated state)
   Combat message log
   Turn strip
-    Physical Attack [A]
-    Magic Attack [C]
-    target buttons + Back [Backspace]
-    End Turn [Space]
+    direct-click/default-attack guidance
+    named-spell target buttons + Back [Backspace]
 HotBar
-  quick attack, dodge, class spells, potion, end turn
+  dodge, named class spells, potion, end turn
+World-space monster HUD
+  exact hp/max bar above rendered head
+  triangle/square/circle/diamond/hexagon/cross target marker
 ```
 
-Target buttons and board clicks converge on `PickTarget`/`ClickCell`. A distant physical
-target uses the same remembered close-in-and-strike path as a direct board click.
+The generic Physical Attack and Magic Attack buttons are intentionally absent. A direct board
+click on a living enemy calls `ClickCell`; a distant target uses the remembered
+close-in-and-strike path. Named spell hotbar slots call `PickSpell` and show only legal targets.
+Monster markers are generated textures rather than font glyphs and are assigned deterministically
+within each encounter.
 Settings includes a persisted Reduced Motion toggle that disables combat camera trauma.
 
 ## Tests
@@ -179,21 +182,23 @@ scripts/ip-scan.ps1
 ```
 
 `RadiantPool.exe -class Wizard -autohost -combatflowtest -savedir <dir>` is the playable
-acceptance encounter. It proves physical selection/targeting, an enemy round, Burning Hands
+acceptance encounter. It proves direct world-click targeting, an enemy round, Burning Hands
 and slot deduction, synchronized defeat removal, victory modal, defeat modal, and retry. The
 smoke suite runs it in its own process and rejects runtime exceptions.
 
 Manual checklist:
 
 1. Start an encounter with at least two enemies and confirm deterministic initiative display.
-2. Choose Physical Attack, pick a distant enemy, and confirm walk, wind-up, impact, reaction,
+2. Left-click a distant enemy and confirm walk, wind-up, impact, reaction,
    damage number, and HP update occur in that order.
-3. End the turn and confirm each living enemy selects an in-range authored attack.
-4. Choose Magic Attack, verify invalid/dead/team targets are absent, cast a slotted spell,
+3. Confirm every living enemy has an overhead exact HP bar and a distinct generated target shape.
+4. End the turn and confirm each living enemy selects an in-range authored attack.
+5. Choose a named spell from the hotbar, verify invalid/dead/team targets are absent,
+   cast a slotted spell,
    and confirm the exact slot is deducted at impact.
-5. Confirm input controls are disabled while the action state says it is resolving.
-6. Defeat all enemies and use Continue on the victory modal.
-7. Lose a battle, confirm defeated characters cannot act, then exercise Retry Battle.
+6. Confirm input controls are disabled while the action state says it is resolving.
+7. Defeat all enemies and use Continue on the victory modal.
+8. Lose a battle, confirm defeated characters cannot act, then exercise Retry Battle.
 8. Check `Player.log` for zero exceptions or Animator parameter errors.
 
 ## Known limitations and extensions
@@ -207,5 +212,5 @@ Manual checklist:
   are implemented, but there is no generic cooldown UI.
 - Floating combat text is pooled. Impact sparks and optional third-party VFX remain short-lived
   objects; expand pooling if profiling shows pressure, without moving rules or timing into it.
-- Controller/touch can implement the same `PickAttack`, `PickMagic`, `PickTarget`, and
-  `ClickCell` public input boundary.
+- Controller/touch can implement the same `ClickCell`, `PickSpell`, and `PickTarget` public
+  input boundary.
