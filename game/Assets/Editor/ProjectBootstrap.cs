@@ -1409,6 +1409,13 @@ namespace RadiantPool.EditorTools
             auction.GetComponent<Renderer>().sharedMaterial = waystoneMat;
             auction.AddComponent<CampaignObjectiveInteract>().ZoneIndex = 1;
 
+            var delivery = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            delivery.name = "QuestObjective_old_docks_delivery";
+            delivery.transform.position = new Vector3(-48f, 0.7f, 18f);
+            delivery.transform.localScale = new Vector3(0.8f, 0.7f, 0.8f);
+            delivery.GetComponent<Renderer>().sharedMaterial = waystoneMat;
+            delivery.AddComponent<CampaignObjectiveInteract>().ZoneIndex = 0;
+
             // Vendor NPC by the council platform.
             var vendor = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             vendor.name = "The Salvage Exchange";
@@ -1452,6 +1459,27 @@ namespace RadiantPool.EditorTools
             splate.color = new Color(1f, 0.8f, 0.6f);
             splateGo.AddComponent<Billboard>();
 
+            // Local side-quest contact. The delivery resolves at the dock marker after
+            // the waterfront is secured; its journal objective is part of zone 0 so it
+            // shares save/progression truth rather than maintaining a duplicate counter.
+            var apothecary = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            apothecary.name = "Emberleaf Apothecary";
+            apothecary.transform.position = new Vector3(9f, 1.3f, -13f);
+            apothecary.GetComponent<Renderer>().sharedMaterial =
+                Mat("M_Apothecary", new Color(0.24f, 0.58f, 0.42f));
+            var apothecaryVisual = apothecary.AddComponent<NpcVisual>();
+            apothecaryVisual.Model = "Ranger";
+            var aplateGo = new GameObject("Nameplate");
+            aplateGo.transform.SetParent(apothecary.transform, false);
+            aplateGo.transform.localPosition = new Vector3(0f, 1.4f, 0f);
+            var aplate = aplateGo.AddComponent<TextMesh>();
+            aplate.text = "Emberleaf Apothecary";
+            aplate.characterSize = 0.055f;
+            aplate.fontSize = 40;
+            aplate.anchor = TextAnchor.LowerCenter;
+            aplate.color = new Color(0.64f, 1f, 0.76f);
+            aplateGo.AddComponent<Billboard>();
+
             // Networking + game systems.
             var netGo = new GameObject("NetworkManager");
             netGo.AddComponent<NetworkManager>();
@@ -1472,17 +1500,19 @@ namespace RadiantPool.EditorTools
                 new GameDirector.ZoneConfig
                 {
                     ZoneId = "old_docks", DisplayName = "The Old Docks",
-                    QuestName = "Retake the Old Docks",
+                    QuestName = "Retake the Old Docks / A Bitter Draught",
                     Description = "Squatter gangs hold three yards along the waterfront " +
-                        "WEST of the hub. Break all three, then follow the gold marker " +
-                        "back to Council Hall to turn in the commission.",
+                        "WEST of the hub. Break all three, deliver the Emberleaf " +
+                        "Apothecary's sealed draught at the marked dock contact, then " +
+                        "follow the gold marker back to Council Hall.",
                     RequiredEncounters = 3, XpEach = 300, Gold = 100,
-                    StartsAvailable = true
+                    StartsAvailable = true,
+                    SiteAction = "Deliver the apothecary's sealed draught to the dock contact."
                 },
                 new GameDirector.ZoneConfig
                 {
                     ZoneId = "drowned_market", DisplayName = "The Drowned Market",
-                    QuestName = "Silence the Drowned Market",
+                    QuestName = "Silence the Drowned Market / The Brass Auction",
                     Description = "The drowned dead haunt the flooded market NORTH of the " +
                         "hub. Lay all four hauntings to rest, then return SOUTH to Council Hall.",
                     RequiredEncounters = 4, XpEach = 900, Gold = 250,
