@@ -24,6 +24,11 @@ WoW-style camera.
 3. Launch the exe → **Host a campaign** → share the invite code; friends enter it and
    **Join**. Playtest script: `docs/playtest-phase2.md`.
 
+To make a single friend-ready Windows installer after building the player, install
+[Inno Setup](https://jrsoftware.org/isdl.php) and run `scripts/build-installer.ps1`.
+Share `game/Builds/Installer/RadiantPool-Setup-1.0.0.exe`; the recipient does not need
+Unity and can install, launch, and uninstall Radiant Pool like a normal Windows app.
+
 ## Rules tests only (no Unity required)
 ```powershell
 dotnet test rules/RadiantPool.Rules.sln

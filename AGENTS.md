@@ -22,6 +22,9 @@ scripts/compile-check.ps1
 # Two-instance netplay verification (host + join on loopback, asserts via logs):
 scripts/smoke-test.ps1
 
+# Package the existing Win64 player as one friend-ready installer (requires Inno Setup):
+scripts/build-installer.ps1
+
 # IP banned-term gate:
 scripts/ip-scan.ps1
 
@@ -29,7 +32,8 @@ scripts/ip-scan.ps1
 & "C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" -b -P scripts/make_beasts.py
 ```
 
-Build output: `game/Builds/Win64/RadiantPool.exe`. Exe flags for automation:
+Build output: `game/Builds/Win64/RadiantPool.exe`. Installer output:
+`game/Builds/Installer/RadiantPool-Setup-1.0.0.exe`. Exe flags for automation:
 `-name <n> -autohost` / `-name <n> -autojoin localhost`; **self-tests** `-selltest`
 (bag → trader → purse), `-leveltest` (XP → level → point spent), `-attacktest` (one click on
 a distant enemy → walk → blow → automatic turn end), `-warpsmith` (park at the smithy so a shop panel can be
