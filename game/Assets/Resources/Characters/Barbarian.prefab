@@ -64,38 +64,16 @@ PrefabInstance:
       propertyPath: m_Name
       value: Barbarian
       objectReference: {fileID: 0}
+    - target: {fileID: 5866666021909216657, guid: b872ceaf56b57de468aea40b207e20bc, type: 3}
+      propertyPath: m_Controller
+      value: 
+      objectReference: {fileID: 9100000, guid: 0f0d93ba8b8f4914bb80513398a859b8, type: 2}
+    - target: {fileID: 5866666021909216657, guid: b872ceaf56b57de468aea40b207e20bc, type: 3}
+      propertyPath: m_ApplyRootMotion
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: b872ceaf56b57de468aea40b207e20bc, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 6213769644059568288}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: b872ceaf56b57de468aea40b207e20bc, type: 3}
---- !u!1 &5074059347868096616 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: b872ceaf56b57de468aea40b207e20bc, type: 3}
-  m_PrefabInstance: {fileID: 5380613833089918265}
-  m_PrefabAsset: {fileID: 0}
---- !u!95 &6213769644059568288
-Animator:
-  serializedVersion: 7
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5074059347868096616}
-  m_Enabled: 1
-  m_Avatar: {fileID: 0}
-  m_Controller: {fileID: 9100000, guid: 0f0d93ba8b8f4914bb80513398a859b8, type: 2}
-  m_CullingMode: 0
-  m_UpdateMode: 0
-  m_ApplyRootMotion: 0
-  m_LinearVelocityBlending: 0
-  m_StabilizeFeet: 0
-  m_AnimatePhysics: 0
-  m_WarningMessage: 
-  m_HasTransformHierarchy: 1
-  m_AllowConstantClipSamplingOptimization: 1
-  m_KeepAnimatorStateOnDisable: 0
-  m_WriteDefaultValuesOnDisable: 0
