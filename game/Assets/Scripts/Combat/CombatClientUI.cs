@@ -455,7 +455,7 @@ namespace RadiantPool.Game
             if (Ui.OpenPanel != Ui.Panel.None) return true;   // a screen is up: never move
             var m = Ui.Mouse;
             if (InitiativeRect(combat).Contains(m)) return true;
-            if (LogRect.Contains(m)) return true;
+            if (_logRect.Contains(m)) return true;
             if (MyCardRect.Contains(m)) return true;
             if (HotBar.BarRect.Contains(m)) return true;
             if (MiniMap.MapRect.Contains(m)) return true;
@@ -581,18 +581,38 @@ namespace RadiantPool.Game
             // A screen is up (journal, settings): it owns the display. The combat strip is
             // still THERE — IsMouseOverHud already refuses clicks while a panel is open — it
             // just doesn't draw through the panel.
-            if (Ui.PanelOpen) return;
+            if (Ui.PanelOpen)
+            {
+                _logRect = default;
+                _actionsRect = default;
+                return;
+            }
             var combat = CombatManager.Instance;
-            if (combat == null) return;
+            if (combat == null)
+            {
+                _logRect = default;
+                _actionsRect = default;
+                return;
+            }
 
             DrawOutcomeBanner(combat);
-            if (combat.ClientUnits.Count == 0) return;
+            if (combat.ClientUnits.Count == 0)
+            {
+                _logRect = default;
+                _actionsRect = default;
+                return;
+            }
 
             DrawMonsterOverlays(combat);
             DrawInitiative(combat);
-            DrawLog(combat);
+            bool choosingTarget = combat.IsMyTurn && _mode != Mode.Root;
+            // Target selection is a short, high-priority interaction. Stow the journal until
+            // the choice is made so it can never cover either the attack/spell picker or the
+            // hotbar on narrow canvases.
+            if (choosingTarget) _logRect = default;
+            else DrawLog(combat);
             DrawMyCard(combat);
-            if (combat.IsMyTurn && _mode != Mode.Root) DrawActions(combat);
+            if (choosingTarget) DrawActions(combat);
             else
             {
                 _actionsRect = default;
@@ -602,15 +622,24 @@ namespace RadiantPool.Game
 
         // ---------- HUD geometry (one definition per panel; IsMouseOverHud reuses these) ----------
 
-        /// <summary>Combat log, bottom-left. Width and height give way on a small window
-        /// rather than sliding off the edge.</summary>
+        /// <summary>Combat log, bottom-left but docked above the complete hotbar bounds
+        /// (including its health strip). It used to anchor to Ui.H and physically cover the
+        /// combat/spell row and utility row whenever the hotbar grew wide enough.</summary>
         private static Rect LogRect
         {
             get
             {
                 float w = Mathf.Clamp(Ui.W * 0.32f, 240f, 384f);
-                float h = Mathf.Clamp(Ui.H * 0.26f, 110f, 162f);
-                return new Rect(12f, Ui.H - 12f - h, w, h);
+                float wantedHeight = Mathf.Clamp(Ui.H * 0.26f, 110f, 162f);
+                // BarRect is the one authoritative definition shared with click blocking.
+                // The conservative fallback protects the first OnGUI frame, before HotBar
+                // has published its layout (a wrapped bar plus health reaches ~163 units up).
+                float barTop = HotBar.BarRect.height > 0f
+                    ? HotBar.BarRect.yMin : Ui.H - 170f;
+                float bottom = Mathf.Min(Ui.H - 12f, barTop - 8f);
+                // Preserve room for the 100-unit player card stacked above this panel.
+                float h = Mathf.Min(wantedHeight, Mathf.Max(84f, bottom - 120f));
+                return new Rect(12f, bottom - h, w, h);
             }
         }
 
@@ -806,7 +835,8 @@ namespace RadiantPool.Game
 
         private void DrawLog(CombatManager combat)
         {
-            GUILayout.BeginArea(LogRect, Theme.PanelStyle);
+            _logRect = LogRect;
+            GUILayout.BeginArea(_logRect, Theme.PanelStyle);
             GUILayout.Label("Combat", Theme.Header);
             _logScroll = GUILayout.BeginScrollView(_logScroll);
             GUILayout.BeginVertical(Theme.ParchmentStyle);
@@ -820,6 +850,7 @@ namespace RadiantPool.Game
         }
 
         private Rect _actionsRect;
+        private Rect _logRect;
         private Vector2 _actionsScroll;
 
         /// <summary>Read-only UI state for the unattended combat test. Keeping the test on
@@ -827,6 +858,7 @@ namespace RadiantPool.Game
         /// into a button that looks present but never submits an attack.</summary>
         public bool AttackPickerOpenForTest => _mode == Mode.PickAttackTarget;
         public Rect ActionPanelRectForTest => _actionsRect;
+        public Rect CombatLogRectForTest => _logRect;
 
         /// <summary>Temporary target picker docked above the hotbar. The old permanent
         /// instruction/status strip is gone; height derives from target count so rows

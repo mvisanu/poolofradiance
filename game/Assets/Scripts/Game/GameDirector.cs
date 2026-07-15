@@ -1623,6 +1623,7 @@ namespace RadiantPool.Game
             // prove both the picker and hotbar stay inside the logical canvas.
             var combatUi = CombatClientUI.Instance;
             yield return null;
+            Rect rootLog = combatUi.CombatLogRectForTest;
             bool instructionGone = combatUi.ActionPanelRectForTest.width <= 0f;
             bool renderedUi = !Application.isBatchMode
                 && SystemInfo.graphicsDeviceType != UnityEngine.Rendering.GraphicsDeviceType.Null;
@@ -1635,6 +1636,7 @@ namespace RadiantPool.Game
             }
             Rect picker = combatUi.ActionPanelRectForTest;
             Rect bar = HotBar.BarRect;
+            Rect targetingLog = combatUi.CombatLogRectForTest;
             bool pickerResponsive = combatUi.AttackPickerOpenForTest
                 && (!renderedUi || (picker.width > 0f && picker.height > 0f
                     && picker.xMin >= -0.5f && picker.xMax <= Ui.W + 0.5f
@@ -1642,10 +1644,18 @@ namespace RadiantPool.Game
             bool hotbarResponsive = !renderedUi || (bar.width > 0f && bar.height > 0f
                 && bar.xMin >= -0.5f && bar.xMax <= Ui.W + 0.5f
                 && bar.yMin >= -0.5f && bar.yMax <= Ui.H + 0.5f);
-            bool combatUiReady = instructionGone && pickerResponsive && hotbarResponsive;
+            bool rootLogClear = !renderedUi || (rootLog.width > 0f && rootLog.height > 0f
+                && rootLog.xMin >= -0.5f && rootLog.yMin >= -0.5f
+                && rootLog.xMax <= Ui.W + 0.5f && rootLog.yMax <= bar.yMin - 7.5f);
+            bool targetingLogStowed = !renderedUi
+                || (targetingLog.width <= 0f && targetingLog.height <= 0f);
+            bool combatUiReady = instructionGone && pickerResponsive && hotbarResponsive
+                && rootLogClear && targetingLogStowed;
             string layoutResult = renderedUi
                 ? $"Attack picker {picker.width:0}x{picker.height:0} inside {Ui.W:0}x{Ui.H:0}; " +
-                  $"hotbar {bar.width:0}x{bar.height:0}"
+                  $"hotbar {bar.width:0}x{bar.height:0}; combat log " +
+                  $"{rootLog.width:0}x{rootLog.height:0} above bar and " +
+                  $"{(targetingLogStowed ? "stowed" : "VISIBLE")} while targeting"
                 : "headless Attack path active; rendered bounds covered by -combatuicapture";
             Debug.Log($"[CombatUiTest] {(combatUiReady ? "PASS" : "FAIL")} - " +
                       $"{layoutResult}; permanent instruction window " +
