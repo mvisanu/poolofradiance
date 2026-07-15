@@ -171,6 +171,8 @@ $checks = @(
     @{ Name = "no failed atmosphere assertion"; Ok = $hostText -notmatch "\[AtmosphereTest\] FAIL" },
     @{ Name = "quest turn-in guidance points to Council Hall"; Ok = $hostText -match "\[QuestGuidanceTest\] PASS" },
     @{ Name = "no failed quest-guidance assertion"; Ok = $hostText -notmatch "\[QuestGuidanceTest\] FAIL" },
+    @{ Name = "world atlas nests every destination inside six campaign regions"; Ok = $hostText -match "\[WorldMap\] PASS - 6 regions contain 27/27 campaign destinations" },
+    @{ Name = "world atlas hierarchy has no structural failure"; Ok = $hostText -notmatch "\[WorldMap\] FAIL" },
     @{ Name = "every creature mapping produces a visible real model"; Ok = $hostText -match "\[CreatureTest\] PASS - all creature visuals 11/11 visible, mappings 11/11" },
     @{ Name = "no failed creature visual or capsule fallback"; Ok = $hostText -notmatch "\[CreatureTest\] FAIL|falling back to a capsule" },
     @{ Name = "armed combat NPC weapons are visible"; Ok = $fightText -match "\[WeaponTest\] PASS - combat NPCs" },

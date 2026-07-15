@@ -159,6 +159,7 @@ namespace RadiantPool.Game
             int questLampCapture = System.Array.IndexOf(args, "-questlampcapture");
             int nextQuestCapture = System.Array.IndexOf(args, "-nextquestcapture");
             int siteCapture = System.Array.IndexOf(args, "-sitecapture");
+            int worldMapCapture = System.Array.IndexOf(args, "-worldmapcapture");
             _allowWorldTimeOverride = System.Array.IndexOf(args, "-atmospheretest") >= 0
                                       || System.Array.IndexOf(args, "-atmospherecapture") >= 0
                                       || questLampCapture >= 0 || siteCapture >= 0;
@@ -197,6 +198,8 @@ namespace RadiantPool.Game
                 StartCoroutine(NextQuestCapture(args[nextQuestCapture + 1]));
             if (siteCapture >= 0 && siteCapture + 1 < args.Length)
                 StartCoroutine(CampaignSiteCapture(args[siteCapture + 1]));
+            if (worldMapCapture >= 0 && worldMapCapture + 1 < args.Length)
+                StartCoroutine(WorldMapCapture(args[worldMapCapture + 1]));
 
             if (!SaveSystem.Exists) return;
             var save = SaveSystem.Read();
@@ -1835,6 +1838,48 @@ namespace RadiantPool.Game
             for (int i = 0; i < oldStates.Length; i++) ZoneStates[i] = oldStates[i];
             ServerClearWorldHourTestOverride();
             Debug.Log($"[SiteCapture] wrote {Zones[zone].QuestName} frame to {path}");
+        }
+
+        /// <summary>Screenshot-only QA for the maximized campaign atlas. It opens the map
+        /// through MiniMap's public control path, demonstrates completed/active/locked route
+        /// states, captures, and restores the campaign without sending desktop input.</summary>
+        private System.Collections.IEnumerator WorldMapCapture(string path)
+        {
+            yield return new WaitForSeconds(8f);
+            var map = FindFirstObjectByType<MiniMap>();
+            if (map == null)
+            {
+                Debug.Log("[WorldMapCapture] FAIL - minimap missing");
+                yield break;
+            }
+
+            int oldMuster = MusterState.Value;
+            var oldStates = ZoneStates.ToArray();
+            MusterState.Value = (int)QuestState.Completed;
+            for (int i = 0; i < ZoneStates.Count; i++)
+                ZoneStates[i] = (int)QuestState.Locked;
+
+            void SetAtlasState(string zoneId, QuestState state)
+            {
+                int i = System.Array.FindIndex(Zones, z => z.ZoneId == zoneId);
+                if (i >= 0) ZoneStates[i] = (int)state;
+            }
+            SetAtlasState("old_docks", QuestState.Completed);
+            SetAtlasState("drowned_market", QuestState.Active);
+            SetAtlasState("drowned_bastion", QuestState.Completed);
+            SetAtlasState("loomhouse_enclave", QuestState.Active);
+            SetAtlasState("cinderwell_yard", QuestState.Completed);
+            SetAtlasState("cinderwell_undercroft", QuestState.Active);
+
+            map.ShowCampaignAtlasForTest();
+            yield return new WaitForSeconds(2f);
+            string directory = System.IO.Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(directory)) System.IO.Directory.CreateDirectory(directory);
+            ScreenCapture.CaptureScreenshot(path);
+            yield return new WaitForSeconds(2f);
+            MusterState.Value = oldMuster;
+            for (int i = 0; i < oldStates.Length; i++) ZoneStates[i] = oldStates[i];
+            Debug.Log($"[WorldMapCapture] wrote six-region campaign atlas to {path}");
         }
 
         /// <summary>A teleport that sticks. A CharacterController overwrites a direct

@@ -50,8 +50,10 @@ namespace RadiantPool.Game
         private Texture2D _playerArrow, _questX, _enemyTri, _npcDiamond,
             _vendorSq, _smithSq, _gateSq, _partyDot;
         private Texture2D _icoExpand, _icoShrink, _icoMinimize, _icoRestore;
+        private Texture2D _atlasTexture, _atlasLocked, _atlasOpen, _atlasDone;
 
-        private GUIStyle _tagStyle, _tipStyle;
+        private GUIStyle _tagStyle, _tipStyle, _atlasRegionStyle, _atlasPlaceStyle,
+            _atlasOceanStyle, _atlasDetailStyle;
 
         private struct Marker { public Vector3 Pos; public Texture2D Tex; public float Size; }
         private readonly List<Marker> _markers = new List<Marker>();
@@ -63,13 +65,124 @@ namespace RadiantPool.Game
         private GUIStyle _placeStyle;
         private Transform _player;
         private float _nextScan;
+        private string _atlasPlayerPlace = "council_hall";
+
+        /// <summary>The maximized view is a campaign atlas rather than a magnified tactical
+        /// camera. Every playable zone belongs to one authored parent region, and its pin
+        /// sits inside that region's coastline. Positions are normalized atlas coordinates
+        /// (top-left origin), deliberately independent of the bootstrap's remote-cell grid.</summary>
+        private sealed class AtlasPlace
+        {
+            public string ZoneId;
+            public string Label;
+            public Vector2 Position;
+            public Vector2 LabelOffset;
+        }
+
+        private sealed class AtlasRegion
+        {
+            public string Name;
+            public Vector2 LabelPosition;
+            public Color LandColor;
+            public Vector2[] Coast;
+            public AtlasPlace[] Places;
+        }
+
+        private static AtlasPlace Ap(string id, string label, float x, float y,
+            float labelX = 0f, float labelY = 9f) => new AtlasPlace
+        {
+            ZoneId = id, Label = label, Position = new Vector2(x, y),
+            LabelOffset = new Vector2(labelX, labelY)
+        };
+
+        private static AtlasRegion Ar(string name, float labelX, float labelY, Color land,
+            Vector2[] coast, params AtlasPlace[] places) => new AtlasRegion
+        {
+            Name = name, LabelPosition = new Vector2(labelX, labelY), LandColor = land,
+            Coast = coast, Places = places
+        };
+
+        // Six readable landmasses mirror the actual campaign hierarchy. The nested
+        // Observatory floors remain one region; the five Aldenmere districts surround
+        // Council Hall; and the final four commissions form one eastward ascent.
+        private static readonly AtlasRegion[] AtlasRegions =
+        {
+            Ar("CINDERWELL COAST", .19f, .105f, new Color(.58f, .38f, .23f), new[]
+            {
+                new Vector2(.035f,.13f), new Vector2(.11f,.055f), new Vector2(.27f,.07f),
+                new Vector2(.35f,.17f), new Vector2(.315f,.33f), new Vector2(.23f,.405f),
+                new Vector2(.085f,.36f), new Vector2(.025f,.245f)
+            },
+                Ap("drowned_bastion", "Drowned Bastion", .085f, .205f, 10f, -13f),
+                Ap("cinderwell_yard", "Cinderwell Yard", .17f, .17f, 0f, -13f),
+                Ap("cinderwell_undercroft", "Undercroft", .255f, .175f, 0f, -13f),
+                Ap("ember_archive", "Ember Archive", .295f, .245f, 4f, 9f),
+                Ap("loomhouse_enclave", "Loomhouse", .105f, .29f, 0f, 9f),
+                Ap("blackbriar_manor", "Blackbriar", .19f, .315f, 0f, 9f),
+                Ap("gilded_quarter", "Gilded Quarter", .275f, .325f, 5f, 9f)),
+
+            Ar("ALDENMERE", .445f, .325f, new Color(.24f, .49f, .32f), new[]
+            {
+                new Vector2(.285f,.405f), new Vector2(.37f,.29f), new Vector2(.51f,.285f),
+                new Vector2(.60f,.405f), new Vector2(.565f,.545f), new Vector2(.46f,.62f),
+                new Vector2(.345f,.585f), new Vector2(.285f,.50f)
+            },
+                Ap("drowned_market", "Drowned Market", .425f, .405f, 0f, -13f),
+                Ap("ashen_ward", "Ashen Ward", .525f, .395f, 0f, -13f),
+                Ap("old_docks", "Old Docks", .34f, .49f, -2f, 9f),
+                Ap("council_hall", "Council Hall", .435f, .49f, 0f, 9f),
+                Ap("glasslit_temple", "Glasslit Temple", .535f, .49f, 0f, 9f),
+                Ap("sunken_warcamp", "Sunken Warcamp", .435f, .565f, 0f, 9f)),
+
+            Ar("EMBERWILD", .18f, .565f, new Color(.43f, .54f, .21f), new[]
+            {
+                new Vector2(.035f,.59f), new Vector2(.125f,.47f), new Vector2(.265f,.485f),
+                new Vector2(.36f,.625f), new Vector2(.315f,.83f), new Vector2(.17f,.925f),
+                new Vector2(.055f,.82f)
+            },
+                Ap("emberwild_expanse", "Emberwild Expanse", .095f, .69f, 10f, -13f),
+                Ap("wild_lairs", "Wilder Dens", .17f, .78f, 0f, 9f),
+                Ap("reedwind_encampment", "Reedwind Camp", .245f, .675f, 0f, -13f),
+                Ap("goblin_delves", "Gloam Delves", .285f, .795f, 0f, 9f)),
+
+            Ar("DROWNED OBSERVATORY", .525f, .075f, new Color(.38f, .53f, .61f), new[]
+            {
+                new Vector2(.42f,.13f), new Vector2(.475f,.035f), new Vector2(.575f,.045f),
+                new Vector2(.625f,.13f), new Vector2(.595f,.255f), new Vector2(.515f,.305f),
+                new Vector2(.435f,.245f)
+            },
+                Ap("drowned_observatory_approach", "Approach", .455f, .19f, -5f, 9f),
+                Ap("drowned_observatory_underworks", "Underworks", .525f, .235f, 0f, 9f),
+                Ap("drowned_observatory_crown", "Crown", .585f, .16f, 0f, 9f)),
+
+            Ar("MIREWATCH REACH", .525f, .64f, new Color(.22f, .45f, .43f), new[]
+            {
+                new Vector2(.375f,.68f), new Vector2(.445f,.565f), new Vector2(.585f,.56f),
+                new Vector2(.685f,.68f), new Vector2(.65f,.86f), new Vector2(.52f,.94f),
+                new Vector2(.405f,.855f)
+            },
+                Ap("mirewatch_citadel", "Mirewatch", .425f, .76f, 2f, -13f),
+                Ap("tidebreaker_anchorage", "Tidebreaker", .50f, .695f, 0f, -13f),
+                Ap("iron_concord_redoubt", "Iron Concord", .59f, .75f, 0f, 9f),
+                Ap("lanternfall_necropolis", "Lanternfall", .535f, .855f, 0f, 9f)),
+
+            Ar("EMBER CROWN", .81f, .205f, new Color(.50f, .22f, .25f), new[]
+            {
+                new Vector2(.66f,.19f), new Vector2(.76f,.095f), new Vector2(.90f,.135f),
+                new Vector2(.965f,.31f), new Vector2(.91f,.49f), new Vector2(.95f,.69f),
+                new Vector2(.84f,.91f), new Vector2(.70f,.835f), new Vector2(.635f,.64f),
+                new Vector2(.69f,.43f)
+            },
+                Ap("cinder_gate", "Cinder Gate", .72f, .52f, 0f, 9f),
+                Ap("crownless_citadel", "Crownless Citadel", .79f, .405f, 0f, -13f),
+                Ap("thornmaze", "Thornmaze", .865f, .56f, 0f, 9f),
+                Ap("ember_crown_spire", "Crown Spire", .865f, .30f, 0f, -13f))
+        };
 
         /// <summary>Map size in logical units. The normal map gives ground back on a short
         /// canvas (a big UI scale can shrink the logical height below the design 630) so it
         /// never crowds the initiative list docked underneath it.</summary>
-        private static float Side => EffectiveMode == 2
-            ? Mathf.Min(Ui.W - 24f, Ui.H - 200f)
-            : Mathf.Clamp(Ui.H * 0.33f, 150f, NormalSide);
+        private static float Side => Mathf.Clamp(Ui.H * 0.33f, 150f, NormalSide);
 
         /// <summary>Full interactive frame (header buttons + map) in Ui-scaled space;
         /// this is the rect HUD hit-tests block clicks against.</summary>
@@ -82,6 +195,12 @@ namespace RadiantPool.Game
             get
             {
                 if (EffectiveMode == 0) return new Rect(Ui.W - 126 - 12, MapTop, 126, Header);
+                if (EffectiveMode == 2)
+                {
+                    float w = Mathf.Min(820f, Ui.W - 24f);
+                    float h = Mathf.Min(500f, Ui.H - 150f);
+                    return new Rect(Ui.W - w - 12f, MapTop, w, h + Header);
+                }
                 float s = Side;
                 return new Rect(Ui.W - s - 12, MapTop, s, s + Header);
             }
@@ -124,11 +243,25 @@ namespace RadiantPool.Game
             _smithSq = MakeSquare(new Color(0.86f, 0.54f, 0.22f), outline, hollow: false);
             _gateSq = MakeSquare(Theme.Parchment, outline, hollow: true);
             _partyDot = MakeCircle(new Color(0.25f, 0.85f, 0.78f), outline);
+            _atlasLocked = MakeCircle(new Color(.30f, .31f, .30f), outline);
+            _atlasOpen = MakeCircle(Theme.Parchment, outline);
+            _atlasDone = MakeCircle(new Color(.25f, .72f, .62f), outline);
+            if (SystemInfo.graphicsDeviceType != UnityEngine.Rendering.GraphicsDeviceType.Null)
+                _atlasTexture = MakeAtlasTexture();
 
             _icoExpand = MakeCornerArrows(outward: true);    // grow / fullscreen
             _icoShrink = MakeCornerArrows(outward: false);   // maximized → normal
             _icoMinimize = MakeMinimizeIcon();               // normal → corner pill
             _icoRestore = _icoExpand;                        // pill → normal
+            ValidateAtlas();
+        }
+
+        /// <summary>Shared public entry for screenshot QA. It exercises the same state
+        /// transition as the M/header controls without sending input to the desktop.</summary>
+        public void ShowCampaignAtlasForTest()
+        {
+            Recenter();
+            _sizeMode = 2; // capture must not overwrite the player's remembered preference
         }
 
         private static void SetSize(int mode)
@@ -212,6 +345,25 @@ namespace RadiantPool.Game
             foreach (var c in FindObjectsByType<CompanionFollower>(FindObjectsSortMode.None))
                 _markers.Add(new Marker { Pos = c.transform.position, Tex = _partyDot, Size = 8 });
 
+            // The atlas shows a separate YOU ARE HERE pin. Remote destinations have a
+            // 45 m arrival footprint; otherwise the player is at the Council Hall hub.
+            _atlasPlayerPlace = "council_hall";
+            float closestDestination = 45f * 45f;
+            foreach (var destination in FindObjectsByType<CampaignDestination>(FindObjectsSortMode.None))
+            {
+                float sqr = (destination.transform.position - _player.position).sqrMagnitude;
+                if (sqr >= closestDestination) continue;
+                if (destination.ZoneIndex < 0)
+                {
+                    closestDestination = sqr;
+                    _atlasPlayerPlace = "council_hall";
+                    continue;
+                }
+                if (director == null || destination.ZoneIndex >= director.Zones.Length) continue;
+                closestDestination = sqr;
+                _atlasPlayerPlace = director.Zones[destination.ZoneIndex].ZoneId;
+            }
+
             // Quarter names, positioned at the centre of each zone's encounters.
             _places.Clear();
             if (director == null) return;
@@ -255,10 +407,11 @@ namespace RadiantPool.Game
                 GUIContent.none);
 
             // Header strip: title, recenter (only once panned), then the two size icons.
-            string mapTitle = _pan == Vector2.zero ? "MAP" : "MAP (PANNED)";
+            string mapTitle = EffectiveMode == 2 ? "CAMPAIGN ATLAS"
+                : _pan == Vector2.zero ? "MAP" : "MAP (PANNED)";
             GUI.Label(new Rect(frame.x + 6, frame.y + 5, 128, 16),
                 $"{mapTitle}  {WorldAtmosphere.ClockLabel}", Theme.Caps);
-            if (_pan != Vector2.zero
+            if (EffectiveMode != 2 && _pan != Vector2.zero
                 && GUI.Button(new Rect(frame.xMax - 130, frame.y + 2, 62, BtnH), "RECENTER"))
                 Recenter();
 
@@ -276,6 +429,13 @@ namespace RadiantPool.Game
             if (IconButton(growRect, _icoExpand, atMax ? "Already maximized" : "Expand map (M)"))
                 SetSize(_sizeMode + 1);
             GUI.enabled = true;
+
+            if (EffectiveMode == 2)
+            {
+                DrawCampaignAtlas(view);
+                DrawTooltip(frame);
+                return;
+            }
 
             GUI.DrawTexture(view, _rt, ScaleMode.StretchToFill);
 
@@ -348,6 +508,252 @@ namespace RadiantPool.Game
 
             if (EffectiveMode == 2) DrawLegend(view);
             DrawTooltip(frame);   // last, so map markers can never cover the hint
+        }
+
+        private void DrawCampaignAtlas(Rect view)
+        {
+            if (_atlasTexture != null)
+                GUI.DrawTexture(view, _atlasTexture, ScaleMode.StretchToFill);
+            else
+                DrawSolid(view, new Color(.055f, .14f, .20f));
+
+            var director = GameDirector.Instance;
+            var pins = new Dictionary<string, Vector2>();
+            foreach (var region in AtlasRegions)
+                foreach (var place in region.Places)
+                {
+                    pins[place.ZoneId] = AtlasPoint(view, place.Position);
+                }
+
+            // The prerequisite graph becomes the atlas road-and-sea-lane network. Locked
+            // routes are subdued; a reachable/completed destination lights its approach.
+            if (director != null && pins.TryGetValue("council_hall", out Vector2 hall))
+            {
+                for (int i = 0; i < director.Zones.Length; i++)
+                {
+                    var zone = director.Zones[i];
+                    if (!pins.TryGetValue(zone.ZoneId, out Vector2 destination)) continue;
+                    QuestState state = director.GetZoneState(i);
+                    Color route = state == QuestState.Locked
+                        ? new Color(.08f, .07f, .06f, .34f)
+                        : state == QuestState.Completed
+                            ? new Color(.35f, .86f, .72f, .62f)
+                            : new Color(.94f, .87f, .70f, .68f);
+                    if (zone.PrerequisiteZoneIds.Length == 0)
+                        DrawDashedLine(hall, destination, route, 1.5f);
+                    else
+                        foreach (string prerequisite in zone.PrerequisiteZoneIds)
+                            if (pins.TryGetValue(prerequisite, out Vector2 start))
+                                DrawDashedLine(start, destination, route, 1.5f);
+                }
+            }
+
+            EnsureAtlasStyles();
+            DrawShadowLabel(new Rect(view.x + view.width * .31f, view.y + view.height * .19f,
+                    view.width * .17f, 15f), "CINDERFLOW SEA", _atlasOceanStyle,
+                new Color(.66f, .83f, .89f, .54f));
+            DrawShadowLabel(new Rect(view.x + view.width * .60f, view.y + view.height * .86f,
+                    view.width * .18f, 15f), "ASHEN SEA", _atlasOceanStyle,
+                new Color(.66f, .83f, .89f, .46f));
+
+            foreach (var region in AtlasRegions)
+            {
+                Vector2 label = AtlasPoint(view, region.LabelPosition);
+                DrawShadowLabel(new Rect(label.x - 90f, label.y - 8f, 180f, 16f),
+                    region.Name, _atlasRegionStyle, Theme.Parchment);
+            }
+
+            AtlasPlace hovered = null;
+            string hoveredRegion = "";
+            foreach (var region in AtlasRegions)
+                foreach (var place in region.Places)
+                {
+                    Vector2 point = pins[place.ZoneId];
+                    bool hubPin = place.ZoneId == "council_hall";
+                    int zoneIndex = director == null || hubPin ? -1
+                        : System.Array.FindIndex(director.Zones, z => z.ZoneId == place.ZoneId);
+                    QuestState state = zoneIndex >= 0
+                        ? director.GetZoneState(zoneIndex) : QuestState.Active;
+                    bool active = zoneIndex >= 0 && state == QuestState.Active;
+                    Texture2D pin = active ? _questX : state == QuestState.Completed
+                        ? _atlasDone : state == QuestState.Locked ? _atlasLocked : _atlasOpen;
+                    float size = active ? 18f + Mathf.Sin(Time.time * 4f) * 2f
+                        : hubPin ? 14f : 11f;
+                    GUI.DrawTexture(new Rect(point.x - size / 2f, point.y - size / 2f, size, size), pin);
+
+                    Color text = active ? Theme.Gold : state == QuestState.Locked
+                        ? Theme.OnSurfaceMuted : Theme.OnSurface;
+                    var label = new Rect(point.x - 52f + place.LabelOffset.x,
+                        point.y + place.LabelOffset.y, 104f, 14f);
+                    DrawShadowLabel(label, place.Label.ToUpperInvariant(), _atlasPlaceStyle, text);
+
+                    var hit = new Rect(point.x - 12f, point.y - 12f, 24f, 24f);
+                    if (hit.Contains(Event.current.mousePosition))
+                    {
+                        hovered = place;
+                        hoveredRegion = region.Name;
+                    }
+                }
+
+            // A separate teal heading marker makes current location unmistakable even when
+            // it shares a pin with an active quest.
+            if (pins.TryGetValue(_atlasPlayerPlace, out Vector2 you))
+            {
+                var old = GUI.matrix;
+                GUIUtility.RotateAroundPivot(0f, you);
+                GUI.DrawTexture(new Rect(you.x - 8f, you.y - 25f, 16f, 16f), _playerArrow);
+                GUI.matrix = old;
+                DrawShadowLabel(new Rect(you.x - 38f, you.y + 22f, 76f, 13f), "YOU ARE HERE",
+                    _atlasPlaceStyle, new Color(.40f, .88f, 1f));
+            }
+
+            DrawAtlasCompass(view);
+            DrawAtlasKey(view, hovered, hoveredRegion, director);
+
+            // Crisp inset edge over the map texture, like an engraved atlas frame.
+            DrawSolid(new Rect(view.x, view.y, view.width, 2f), Theme.GoldDeep);
+            DrawSolid(new Rect(view.x, view.yMax - 2f, view.width, 2f), Theme.GoldDeep);
+            DrawSolid(new Rect(view.x, view.y, 2f, view.height), Theme.GoldDeep);
+            DrawSolid(new Rect(view.xMax - 2f, view.y, 2f, view.height), Theme.GoldDeep);
+        }
+
+        private void DrawAtlasKey(Rect view, AtlasPlace hovered, string hoveredRegion,
+            GameDirector director)
+        {
+            var panel = new Rect(view.xMax - 244f, view.yMax - 52f, 236f, 44f);
+            DrawSolid(panel, new Color(.055f, .045f, .035f, .88f));
+            DrawSolid(new Rect(panel.x, panel.y, 3f, panel.height), Theme.GoldDeep);
+            string title = "REGION > DESTINATION";
+            string detail = "Pins sit inside their region; dashed routes show what unlocks next.";
+            if (hovered != null)
+            {
+                title = $"{hoveredRegion} > {hovered.Label}".ToUpperInvariant();
+                if (hovered.ZoneId == "council_hall") detail = "Party hub and waystone network.";
+                else if (director != null)
+                {
+                    int i = System.Array.FindIndex(director.Zones, z => z.ZoneId == hovered.ZoneId);
+                    detail = i < 0 ? "Campaign destination" : StatusLabel(director.GetZoneState(i));
+                }
+            }
+            GUI.Label(new Rect(panel.x + 9f, panel.y + 5f, panel.width - 14f, 14f), title,
+                Theme.Caps);
+            GUI.Label(new Rect(panel.x + 9f, panel.y + 21f, panel.width - 14f, 20f), detail,
+                _atlasDetailStyle);
+
+            var legend = new Rect(view.x + 8f, view.yMax - 29f, 242f, 21f);
+            DrawSolid(legend, new Color(.055f, .045f, .035f, .82f));
+            DrawAtlasLegendItem(legend.x + 7f, legend.y + 5f, _atlasOpen, "OPEN");
+            DrawAtlasLegendItem(legend.x + 65f, legend.y + 5f, _questX, "ACTIVE");
+            DrawAtlasLegendItem(legend.x + 135f, legend.y + 5f, _atlasDone, "DONE");
+            DrawAtlasLegendItem(legend.x + 194f, legend.y + 5f, _atlasLocked, "LOCKED");
+        }
+
+        private void DrawAtlasLegendItem(float x, float y, Texture2D icon, string label)
+        {
+            GUI.DrawTexture(new Rect(x, y, 10f, 10f), icon);
+            GUI.Label(new Rect(x + 13f, y - 2f, 48f, 14f), label, _atlasPlaceStyle);
+        }
+
+        private void DrawAtlasCompass(Rect view)
+        {
+            Vector2 c = new Vector2(view.x + 31f, view.y + 34f);
+            DrawLine(new Vector2(c.x, c.y - 16f), new Vector2(c.x, c.y + 16f),
+                new Color(.93f, .87f, .75f, .85f), 1.5f);
+            DrawLine(new Vector2(c.x - 16f, c.y), new Vector2(c.x + 16f, c.y),
+                new Color(.93f, .87f, .75f, .85f), 1.5f);
+            GUI.DrawTexture(new Rect(c.x - 4f, c.y - 18f, 8f, 15f), _playerArrow);
+            GUI.Label(new Rect(c.x - 7f, c.y - 30f, 14f, 13f), "N", Theme.Caps);
+            GUI.Label(new Rect(c.x + 18f, c.y - 7f, 14f, 13f), "E", Theme.Caps);
+            GUI.Label(new Rect(c.x - 30f, c.y - 7f, 14f, 13f), "W", Theme.Caps);
+        }
+
+        private void EnsureAtlasStyles()
+        {
+            if (_atlasRegionStyle != null) return;
+            _atlasRegionStyle = new GUIStyle(Theme.Caps)
+                { alignment = TextAnchor.MiddleCenter, fontSize = 12, fontStyle = FontStyle.Bold };
+            _atlasPlaceStyle = new GUIStyle(Theme.Caps)
+                { alignment = TextAnchor.MiddleCenter, fontSize = 8, fontStyle = FontStyle.Bold };
+            _atlasOceanStyle = new GUIStyle(Theme.Caps)
+                { alignment = TextAnchor.MiddleCenter, fontSize = 9, fontStyle = FontStyle.Italic };
+            _atlasDetailStyle = new GUIStyle(Theme.Body)
+                { alignment = TextAnchor.UpperLeft, fontSize = 9, wordWrap = true };
+        }
+
+        private static string StatusLabel(QuestState state)
+        {
+            switch (state)
+            {
+                case QuestState.Active: return "Active commission - follow the gold route.";
+                case QuestState.ObjectivesMet: return "Objectives met - report at Council Hall.";
+                case QuestState.Completed: return "Commission completed.";
+                default: return "Locked - complete its prerequisite route.";
+            }
+        }
+
+        private static Vector2 AtlasPoint(Rect view, Vector2 normalized) =>
+            new Vector2(view.x + normalized.x * view.width, view.y + normalized.y * view.height);
+
+        private static void DrawShadowLabel(Rect rect, string text, GUIStyle style, Color color)
+        {
+            style.normal.textColor = new Color(0f, 0f, 0f, Mathf.Max(.60f, color.a));
+            GUI.Label(new Rect(rect.x + 1f, rect.y + 1f, rect.width, rect.height), text, style);
+            style.normal.textColor = color;
+            GUI.Label(rect, text, style);
+        }
+
+        private static void DrawSolid(Rect rect, Color color)
+        {
+            Color old = GUI.color;
+            GUI.color = color;
+            GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            GUI.color = old;
+        }
+
+        private static void DrawDashedLine(Vector2 start, Vector2 end, Color color, float width)
+        {
+            float length = Vector2.Distance(start, end);
+            if (length < 1f) return;
+            Vector2 direction = (end - start) / length;
+            const float dash = 6f, gap = 4f;
+            for (float at = 0f; at < length; at += dash + gap)
+                DrawLine(start + direction * at,
+                    start + direction * Mathf.Min(length, at + dash), color, width);
+        }
+
+        private static void DrawLine(Vector2 start, Vector2 end, Color color, float width)
+        {
+            Vector2 delta = end - start;
+            float length = delta.magnitude;
+            if (length < .5f) return;
+            Matrix4x4 oldMatrix = GUI.matrix;
+            Color oldColor = GUI.color;
+            GUI.color = color;
+            GUIUtility.RotateAroundPivot(Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg, start);
+            GUI.DrawTexture(new Rect(start.x, start.y - width / 2f, length, width),
+                Texture2D.whiteTexture);
+            GUI.matrix = oldMatrix;
+            GUI.color = oldColor;
+        }
+
+        private void ValidateAtlas()
+        {
+            var director = GameDirector.Instance;
+            if (director == null) return;
+            string[] mapped = AtlasRegions.SelectMany(r => r.Places)
+                .Where(p => p.ZoneId != "council_hall").Select(p => p.ZoneId).ToArray();
+            var expected = new HashSet<string>(director.Zones.Select(z => z.ZoneId));
+            var actual = new HashSet<string>(mapped);
+            bool unique = mapped.Length == actual.Count;
+            bool covered = expected.SetEquals(actual);
+            int routes = director.Zones.Sum(z => Mathf.Max(1, z.PrerequisiteZoneIds.Length));
+            if (unique && covered && AtlasRegions.Length == 6)
+                Debug.Log($"[WorldMap] PASS - {AtlasRegions.Length} regions contain " +
+                          $"{actual.Count}/{expected.Count} campaign destinations; " +
+                          $"{routes} prerequisite routes charted");
+            else
+                Debug.LogError($"[WorldMap] FAIL - regions {AtlasRegions.Length}, mapped " +
+                               $"{actual.Count}/{expected.Count}, unique {unique}");
         }
 
         /// <summary>A themed button whose face is a generated icon (fonts have no glyphs
@@ -439,6 +845,114 @@ namespace RadiantPool.Game
                 GUI.Label(new Rect(panel.x + 22, y, panel.width - 24, rowH),
                     rows[i].label, Theme.Caps);
             }
+        }
+
+        /// <summary>Builds the atlas's ocean and six coastlines once. This stays procedural
+        /// like every other minimap icon, so it is resolution-independent, source-controlled,
+        /// original art, and cannot disappear because a font or imported texture is missing.</summary>
+        private static Texture2D MakeAtlasTexture()
+        {
+            const int width = 1024, height = 600;
+            var tex = new Texture2D(width, height, TextureFormat.RGBA32, false)
+            {
+                hideFlags = HideFlags.HideAndDontSave,
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            var regionAt = new int[width * height];
+            for (int i = 0; i < regionAt.Length; i++) regionAt[i] = -1;
+
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                {
+                    Vector2 p = new Vector2((x + .5f) / width, (y + .5f) / height);
+                    for (int r = 0; r < AtlasRegions.Length; r++)
+                        if (InsidePolygon(p, AtlasRegions[r].Coast))
+                        {
+                            regionAt[y * width + x] = r;
+                            break;
+                        }
+                }
+
+            var pixels = new Color[width * height];
+            var oceanDeep = new Color(.035f, .105f, .155f);
+            var oceanLight = new Color(.075f, .235f, .30f);
+            var coast = new Color(.09f, .075f, .055f);
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                {
+                    int mapIndex = y * width + x;
+                    int region = regionAt[mapIndex];
+                    float nx = (x + .5f) / width, ny = (y + .5f) / height;
+                    float vignette = Mathf.Clamp01(Mathf.Abs(nx - .5f) * .75f
+                                                   + Mathf.Abs(ny - .5f) * .48f);
+                    float wave = (Mathf.Sin(nx * 91f + ny * 37f)
+                                  + Mathf.Sin(nx * 31f - ny * 73f)) * .012f;
+                    Color value;
+                    if (region < 0)
+                    {
+                        value = Color.Lerp(oceanLight, oceanDeep, .25f + vignette * .65f);
+                        value += new Color(wave, wave, wave, 0f);
+                        // A faint cartographic grid gives the water scale without competing
+                        // with roads or labels.
+                        if ((x % 128 == 0 || y % 100 == 0))
+                            value = Color.Lerp(value, new Color(.32f, .51f, .56f), .12f);
+                        if (NeighborRegion(regionAt, width, height, x, y, 4) >= 0)
+                            value = Color.Lerp(value, new Color(.025f, .04f, .045f), .70f);
+                    }
+                    else
+                    {
+                        Color land = AtlasRegions[region].LandColor;
+                        float grain = Hash01(x, y) * .10f - .05f;
+                        float light = .86f + (1f - ny) * .17f + grain;
+                        value = new Color(land.r * light, land.g * light,
+                            land.b * light, 1f);
+                        if (NeighborRegion(regionAt, width, height, x, y, 3) != region)
+                            value = Color.Lerp(coast, value, .26f);
+                    }
+                    // Pixel storage is bottom-up; atlas positions deliberately use a
+                    // top-left origin, so flip once here and nowhere in the UI code.
+                    pixels[(height - 1 - y) * width + x] = value;
+                }
+            tex.SetPixels(pixels);
+            tex.Apply(false, false);
+            return tex;
+        }
+
+        private static int NeighborRegion(int[] regions, int width, int height,
+            int x, int y, int distance)
+        {
+            int own = regions[y * width + x];
+            int[] xs = { x - distance, x + distance, x, x };
+            int[] ys = { y, y, y - distance, y + distance };
+            for (int i = 0; i < 4; i++)
+            {
+                if (xs[i] < 0 || ys[i] < 0 || xs[i] >= width || ys[i] >= height) continue;
+                int other = regions[ys[i] * width + xs[i]];
+                if (other != own) return other;
+            }
+            return own;
+        }
+
+        private static bool InsidePolygon(Vector2 point, Vector2[] polygon)
+        {
+            bool inside = false;
+            for (int i = 0, j = polygon.Length - 1; i < polygon.Length; j = i++)
+            {
+                Vector2 a = polygon[i], b = polygon[j];
+                bool crosses = (a.y > point.y) != (b.y > point.y)
+                    && point.x < (b.x - a.x) * (point.y - a.y)
+                    / (b.y - a.y + .000001f) + a.x;
+                if (crosses) inside = !inside;
+            }
+            return inside;
+        }
+
+        private static float Hash01(int x, int y)
+        {
+            uint n = (uint)(x * 374761393 + y * 668265263);
+            n = (n ^ (n >> 13)) * 1274126177u;
+            return (n & 0xffffu) / 65535f;
         }
 
         // ---------- marker textures (procedural, dark-outlined so they read on any
