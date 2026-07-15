@@ -120,6 +120,21 @@ Stop-Process -Id $questMarkerProc.Id -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 $questMarkerText = Get-Content $questMarkerLog -Raw
 
+# The waystone directory must make the tracked quest route unmistakable without creating
+# a second quest-selection rule. It verifies tracked preference, active fallback, no
+# misdirection during turn-in, and the generated green card/button assets.
+Write-Host "Starting waystone quest-route instance (-waystonehighlighttest)..."
+$waystoneLog = Join-Path $logDir "waystone-highlight.log"
+Remove-Item $waystoneLog -ErrorAction SilentlyContinue
+$waystoneSave = Join-Path $logDir "waystonesave"
+Remove-Item -Recurse -Force $waystoneSave -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $waystoneSave | Out-Null
+$waystoneProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Orin","-autohost","-waystonehighlighttest","-savedir",$waystoneSave,"-logFile",$waystoneLog -PassThru
+Start-Sleep -Seconds 14
+Stop-Process -Id $waystoneProc.Id -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+$waystoneText = Get-Content $waystoneLog -Raw
+
 # Campaign waystones move the whole party through a server-validated route. Keep this
 # isolated because it deliberately teleports the host out of, and back into, the hub.
 Write-Host "Starting campaign travel instance (-traveltest)..."
@@ -219,6 +234,8 @@ $checks = @(
     @{ Name = "Watcher Below site action has no runtime exception"; Ok = $siteActionText -notmatch "Exception|\[SiteActionInputTest\] FAIL" },
     @{ Name = "quest giver marker follows available accepted and turn-in states"; Ok = $questMarkerText -match "\[QuestMarkerTest\] PASS.+available yellow ! True, accepted gray \? True, ready yellow \? True, finished hidden True, overhead billboard True" },
     @{ Name = "quest giver marker has no failed assertion or runtime exception"; Ok = $questMarkerText -notmatch "Exception|\[QuestMarkerTest\] FAIL" },
+    @{ Name = "waystone network highlights the tracked quest destination green"; Ok = $waystoneText -match "\[WaystoneHighlightTest\] PASS.+tracked quest route 1, turn-in route -1, active fallback 0, green card/button True" },
+    @{ Name = "waystone quest route has no failed assertion or runtime exception"; Ok = $waystoneText -notmatch "Exception|\[WaystoneHighlightTest\] FAIL" },
     @{ Name = "campaign reaches every site and pays side/main quest rewards"; Ok = $travelText -match "\[TravelTest\] PASS - 39/39 sites reached; 39/39 encounter sets authored; 39/39 objectives anchored; site objective resolved; side/main rewards paid;.*39/39 hub returns" },
     @{ Name = "all installed environment packs dress the campaign"; Ok = $travelText -match "environment art RPG x[1-9][0-9]*, nature x[1-9][0-9]*, graveyard/nature2 x[1-9][0-9]{2,}, dungeon x[1-9][0-9]*, painted ground x34" },
     @{ Name = "campaign travel has no runtime exception"; Ok = $travelText -notmatch "Exception|\[TravelTest\] FAIL" },
@@ -246,6 +263,6 @@ foreach ($c in $checks) {
     if ($c.Ok) { Write-Host "  PASS  $($c.Name)" -ForegroundColor Green }
     else { Write-Host "  FAIL  $($c.Name)" -ForegroundColor Red; $failed++ }
 }
-Write-Host "Logs: $hostLog | $clientLog | $recruitLog | $recruitRestoreLog | $migrationLog | $siteActionLog | $questMarkerLog | $travelLog | $scalingLog | $fightLog | $combatFlowLog"
+Write-Host "Logs: $hostLog | $clientLog | $recruitLog | $recruitRestoreLog | $migrationLog | $siteActionLog | $questMarkerLog | $waystoneLog | $travelLog | $scalingLog | $fightLog | $combatFlowLog"
 if ($failed -gt 0) { exit 1 }
 Write-Host "Smoke test passed - two instances hosted, joined, and spawned characters." -ForegroundColor Green

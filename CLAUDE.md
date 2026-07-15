@@ -39,8 +39,10 @@ Build output: `game/Builds/Win64/RadiantPool.exe`. Installer output:
 (bag → trader → purse), `-leveltest` (XP → level → point spent), `-attacktest` (one click on
 a distant enemy → walk → blow → automatic turn end + monster HUD), `-combatflowtest` (direct world attack → enemy round →
 slotted magic → victory modal → defeat modal → retry), `-warpsmith` (park at the smithy so a shop panel can be
-LOOKED at), `-questmarkertest` (yellow ! → gray ? → yellow ? → hidden);
+LOOKED at), `-questmarkertest` (yellow ! → gray ? → yellow ? → hidden),
+`-waystonehighlighttest` (tracked active quest → green route; turn-in → no outbound route);
 **visual QA** `-questmarkercapture <dir>` captures all three visible quest-giver states;
+`-waystonecapture <png>` opens the network and captures its green quest destination;
 `-worldmapcapture <png>` opens the maximized campaign atlas through
 `MiniMap.ShowCampaignAtlasForTest`, captures it without desktop input, and restores the
 temporary quest states; it also asserts three simultaneous active commissions produce
@@ -205,6 +207,11 @@ mouse and the self-test drive the very same code.
   With no remaining commission the marker hides. The Inter Bold world-space glyph is
   unlit, outlined, billboarded, gently bobbed (disabled by Reduced Motion), and derived
   from replicated `MusterState`/`ZoneStates`; it never keeps a duplicate quest counter.
+  `CampaignTravel` consumes `QuestTracker.RecommendedTravelZoneIndex`: the Council
+  Waystone Network renders the tracked active quest's destination as a pale-green card
+  with a green **QUEST DESTINATION** label and green **Travel now** button. Multiple open
+  commissions follow the journal's saved Track waypoint choice; a ready turn-in highlights
+  no outbound site because the real target is Council Hall. Colour is reinforced by words.
 - `MiniMap.cs` — docked in the **top-right corner itself** (`MapTop`) and **starts collapsed**
   (pref key `minimap.size2`). Three sizes via header **icon** buttons or `M`, which cycles
   **hidden → normal tactical map → maximized campaign atlas → hidden**, remembered in

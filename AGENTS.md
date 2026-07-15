@@ -38,10 +38,12 @@ Build output: `game/Builds/Win64/RadiantPool.exe`. Installer output:
 (bag → trader → purse), `-leveltest` (XP → level → point spent), `-attacktest` (one click on
 a distant enemy → walk → blow → automatic turn end), `-warpsmith` (park at the smithy so a shop panel can be
 LOOKED at), `-siteactiontest` (Watcher Below E panel → choice → saved decision),
-`-questmarkertest` (yellow ! → gray ? → yellow ? → hidden);
+`-questmarkertest` (yellow ! → gray ? → yellow ? → hidden),
+`-waystonehighlighttest` (tracked active quest → green route; turn-in → no outbound route);
 **visual QA** `-uiskincapture <png>` renders the title/character-creation screen, asserts all
 19 RPG & MMO UI 7 skin roles are present, captures it without input, then quits;
 `-questmarkercapture <dir>` captures the three visible quest-giver states without input;
+`-waystonecapture <png>` opens the network and captures its green quest destination;
 `-savedir <dir>` keeps a test run off the real campaign.
 Player log (first place to look when the user reports bugs):
 `%USERPROFILE%\AppData\LocalLow\RadiantPool\Radiant Pool\Player.log`.
@@ -195,6 +197,11 @@ mouse and the self-test drive the very same code.
   With no remaining commission the marker hides. The Inter Bold world-space glyph is
   unlit, outlined, billboarded, gently bobbed (disabled by Reduced Motion), and derived
   from replicated `MusterState`/`ZoneStates`; it never keeps a duplicate quest counter.
+  `CampaignTravel` consumes `QuestTracker.RecommendedTravelZoneIndex`: the Council
+  Waystone Network renders the tracked active quest's destination as a pale-green card
+  with a green **QUEST DESTINATION** label and green **Travel now** button. Multiple open
+  commissions follow the journal's saved Track waypoint choice; a ready turn-in highlights
+  no outbound site because the real target is Council Hall. Colour is reinforced by words.
 - `MiniMap.cs` — docked in the **top-right corner itself** (`MapTop`) and **starts collapsed**
   (pref key `minimap.size2` — renamed so the new default reaches players who stored the old
   one). Three sizes (collapsed pill / normal / maximized) via header **icon**

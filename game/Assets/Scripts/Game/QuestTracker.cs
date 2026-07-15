@@ -29,7 +29,7 @@ namespace RadiantPool.Game
         private float _nextScan;
         private Texture2D _steerArrow;
         private GUIStyle _distStyle, _questTitle, _stepStyle, _stepDone, _cardBtn;
-        private const string TrackedQuestPref = "questTracker.zoneId";
+        public const string TrackedQuestPreference = "questTracker.zoneId";
 
         private void Awake() => Instance = this;
         private void Start()
@@ -78,13 +78,24 @@ namespace RadiantPool.Game
             for (int i = 0; i < director.Zones.Length; i++)
                 if (director.GetZoneState(i) == QuestState.ObjectivesMet) return i;
 
-            string wanted = PlayerPrefs.GetString(TrackedQuestPref, "");
+            string wanted = PlayerPrefs.GetString(TrackedQuestPreference, "");
             for (int i = 0; i < director.Zones.Length; i++)
                 if (director.Zones[i].ZoneId == wanted
                     && director.GetZoneState(i) == QuestState.Active) return i;
             for (int i = 0; i < director.Zones.Length; i++)
                 if (director.GetZoneState(i) == QuestState.Active) return i;
             return -1;
+        }
+
+        /// <summary>The Council network should recommend travel only while the tracked
+        /// commission is active. ObjectivesMet points back to Council Hall for turn-in,
+        /// so highlighting its remote site would send the player the wrong direction.</summary>
+        public static int RecommendedTravelZoneIndex(GameDirector director)
+        {
+            if (director == null) return -1;
+            int tracked = TrackedZoneIndex(director);
+            return tracked >= 0 && director.GetZoneState(tracked) == QuestState.Active
+                ? tracked : -1;
         }
 
         public static bool IsTrackedZone(int zone)
@@ -98,7 +109,7 @@ namespace RadiantPool.Game
             var director = GameDirector.Instance;
             if (director == null || zone < 0 || zone >= director.Zones.Length
                 || director.GetZoneState(zone) != QuestState.Active) return;
-            PlayerPrefs.SetString(TrackedQuestPref, director.Zones[zone].ZoneId);
+            PlayerPrefs.SetString(TrackedQuestPreference, director.Zones[zone].ZoneId);
             PlayerPrefs.Save();
             _nextScan = 0f;
             Scan();

@@ -34,6 +34,8 @@ namespace RadiantPool.Game
         public static readonly Color MageBlue       = Hex("#3860be");
         public static readonly Color FighterRed     = Hex("#c62828");
         public static readonly Color RangerGreen    = Hex("#2e7d32");
+        public static readonly Color RouteGreen     = Hex("#2e7d32");   // tracked waystone route
+        public static readonly Color RouteGreenHigh = Hex("#43a047");
         public static readonly Color ClericGold     = Hex("#ffd700");
         public static readonly Color HpRed          = Hex("#e53935");   // enemy HP (their side)
         public static readonly Color HpGreen        = Hex("#4caf50");   // party HP (our side)
@@ -155,6 +157,8 @@ namespace RadiantPool.Game
             Rounded("panelPlain", Panel, PanelBright, 1, 6));
         public static Texture2D ParchmentTex => Rounded("parchment", Parchment, ParchmentEdge, 1, 6);
         public static Texture2D GoldWashTex => Rounded("goldwash", new Color(0.94f, 0.88f, 0.72f), GoldDeep, 2, 6);
+        public static Texture2D QuestRouteTex => Rounded("questRoute", Hex("#d8ead2"),
+            RouteGreen, 3, 6);
         public static Texture2D WellTex => RpgMmoUi7Skin.Get("bar",
             Rounded("well", Hex("#0e0e0e"), Color.black, 1, 4));
         public static Texture2D BtnStoneTex => RpgMmoUi7Skin.Get("button",
@@ -167,6 +171,10 @@ namespace RadiantPool.Game
             Rounded("btnBlueHov", Hex("#4a72d0"), Hex("#4a72d0"), 1, 10, 2, Gold));
         public static Texture2D BtnGoldTex => RpgMmoUi7Skin.Get("button_pressed",
             Rounded("btnGold", Gold, GoldDeep, 2, 10));
+        public static Texture2D BtnRouteTex => Rounded("btnRoute", RouteGreen,
+            Hex("#1b5e20"), 2, 10, 2, Hex("#1b5e20"));
+        public static Texture2D BtnRouteHoverTex => Rounded("btnRouteHover", RouteGreenHigh,
+            Hex("#66bb6a"), 2, 10, 2, Hex("#1b5e20"));
         public static Texture2D FieldTex => RpgMmoUi7Skin.Get("field", ParchmentTex);
         public static Texture2D SlotTex => RpgMmoUi7Skin.Get("slot", BtnStoneTex);
 
@@ -180,7 +188,8 @@ namespace RadiantPool.Game
 
         // ---------- styles ----------
         private static GUIStyle _header, _headerBig, _headerInk, _caps, _body14, _bodyInk,
-            _btnPrimary, _slot, _tab, _tabActive, _panel, _parchment, _goldWash, _toast;
+            _btnPrimary, _btnRoute, _slot, _tab, _tabActive, _panel, _parchment,
+            _goldWash, _questRoute, _toast;
 
         private static GUIStyle MakeLabel(Font font, int size, Color color, FontStyle fallback)
         {
@@ -240,6 +249,25 @@ namespace RadiantPool.Game
                 _btnPrimary.hover.textColor = Color.white;
                 _btnPrimary.active.textColor = new Color(0.9f, 0.9f, 1f);
                 return _btnPrimary;
+            }
+        }
+
+        /// <summary>Green action reserved for the destination selected by the tracked
+        /// quest. The word label remains present so the route never depends on colour alone.</summary>
+        public static GUIStyle BtnRoute
+        {
+            get
+            {
+                if (_btnRoute != null) return _btnRoute;
+                _btnRoute = new GUIStyle(BtnPrimary);
+                _btnRoute.normal.background = BtnRouteTex;
+                _btnRoute.hover.background = BtnRouteHoverTex;
+                _btnRoute.active.background = BtnRouteTex;
+                _btnRoute.focused.background = BtnRouteHoverTex;
+                _btnRoute.normal.textColor = Color.white;
+                _btnRoute.hover.textColor = Color.white;
+                _btnRoute.active.textColor = Color.white;
+                return _btnRoute;
             }
         }
 
@@ -343,6 +371,20 @@ namespace RadiantPool.Game
                 _goldWash.normal.background = GoldWashTex;
                 _goldWash.normal.textColor = Ink;
                 return _goldWash;
+            }
+        }
+
+        /// <summary>Pale green card with a strong green border for the one waystone
+        /// destination selected by the active/tracked quest.</summary>
+        public static GUIStyle QuestRouteStyle
+        {
+            get
+            {
+                if (_questRoute != null) return _questRoute;
+                _questRoute = new GUIStyle(ParchmentStyle);
+                _questRoute.normal.background = QuestRouteTex;
+                _questRoute.normal.textColor = Ink;
+                return _questRoute;
             }
         }
 

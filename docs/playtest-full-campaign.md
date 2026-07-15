@@ -3,7 +3,9 @@
 1. Host + join (docs/playtest-phase2.md rows 1–2). Verify Veresk starts with a yellow `!`;
    accept the muster quest and confirm it becomes a gray `?` →
    "Retake the Old Docks" activates; the Market gate (north) and Temple gate (east) are
-   solid walls — you cannot enter either zone.
+   solid walls — you cannot enter either zone. Open the Council Waystone Network and
+   confirm **The Old Docks** is the only pale-green **QUEST DESTINATION** with a green
+   **Travel now** button.
 2. Clear the docks' 3 required encounters (west side) → verify Veresk's marker becomes a
    yellow `?` → turn in at Veresk → +300 XP each
    (level 2), +100 gold, **the Market gate sinks open on both clients**. Repeat for the
