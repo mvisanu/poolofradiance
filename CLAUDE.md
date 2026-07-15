@@ -33,7 +33,9 @@ Build output: `game/Builds/Win64/RadiantPool.exe`. Exe flags for automation:
 `-name <n> -autohost` / `-name <n> -autojoin localhost`; **self-tests** `-selltest`
 (bag → trader → purse), `-leveltest` (XP → level → point spent), `-attacktest` (one click on
 a distant enemy → walk → blow), `-warpsmith` (park at the smithy so a shop panel can be
-LOOKED at); `-savedir <dir>` keeps a test run off the real campaign.
+LOOKED at); **visual QA** `-worldmapcapture <png>` opens the maximized campaign atlas through
+`MiniMap.ShowCampaignAtlasForTest`, captures it without desktop input, and restores the
+temporary quest states; `-savedir <dir>` keeps a test run off the real campaign.
 Player log (first place to look when the user reports bugs):
 `%USERPROFILE%\AppData\LocalLow\RadiantPool\Radiant Pool\Player.log`.
 
@@ -143,17 +145,23 @@ mouse and the self-test drive the very same code.
   = active quest). After the campaign ends the tracker issues standing orders against any
   encounters still standing, so there is never a questless state.
 - `MiniMap.cs` — docked in the **top-right corner itself** (`MapTop`) and **starts collapsed**
-  (pref key `minimap.size2` — renamed so the new default reaches players who stored the old
-  one). Three sizes (collapsed pill / normal / maximized) via header **icon**
-  buttons or `M`, which **cycles hidden → normal → maximized → hidden** (a key that could only
-  grow it would be a one-way door out of the clear view), remembered in PlayerPrefs;
-  the initiative panel still docks off `MapRect.yMax`, so it follows the map up.
-  **left-drag pans** the view with a RECENTER
-  button; scroll zooms. Markers are shape+colour, never colour alone (enemy = red
-  triangle, quest = gold X with distance, NPC = green diamond, vendor/smith = squares,
-  locked gate = hollow square, party = teal circles); legend when maximized. All icons are
-  **generated textures, not font glyphs** — the body font has no box/tick/arrow glyphs and
-  a missing glyph renders as tofu (this is why the old `-`/`+` buttons were unreadable).
+  (pref key `minimap.size2`). Three sizes via header **icon** buttons or `M`, which cycles
+  **hidden → normal tactical map → maximized campaign atlas → hidden**, remembered in
+  PlayerPrefs. Combat caps the map at normal and the initiative panel still docks off
+  `MapRect.yMax`. The normal view remains the live north-up render: left-drag pans, RECENTER
+  returns to the player, scroll zooms, and shape+colour markers distinguish enemies, quests,
+  NPCs, vendors, smiths, locked gates, and party members.
+  The **maximized view is a world atlas, never a magnified tactical camera**. Six authored
+  continent-like parent regions (Cinderwell Coast, Aldenmere, Emberwild, Drowned Observatory,
+  Mirewatch Reach, Ember Crown) contain all 27 playable destinations plus Council Hall.
+  Destination pins show open/active/done/locked state, dashed roads and sea lanes are derived
+  from `ZoneConfig.PrerequisiteZoneIds`, and a separate teal marker identifies the party's
+  current destination. Coastlines, ocean grid, compass, pins, and controls are procedural
+  textures/original code-native art — no imported bitmap or unsupported font glyphs.
+  `ValidateAtlas` logs `[WorldMap] PASS` only when the six regions contain every configured
+  zone exactly once; `smoke-test.ps1` gates on 27/27 coverage and no structural failure.
+  `-worldmapcapture <png>` is the input-free visual QA path and must not overwrite the
+  player's saved map-size preference.
 - `InventoryUI.cs` (I) — left column = the character sheet: **the six ABILITY SCORES first**
   (score and modifier, from the `*Synced` SyncVars via `PlayerCharacterHolder.ModOf` — the one
   definition the level-up screen also uses), then what they are WEARING (slot rows + each
