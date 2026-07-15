@@ -37,9 +37,11 @@ Build output: `game/Builds/Win64/RadiantPool.exe`. Installer output:
 `-name <n> -autohost` / `-name <n> -autojoin localhost`; **self-tests** `-selltest`
 (bag → trader → purse), `-leveltest` (XP → level → point spent), `-attacktest` (one click on
 a distant enemy → walk → blow → automatic turn end), `-warpsmith` (park at the smithy so a shop panel can be
-LOOKED at), `-siteactiontest` (Watcher Below E panel → choice → saved decision);
+LOOKED at), `-siteactiontest` (Watcher Below E panel → choice → saved decision),
+`-questmarkertest` (yellow ! → gray ? → yellow ? → hidden);
 **visual QA** `-uiskincapture <png>` renders the title/character-creation screen, asserts all
 19 RPG & MMO UI 7 skin roles are present, captures it without input, then quits;
+`-questmarkercapture <dir>` captures the three visible quest-giver states without input;
 `-savedir <dir>` keeps a test run off the real campaign.
 Player log (first place to look when the user reports bugs):
 `%USERPROFILE%\AppData\LocalLow\RadiantPool\Radiant Pool\Player.log`.
@@ -187,6 +189,12 @@ mouse and the self-test drive the very same code.
   **district sign** over each quarter; `MiniMap` paints the quarter names on the map (gold
   = active quest). After the campaign ends the tracker issues standing orders against any
   encounters still standing, so there is never a questless state.
+  `NpcInteract` owns the quest giver's overhead state marker: a **yellow `!`** means Veresk
+  has the opening commission available, an accepted/active commission is a **gray `?`**,
+  and any `ObjectivesMet` commission takes priority as a **yellow `?`** ready for turn-in.
+  With no remaining commission the marker hides. The Inter Bold world-space glyph is
+  unlit, outlined, billboarded, gently bobbed (disabled by Reduced Motion), and derived
+  from replicated `MusterState`/`ZoneStates`; it never keeps a duplicate quest counter.
 - `MiniMap.cs` — docked in the **top-right corner itself** (`MapTop`) and **starts collapsed**
   (pref key `minimap.size2` — renamed so the new default reaches players who stored the old
   one). Three sizes (collapsed pill / normal / maximized) via header **icon**

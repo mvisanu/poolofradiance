@@ -105,6 +105,21 @@ Stop-Process -Id $siteActionProc.Id -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 $siteActionText = Get-Content $siteActionLog -Raw
 
+# The quest giver's overhead marker is a replicated-state presentation contract. This
+# isolated run drives available -> accepted -> ready -> complete without racing the
+# other host self-tests that also manufacture campaign states.
+Write-Host "Starting quest-giver marker instance (-questmarkertest)..."
+$questMarkerLog = Join-Path $logDir "quest-marker.log"
+Remove-Item $questMarkerLog -ErrorAction SilentlyContinue
+$questMarkerSave = Join-Path $logDir "questmarkersave"
+Remove-Item -Recurse -Force $questMarkerSave -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $questMarkerSave | Out-Null
+$questMarkerProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Lysa","-autohost","-questmarkertest","-savedir",$questMarkerSave,"-logFile",$questMarkerLog -PassThru
+Start-Sleep -Seconds 14
+Stop-Process -Id $questMarkerProc.Id -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+$questMarkerText = Get-Content $questMarkerLog -Raw
+
 # Campaign waystones move the whole party through a server-validated route. Keep this
 # isolated because it deliberately teleports the host out of, and back into, the hub.
 Write-Host "Starting campaign travel instance (-traveltest)..."
@@ -202,6 +217,8 @@ $checks = @(
     @{ Name = "save migration has no runtime exception"; Ok = $migrationText -notmatch "Exception|\[CampaignMigration\] FAIL" },
     @{ Name = "Watcher Below E panel survives all distant objective updates"; Ok = $siteActionText -match "\[SiteActionInputTest\] PASS.+E opened the spectral-watch choice.+decision recorded as 'Honor their oath'" },
     @{ Name = "Watcher Below site action has no runtime exception"; Ok = $siteActionText -notmatch "Exception|\[SiteActionInputTest\] FAIL" },
+    @{ Name = "quest giver marker follows available accepted and turn-in states"; Ok = $questMarkerText -match "\[QuestMarkerTest\] PASS.+available yellow ! True, accepted gray \? True, ready yellow \? True, finished hidden True, overhead billboard True" },
+    @{ Name = "quest giver marker has no failed assertion or runtime exception"; Ok = $questMarkerText -notmatch "Exception|\[QuestMarkerTest\] FAIL" },
     @{ Name = "campaign reaches every site and pays side/main quest rewards"; Ok = $travelText -match "\[TravelTest\] PASS - 39/39 sites reached; 39/39 encounter sets authored; 39/39 objectives anchored; site objective resolved; side/main rewards paid;.*39/39 hub returns" },
     @{ Name = "all installed environment packs dress the campaign"; Ok = $travelText -match "environment art RPG x[1-9][0-9]*, nature x[1-9][0-9]*, graveyard/nature2 x[1-9][0-9]{2,}, dungeon x[1-9][0-9]*, painted ground x34" },
     @{ Name = "campaign travel has no runtime exception"; Ok = $travelText -notmatch "Exception|\[TravelTest\] FAIL" },
@@ -229,6 +246,6 @@ foreach ($c in $checks) {
     if ($c.Ok) { Write-Host "  PASS  $($c.Name)" -ForegroundColor Green }
     else { Write-Host "  FAIL  $($c.Name)" -ForegroundColor Red; $failed++ }
 }
-Write-Host "Logs: $hostLog | $clientLog | $recruitLog | $recruitRestoreLog | $migrationLog | $siteActionLog | $travelLog | $scalingLog | $fightLog | $combatFlowLog"
+Write-Host "Logs: $hostLog | $clientLog | $recruitLog | $recruitRestoreLog | $migrationLog | $siteActionLog | $questMarkerLog | $travelLog | $scalingLog | $fightLog | $combatFlowLog"
 if ($failed -gt 0) { exit 1 }
 Write-Host "Smoke test passed - two instances hosted, joined, and spawned characters." -ForegroundColor Green

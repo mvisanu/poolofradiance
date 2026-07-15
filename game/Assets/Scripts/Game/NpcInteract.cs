@@ -4,11 +4,22 @@ using UnityEngine;
 
 namespace RadiantPool.Game
 {
+    public enum QuestGiverMarkerState
+    {
+        Hidden,
+        QuestAvailable,
+        QuestAccepted,
+        ReadyToTurnIn
+    }
+
     /// <summary>Walk up to the NPC and press E; dialogue reflects the shared quest state
     /// across the whole zone chain (lines abridged from content/dialogue JSON). Choices
     /// go to the server via GameDirector, so all players see quest state advance.</summary>
     public class NpcInteract : MonoBehaviour
     {
+        public static readonly Color QuestMarkerYellow = new Color(1f, 0.76f, 0.08f, 1f);
+        public static readonly Color QuestMarkerGray = new Color(0.58f, 0.62f, 0.68f, 1f);
+
         public string NpcName = "Councilor Veresk";
         public float InteractRange = 3.5f;
 
@@ -44,6 +55,136 @@ namespace RadiantPool.Game
 
         private bool _open;
         private Vector2 _scroll;
+        private Transform _questMarkerRoot;
+        private TextMesh _questMarkerHalo;
+        private TextMesh _questMarkerShadow;
+        private TextMesh _questMarkerGlyph;
+        private float _nextQuestMarkerRefresh;
+        private static readonly Vector3 QuestMarkerBase = new Vector3(0f, 2.15f, 0f);
+
+        public QuestGiverMarkerState QuestMarkerState { get; private set; } =
+            QuestGiverMarkerState.Hidden;
+        public string QuestMarkerGlyph => _questMarkerGlyph != null
+            ? _questMarkerGlyph.text : "";
+        public Color QuestMarkerColor => _questMarkerGlyph != null
+            ? _questMarkerGlyph.color : Color.clear;
+        public bool QuestMarkerVisible => _questMarkerRoot != null
+                                          && _questMarkerRoot.gameObject.activeSelf;
+        public bool QuestMarkerHasRenderableGlyph => QuestMarkerVisible
+            && _questMarkerGlyph != null && _questMarkerGlyph.font != null
+            && _questMarkerGlyph.GetComponent<MeshRenderer>() != null
+            && _questMarkerGlyph.GetComponent<MeshRenderer>().enabled
+            && _questMarkerRoot.GetComponent<Billboard>() != null;
+
+        private void Awake()
+        {
+            EnsureQuestMarker();
+            RefreshQuestMarkerNow();
+        }
+
+        /// <summary>The quest giver exposes one party-shared state. A ready turn-in wins
+        /// over other accepted commissions, so the player never misses a payable reward.</summary>
+        public static QuestGiverMarkerState MarkerStateFor(GameDirector director)
+        {
+            if (director == null) return QuestGiverMarkerState.Hidden;
+            if ((QuestState)director.MusterState.Value == QuestState.Active)
+                return QuestGiverMarkerState.QuestAvailable;
+
+            bool accepted = false;
+            for (int i = 0; i < director.Zones.Length; i++)
+            {
+                QuestState state = director.GetZoneState(i);
+                if (state == QuestState.ObjectivesMet)
+                    return QuestGiverMarkerState.ReadyToTurnIn;
+                if (state == QuestState.Active) accepted = true;
+            }
+            return accepted ? QuestGiverMarkerState.QuestAccepted
+                : QuestGiverMarkerState.Hidden;
+        }
+
+        private void EnsureQuestMarker()
+        {
+            if (_questMarkerRoot != null) return;
+            var root = new GameObject("QuestStateMarker");
+            root.transform.SetParent(transform, false);
+            root.transform.localPosition = QuestMarkerBase;
+            root.AddComponent<Billboard>();
+            _questMarkerRoot = root.transform;
+
+            _questMarkerHalo = MarkerLayer("Halo", 0.235f,
+                new Color(1f, 0.76f, 0.08f, 0.2f), 18, 0.018f);
+            _questMarkerShadow = MarkerLayer("Outline", 0.19f,
+                new Color(0.035f, 0.025f, 0.02f, 0.95f), 19, 0.009f);
+            _questMarkerGlyph = MarkerLayer("Glyph", 0.17f,
+                QuestMarkerYellow, 20, 0f);
+            root.SetActive(false);
+        }
+
+        private TextMesh MarkerLayer(string name, float size, Color color,
+            int sortingOrder, float localZ)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(_questMarkerRoot, false);
+            go.transform.localPosition = new Vector3(0f, 0f, localZ);
+            var text = go.AddComponent<TextMesh>();
+            text.text = "!";
+            text.anchor = TextAnchor.MiddleCenter;
+            text.alignment = TextAlignment.Center;
+            text.characterSize = size;
+            text.fontSize = 80;
+            text.fontStyle = FontStyle.Bold;
+            text.richText = false;
+            text.color = color;
+            var font = Resources.Load<Font>("Fonts/Inter-Bold");
+            var renderer = text.GetComponent<MeshRenderer>();
+            if (font != null)
+            {
+                text.font = font;
+                renderer.sharedMaterial = font.material;
+            }
+            renderer.sortingOrder = sortingOrder;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+            return text;
+        }
+
+        /// <summary>Refresh immediately after a replicated state transition. Public so
+        /// the built-player regression drives the exact same presentation path.</summary>
+        public void RefreshQuestMarkerNow()
+        {
+            EnsureQuestMarker();
+            QuestMarkerState = MarkerStateFor(GameDirector.Instance);
+            if (QuestMarkerState == QuestGiverMarkerState.Hidden)
+            {
+                _questMarkerRoot.gameObject.SetActive(false);
+                return;
+            }
+
+            string glyph = QuestMarkerState == QuestGiverMarkerState.QuestAvailable ? "!" : "?";
+            Color color = QuestMarkerState == QuestGiverMarkerState.QuestAccepted
+                ? QuestMarkerGray : QuestMarkerYellow;
+            _questMarkerHalo.text = glyph;
+            _questMarkerShadow.text = glyph;
+            _questMarkerGlyph.text = glyph;
+            _questMarkerGlyph.color = color;
+            _questMarkerHalo.color = new Color(color.r, color.g, color.b,
+                QuestMarkerState == QuestGiverMarkerState.QuestAccepted ? 0.11f : 0.22f);
+            _questMarkerRoot.gameObject.SetActive(true);
+        }
+
+        private void UpdateQuestMarker()
+        {
+            if (Time.unscaledTime >= _nextQuestMarkerRefresh)
+            {
+                _nextQuestMarkerRefresh = Time.unscaledTime + 0.15f;
+                RefreshQuestMarkerNow();
+            }
+            if (!QuestMarkerVisible) return;
+            float wave = SettingsMenu.ReducedMotion ? 0f
+                : Mathf.Sin(Time.unscaledTime * 2.8f);
+            _questMarkerRoot.localPosition = QuestMarkerBase + Vector3.up * (wave * 0.055f);
+            _questMarkerRoot.localScale = Vector3.one * (1f + Mathf.Max(0f, wave) * 0.035f);
+        }
 
         /// <summary>How many companions Veresk can add right now. This is independent of
         /// quest state: new hires and saved former companions remain available at any point.</summary>
@@ -82,6 +223,7 @@ namespace RadiantPool.Game
 
         private void Update()
         {
+            UpdateQuestMarker();
             bool combat = CombatManager.Instance != null && CombatManager.Instance.InCombat.Value;
             if (combat) { _open = false; return; }
             if (Input.GetKeyDown(KeyCode.E) && InRange() && !Ui.PanelOpen) _open = !_open;

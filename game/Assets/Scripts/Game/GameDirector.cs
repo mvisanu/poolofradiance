@@ -157,12 +157,14 @@ namespace RadiantPool.Game
             base.OnStartServer();
             var args = System.Environment.GetCommandLineArgs();
             int questLampCapture = System.Array.IndexOf(args, "-questlampcapture");
+            int questMarkerCapture = System.Array.IndexOf(args, "-questmarkercapture");
             int nextQuestCapture = System.Array.IndexOf(args, "-nextquestcapture");
             int siteCapture = System.Array.IndexOf(args, "-sitecapture");
             int worldMapCapture = System.Array.IndexOf(args, "-worldmapcapture");
             _allowWorldTimeOverride = System.Array.IndexOf(args, "-atmospheretest") >= 0
                                       || System.Array.IndexOf(args, "-atmospherecapture") >= 0
-                                      || questLampCapture >= 0 || siteCapture >= 0;
+                                      || questLampCapture >= 0 || questMarkerCapture >= 0
+                                      || siteCapture >= 0;
             SyncFromComputerClock();
             Debug.Log($"[Atmosphere] host computer clock " +
                       $"{System.DateTime.Now:HH:mm:ss} ({System.TimeZoneInfo.Local.Id})");
@@ -194,8 +196,12 @@ namespace RadiantPool.Game
                 StartCoroutine(EncounterScalingSelfTest());
             if (System.Array.IndexOf(args, "-siteactiontest") >= 0)
                 StartCoroutine(SiteActionInputSelfTest());
+            if (System.Array.IndexOf(args, "-questmarkertest") >= 0)
+                StartCoroutine(QuestMarkerSelfTest());
             if (questLampCapture >= 0 && questLampCapture + 1 < args.Length)
                 StartCoroutine(QuestLampCapture(args[questLampCapture + 1]));
+            if (questMarkerCapture >= 0 && questMarkerCapture + 1 < args.Length)
+                StartCoroutine(QuestMarkerCapture(args[questMarkerCapture + 1]));
             if (nextQuestCapture >= 0 && nextQuestCapture + 1 < args.Length)
                 StartCoroutine(NextQuestCapture(args[nextQuestCapture + 1]));
             if (siteCapture >= 0 && siteCapture + 1 < args.Length)
@@ -1942,6 +1948,131 @@ namespace RadiantPool.Game
                       $"E opened the spectral-watch choice and it survived {anchors - 1} " +
                       $"distant objective updates; decision " +
                       $"{(resolved ? $"recorded as '{SiteActionResult(zone)}'" : "NOT RECORDED")}");
+        }
+
+        /// <summary>Built-player regression for the complete quest-giver marker contract:
+        /// offered, accepted, ready to turn in, then no remaining commission.</summary>
+        private System.Collections.IEnumerator QuestMarkerSelfTest()
+        {
+            yield return new WaitForSeconds(8f);
+            var giver = FindObjectsByType<NpcInteract>(FindObjectsSortMode.None)
+                .FirstOrDefault();
+            if (giver == null || ZoneStates.Count == 0)
+            {
+                Debug.Log("[QuestMarkerTest] FAIL - quest giver or zone state missing");
+                yield break;
+            }
+
+            int oldMuster = MusterState.Value;
+            var oldStates = ZoneStates.ToArray();
+            bool SameColor(Color a, Color b) => Mathf.Abs(a.r - b.r) < 0.01f
+                && Mathf.Abs(a.g - b.g) < 0.01f && Mathf.Abs(a.b - b.b) < 0.01f;
+            void LockAll()
+            {
+                for (int i = 0; i < ZoneStates.Count; i++)
+                    ZoneStates[i] = (int)QuestState.Locked;
+            }
+
+            LockAll();
+            MusterState.Value = (int)QuestState.Active;
+            giver.RefreshQuestMarkerNow();
+            bool available = giver.QuestMarkerState == QuestGiverMarkerState.QuestAvailable
+                             && giver.QuestMarkerGlyph == "!"
+                             && SameColor(giver.QuestMarkerColor, NpcInteract.QuestMarkerYellow)
+                             && giver.QuestMarkerHasRenderableGlyph;
+
+            MusterState.Value = (int)QuestState.Completed;
+            ZoneStates[0] = (int)QuestState.Active;
+            giver.RefreshQuestMarkerNow();
+            bool accepted = giver.QuestMarkerState == QuestGiverMarkerState.QuestAccepted
+                            && giver.QuestMarkerGlyph == "?"
+                            && SameColor(giver.QuestMarkerColor, NpcInteract.QuestMarkerGray)
+                            && giver.QuestMarkerHasRenderableGlyph;
+
+            ZoneStates[0] = (int)QuestState.ObjectivesMet;
+            giver.RefreshQuestMarkerNow();
+            bool ready = giver.QuestMarkerState == QuestGiverMarkerState.ReadyToTurnIn
+                         && giver.QuestMarkerGlyph == "?"
+                         && SameColor(giver.QuestMarkerColor, NpcInteract.QuestMarkerYellow)
+                         && giver.QuestMarkerHasRenderableGlyph;
+
+            ZoneStates[0] = (int)QuestState.Completed;
+            giver.RefreshQuestMarkerNow();
+            bool hidden = giver.QuestMarkerState == QuestGiverMarkerState.Hidden
+                          && !giver.QuestMarkerVisible;
+            var marker = giver.transform.Find("QuestStateMarker");
+            bool overheadBillboard = marker != null && marker.localPosition.y > 1.8f
+                                     && marker.GetComponent<Billboard>() != null;
+
+            MusterState.Value = oldMuster;
+            for (int i = 0; i < oldStates.Length; i++) ZoneStates[i] = oldStates[i];
+            giver.RefreshQuestMarkerNow();
+
+            bool pass = available && accepted && ready && hidden && overheadBillboard;
+            Debug.Log($"[QuestMarkerTest] {(pass ? "PASS" : "FAIL")} - " +
+                      $"available yellow ! {available}, accepted gray ? {accepted}, " +
+                      $"ready yellow ? {ready}, finished hidden {hidden}, " +
+                      $"overhead billboard {overheadBillboard}");
+        }
+
+        /// <summary>Visual QA without synthetic input: capture the same giver and camera
+        /// in all three visible quest states, then restore the live campaign.</summary>
+        private System.Collections.IEnumerator QuestMarkerCapture(string directory)
+        {
+            yield return new WaitForSeconds(8f);
+            var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => !p.IsCompanion && p.Owner != null && p.Owner.IsValid);
+            var giver = FindObjectsByType<NpcInteract>(FindObjectsSortMode.None)
+                .FirstOrDefault();
+            if (holder == null || giver == null || ZoneStates.Count == 0)
+            {
+                Debug.Log("[QuestMarkerCapture] FAIL - player, quest giver, or zone state missing");
+                yield break;
+            }
+
+            int oldMuster = MusterState.Value;
+            var oldStates = ZoneStates.ToArray();
+            void LockAll()
+            {
+                for (int i = 0; i < ZoneStates.Count; i++)
+                    ZoneStates[i] = (int)QuestState.Locked;
+            }
+            System.IO.Directory.CreateDirectory(directory);
+            Warp(holder.transform, new Vector3(0f, 0.1f, -8f));
+            holder.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+            var orbit = Camera.main != null ? Camera.main.GetComponent<OrbitCamera>() : null;
+            if (orbit != null) orbit.SetPresentationView(180f, 18f, 8f);
+            ServerSetWorldHourForTest(14f);
+
+            LockAll();
+            MusterState.Value = (int)QuestState.Active;
+            giver.RefreshQuestMarkerNow();
+            yield return new WaitForSeconds(1f);
+            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(directory,
+                "quest-marker-available.png"));
+            yield return new WaitForSeconds(1.5f);
+
+            MusterState.Value = (int)QuestState.Completed;
+            ZoneStates[0] = (int)QuestState.Active;
+            giver.RefreshQuestMarkerNow();
+            yield return new WaitForSeconds(1f);
+            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(directory,
+                "quest-marker-accepted.png"));
+            yield return new WaitForSeconds(1.5f);
+
+            ZoneStates[0] = (int)QuestState.ObjectivesMet;
+            giver.RefreshQuestMarkerNow();
+            yield return new WaitForSeconds(1f);
+            ScreenCapture.CaptureScreenshot(System.IO.Path.Combine(directory,
+                "quest-marker-ready.png"));
+            yield return new WaitForSeconds(1.5f);
+
+            MusterState.Value = oldMuster;
+            for (int i = 0; i < oldStates.Length; i++) ZoneStates[i] = oldStates[i];
+            giver.RefreshQuestMarkerNow();
+            ServerClearWorldHourTestOverride();
+            Debug.Log($"[QuestMarkerCapture] PASS - wrote available, accepted, and " +
+                      $"turn-in marker frames to {directory}");
         }
 
         /// <summary>Screenshot-only QA path: park north of the council forecourt, face the

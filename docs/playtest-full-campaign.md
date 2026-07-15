@@ -1,9 +1,11 @@
 # Playtest checklist — full first-region campaign (2 players)
 
-1. Host + join (docs/playtest-phase2.md rows 1–2). Accept the muster quest at Veresk →
+1. Host + join (docs/playtest-phase2.md rows 1–2). Verify Veresk starts with a yellow `!`;
+   accept the muster quest and confirm it becomes a gray `?` →
    "Retake the Old Docks" activates; the Market gate (north) and Temple gate (east) are
    solid walls — you cannot enter either zone.
-2. Clear the docks' 3 required encounters (west side) → turn in at Veresk → +300 XP each
+2. Clear the docks' 3 required encounters (west side) → verify Veresk's marker becomes a
+   yellow `?` → turn in at Veresk → +300 XP each
    (level 2), +100 gold, **the Market gate sinks open on both clients**. Repeat for the
    Market (4 encounters, undead) → Temple gate opens; party should reach ~level 3–4.
 3. Temple (5 encounters vs the Kindled): the finale at the Lightwell pits the party

@@ -39,7 +39,9 @@ Build output: `game/Builds/Win64/RadiantPool.exe`. Installer output:
 (bag → trader → purse), `-leveltest` (XP → level → point spent), `-attacktest` (one click on
 a distant enemy → walk → blow → automatic turn end + monster HUD), `-combatflowtest` (direct world attack → enemy round →
 slotted magic → victory modal → defeat modal → retry), `-warpsmith` (park at the smithy so a shop panel can be
-LOOKED at); **visual QA** `-worldmapcapture <png>` opens the maximized campaign atlas through
+LOOKED at), `-questmarkertest` (yellow ! → gray ? → yellow ? → hidden);
+**visual QA** `-questmarkercapture <dir>` captures all three visible quest-giver states;
+`-worldmapcapture <png>` opens the maximized campaign atlas through
 `MiniMap.ShowCampaignAtlasForTest`, captures it without desktop input, and restores the
 temporary quest states; it also asserts three simultaneous active commissions produce
 exactly one `[WorldMapObjectiveTest]` X. `-uiskincapture <png>` renders the title/character-creation screen,
@@ -197,6 +199,12 @@ mouse and the self-test drive the very same code.
   **district sign** over each quarter; `MiniMap` paints the quarter names on the map (gold
   = active quest). After the campaign ends the tracker issues standing orders against any
   encounters still standing, so there is never a questless state.
+  `NpcInteract` owns the quest giver's overhead state marker: a **yellow `!`** means Veresk
+  has the opening commission available, an accepted/active commission is a **gray `?`**,
+  and any `ObjectivesMet` commission takes priority as a **yellow `?`** ready for turn-in.
+  With no remaining commission the marker hides. The Inter Bold world-space glyph is
+  unlit, outlined, billboarded, gently bobbed (disabled by Reduced Motion), and derived
+  from replicated `MusterState`/`ZoneStates`; it never keeps a duplicate quest counter.
 - `MiniMap.cs` — docked in the **top-right corner itself** (`MapTop`) and **starts collapsed**
   (pref key `minimap.size2`). Three sizes via header **icon** buttons or `M`, which cycles
   **hidden → normal tactical map → maximized campaign atlas → hidden**, remembered in
