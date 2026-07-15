@@ -1,4 +1,6 @@
 using System;
+using System.Collections;
+using System.IO;
 using FishNet.Managing;
 using FishNet.Transporting;
 using FishNet.Transporting.Tugboat;
@@ -56,6 +58,7 @@ namespace RadiantPool.Game
         private void Start()
         {
             var args = Environment.GetCommandLineArgs();
+            string uiSkinCapture = "";
             for (int i = 0; i < args.Length; i++)
             {
                 if (args[i] == "-name" && i + 1 < args.Length)
@@ -66,6 +69,8 @@ namespace RadiantPool.Game
                         n.Equals(args[i + 1], StringComparison.OrdinalIgnoreCase));
                     if (classIndex >= 0) CharacterBuild.Local = CharacterBuild.Default(classIndex);
                 }
+                else if (args[i] == "-uiskincapture" && i + 1 < args.Length)
+                    uiSkinCapture = args[i + 1];
             }
             for (int i = 0; i < args.Length; i++)
             {
@@ -91,6 +96,46 @@ namespace RadiantPool.Game
                     }
                 }
             }
+            if (uiSkinCapture.Length > 0)
+                StartCoroutine(CaptureUiSkin(uiSkinCapture));
+        }
+
+        /// <summary>No-input visual/runtime assertion for the licensed skin. It captures
+        /// the title/character-creation screen, which exercises panels, tabs/selection
+        /// buttons, fields, scrollbars, primary and ordinary buttons in one frame.</summary>
+        private static IEnumerator CaptureUiSkin(string path)
+        {
+            // Let the first scene, camera and IMGUI layout settle before asking the GPU for
+            // pixels. Quitting on the first file-exists frame can leave a tiled black PNG.
+            for (int frame = 0; frame < 30; frame++) yield return null;
+            yield return new WaitForEndOfFrame();
+            int loaded = RpgMmoUi7Skin.LoadedRoleCount;
+            if (!RpgMmoUi7Skin.Available || loaded != RpgMmoUi7Skin.Roles.Length)
+            {
+                Debug.LogError($"[UiSkinTest] FAIL - loaded {loaded}/{RpgMmoUi7Skin.Roles.Length} roles.");
+                Application.Quit(2);
+                yield break;
+            }
+
+            string fullPath = Path.GetFullPath(path);
+            string directory = Path.GetDirectoryName(fullPath);
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+            ScreenCapture.CaptureScreenshot(fullPath);
+            for (int frame = 0; frame < 180; frame++)
+            {
+                yield return null;
+                if (File.Exists(fullPath) && new FileInfo(fullPath).Length > 0)
+                {
+                    for (int settle = 0; settle < 30; settle++)
+                        yield return new WaitForEndOfFrame();
+                    Debug.Log($"[UiSkinTest] PASS - {loaded}/{RpgMmoUi7Skin.Roles.Length} roles; " +
+                              $"title capture: {fullPath}");
+                    Application.Quit(0);
+                    yield break;
+                }
+            }
+            Debug.LogError($"[UiSkinTest] FAIL - screenshot was not written: {fullPath}");
+            Application.Quit(3);
         }
 
         private void OnDestroy()

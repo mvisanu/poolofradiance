@@ -49,6 +49,9 @@ Local builds also use **Caves and Dungeons** (Sonus Novum), **Action RPG Battle
 Music** (Chimera Forge Productions), and selected **AnyMMORPG** combat SFX under
 the Unity Asset Store EULA. Those licensed source clips are installed from the owner's
 Unity cache by `scripts/install-audio-assets.py` and are intentionally not in this repo.
+Local owner builds may also use **RPG & MMO UI 7** (Evil) under the Unity Asset Store
+EULA. Its source textures and generated runtime skin crops stay gitignored and are not
+redistributed in this repository.
 
 ## License / attribution
 This work includes material taken from the System Reference Document 5.1 ("SRD 5.1") by

@@ -32,6 +32,7 @@ namespace RadiantPool.EditorTools
             EnsureFolders();
             SetupPlayerSettings();
             SetupUrp();
+            RpgMmoUi7Art.Bake();       // licensed UI art -> ignored runtime skin textures
             PolyPackArt.Invalidate();      // re-scan: the pack may have just been imported
             PolyPackArt.SetupMaterials();  // Asset Store packs ship Standard mats: magenta in URP
             KenneyArt.SetupMaterials();

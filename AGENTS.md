@@ -34,6 +34,8 @@ Build output: `game/Builds/Win64/RadiantPool.exe`. Exe flags for automation:
 (bag → trader → purse), `-leveltest` (XP → level → point spent), `-attacktest` (one click on
 a distant enemy → walk → blow), `-warpsmith` (park at the smithy so a shop panel can be
 LOOKED at), `-siteactiontest` (Watcher Below E panel → choice → saved decision);
+**visual QA** `-uiskincapture <png>` renders the title/character-creation screen, asserts all
+19 RPG & MMO UI 7 skin roles are present, captures it without input, then quits;
 `-savedir <dir>` keeps a test run off the real campaign.
 Player log (first place to look when the user reports bugs):
 `%USERPROFILE%\AppData\LocalLow\RadiantPool\Radiant Pool\Player.log`.
@@ -96,6 +98,11 @@ mouse and the self-test drive the very same code.
   brass borders, parchment; bright gold = active states only; text contrast ≥4.5:1;
   MedievalSharp headers / Inter body, OFL, under `Resources/Fonts`). All IMGUI styling
   flows through `Ui.Begin()` → `Theme.Apply()`; tune look there, never inline styles.
+  `RpgMmoUi7Art` selectively imports the locally licensed **RPG & MMO UI 7** textures and
+  bakes 19 semantic runtime roles (panels, button states, fields, slots, bars, sliders,
+  toggles, tooltips, scrollbars, tabs) into ignored `Resources/UI/RpgMmoUi7`. `Theme.Apply`
+  consumes them globally, while `Theme.SlotStyle` covers compact hotbar/minimap controls and
+  `Theme.TabStyle` covers character tabs. No pack means the generated Gilded Quest fallback.
   **Gold lives on the HotBar** (`{PartyGold:N0}g`, always visible): it used to exist only
   inside the bags and the shops, so the purse never visibly moved and the total read like a
   placeholder. Format gold `:N0` everywhere — "1,234", never "1234".
@@ -214,6 +221,9 @@ mouse and the self-test drive the very same code.
   Resources paths. `GameAudio.AssetAudioReady` and the `-attacktest` smoke assertions
   prove the licensed music, weapon cue, and fire cast/impact are present in the built player;
   missing clips fall back to `AudioSynth`. Never commit the extracted WAVs or metas.
+  For **RPG & MMO UI 7**, use `scripts/import-rpg-mmo-ui7.ps1`: it extracts only image/sprite
+  art and metadata into ignored `Assets/LocalLicensed`, excludes the legacy scripts/prefabs,
+  rebakes the 19-role IMGUI skin, and fails unless the skin is complete.
 - `PolyPackArt.cs` — **environment art from the Asset Store RPG Poly Pack**, wired
   DISCOVERY-first, not by prefab name: it finds the pack wherever it imported, sorts every
   prefab into buckets by the words in its name (`Tree/Pine/Rock/Cliff/Bush/Grass/Flower/

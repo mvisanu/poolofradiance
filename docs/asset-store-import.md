@@ -39,6 +39,7 @@ the ground helper selects clean, swamp, civic, or corrupted terrain for each sit
 
 | Pack | Wire-up |
 |---|---|
+| [RPG & MMO UI 7](https://assetstore.unity.com/packages/2d/gui/rpg-mmo-ui-7-114435) | In Package Manager > My Assets click **Download only**, close this project's editor, then run `scripts/import-rpg-mmo-ui7.ps1`. The selective installer preserves all 286 image assets locally, excludes the package's legacy scripts/prefabs/demo scenes, and `RpgMmoUi7Art` bakes 19 semantic IMGUI roles into ignored `Assets/Resources/UI/RpgMmoUi7`. `Theme.Apply()` carries the skin across title, character creation, inventory, journal, settings, level-up, session, vendor/smith/NPC/travel/objective panels, quest/minimap HUD, hotbar, and combat UI. Verify the built player with `RadiantPool.exe -uiskincapture <png>`; it logs `[UiSkinTest] PASS - 19/19 roles`. |
 | [FREE RPG Fantasy Spell Icons](https://assetstore.unity.com/packages/2d/gui/icons/free-rpg-fantasy-spell-icons-200511) | Overwrite the same-named PNGs in `Assets/Resources/SpellIcons/` (`fire_bolt.png`, `magic_missile.png`, `burning_hands.png`, `sleep.png`, `sacred_flame.png`, `guiding_bolt.png`, `cure_wounds.png`, `healing_word.png`, `bless.png`, `attack.png`, `dodge.png`, `cast.png`, `end_turn.png`). Current icons are CC-BY game-icons.net placeholders. |
 | [Caves and Dungeons music](https://assetstore.unity.com/packages/audio/music/caves-and-dungeons-292342) | `install-audio-assets.py` selects an exploration loop plus distinct Old Docks, Drowned Market, Sunken Warcamp, Glasslit Temple, and Ashen Ward loops. |
 | Action RPG Battle Music | `install-audio-assets.py` installs four looped encounter tracks. `GameAudio` chooses a new track per fight without immediately repeating the last one. |
@@ -71,6 +72,7 @@ Downloading needs the editor **once**; everything after that is headless:
    ```powershell
    scripts/import-assetstore.ps1              # newest cached pack matching "poly"
    scripts/import-assetstore.ps1 -Match "RPG Poly Pack"
+   scripts/import-rpg-mmo-ui7.ps1            # selective UI7 image-only installer
    ```
 
    That imports the cached `.unitypackage` in batchmode, converts materials to URP,

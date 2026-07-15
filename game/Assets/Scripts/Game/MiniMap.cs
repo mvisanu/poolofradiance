@@ -762,7 +762,7 @@ namespace RadiantPool.Game
         /// Optional `text` labels the button for cases where the icon alone is ambiguous.</summary>
         private bool IconButton(Rect r, Texture2D icon, string tip, string text = null)
         {
-            bool clicked = GUI.Button(r, new GUIContent(text ?? "", tip));
+            bool clicked = GUI.Button(r, new GUIContent(text ?? "", tip), Theme.SlotStyle);
 
             float ico = Mathf.Min(16f, r.height - 6f);
             float x = text == null ? r.center.x - ico / 2f : r.xMax - ico - 8f;

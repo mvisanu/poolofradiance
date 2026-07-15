@@ -6,8 +6,9 @@ namespace RadiantPool.Game
     /// <summary>The "Gilded Quest" design system from theme/ (Stitch mockups): charcoal
     /// stone panels with gold borders, parchment content cards, mage-blue primary
     /// buttons, Source Serif 4 headers + Inter body, class accent colors, and glassy
-    /// HP/MP bars. Hard outlines instead of soft shadows. All textures are generated
-    /// at runtime (9-sliced rounded rects); fonts ship in Resources/Fonts (SIL OFL).</summary>
+    /// HP/MP bars. When the locally licensed RPG & MMO UI 7 pack is installed, its baked
+    /// frames and controls replace the procedural surfaces globally; public builds retain
+    /// the generated fallback. Fonts ship in Resources/Fonts (SIL OFL).</summary>
     public static class Theme
     {
         // ---------- palette ----------
@@ -136,20 +137,31 @@ namespace RadiantPool.Game
             return tex;
         }
 
-        public static Texture2D PanelTex => Rounded("panel", Panel, GoldDeep, 2, 8);
-        public static Texture2D PanelPlainTex => Rounded("panelPlain", Panel, PanelBright, 1, 6);
+        public static bool RpgMmoUi7Ready => RpgMmoUi7Skin.Available;
+        public static Texture2D PanelTex => RpgMmoUi7Skin.Get("panel",
+            Rounded("panel", Panel, GoldDeep, 2, 8));
+        public static Texture2D PanelPlainTex => RpgMmoUi7Skin.Get("panel_plain",
+            Rounded("panelPlain", Panel, PanelBright, 1, 6));
         public static Texture2D ParchmentTex => Rounded("parchment", Parchment, ParchmentEdge, 1, 6);
         public static Texture2D GoldWashTex => Rounded("goldwash", new Color(0.94f, 0.88f, 0.72f), GoldDeep, 2, 6);
-        public static Texture2D WellTex => Rounded("well", Hex("#0e0e0e"), Color.black, 1, 4);
-        public static Texture2D BtnStoneTex => Rounded("btnStone", PanelHigh, GoldDeep, 1, 10);
-        public static Texture2D BtnStoneHoverTex => Rounded("btnStoneHov", PanelBright, Gold, 1, 10);
-        public static Texture2D BtnBlueTex => Rounded("btnBlue", MageBlue, MageBlue, 1, 10, 2, GoldDeep);
-        public static Texture2D BtnBlueHoverTex => Rounded("btnBlueHov", Hex("#4a72d0"), Hex("#4a72d0"), 1, 10, 2, Gold);
-        public static Texture2D BtnGoldTex => Rounded("btnGold", Gold, GoldDeep, 2, 10);
+        public static Texture2D WellTex => RpgMmoUi7Skin.Get("bar",
+            Rounded("well", Hex("#0e0e0e"), Color.black, 1, 4));
+        public static Texture2D BtnStoneTex => RpgMmoUi7Skin.Get("button",
+            Rounded("btnStone", PanelHigh, GoldDeep, 1, 10));
+        public static Texture2D BtnStoneHoverTex => RpgMmoUi7Skin.Get("button_hover",
+            Rounded("btnStoneHov", PanelBright, Gold, 1, 10));
+        public static Texture2D BtnBlueTex => RpgMmoUi7Skin.Get("primary",
+            Rounded("btnBlue", MageBlue, MageBlue, 1, 10, 2, GoldDeep));
+        public static Texture2D BtnBlueHoverTex => RpgMmoUi7Skin.Get("primary_hover",
+            Rounded("btnBlueHov", Hex("#4a72d0"), Hex("#4a72d0"), 1, 10, 2, Gold));
+        public static Texture2D BtnGoldTex => RpgMmoUi7Skin.Get("button_pressed",
+            Rounded("btnGold", Gold, GoldDeep, 2, 10));
+        public static Texture2D FieldTex => RpgMmoUi7Skin.Get("field", ParchmentTex);
+        public static Texture2D SlotTex => RpgMmoUi7Skin.Get("slot", BtnStoneTex);
 
         // ---------- styles ----------
         private static GUIStyle _header, _headerBig, _headerInk, _caps, _body14, _bodyInk,
-            _btnPrimary, _panel, _parchment, _goldWash, _toast;
+            _btnPrimary, _slot, _tab, _tabActive, _panel, _parchment, _goldWash, _toast;
 
         private static GUIStyle MakeLabel(Font font, int size, Color color, FontStyle fallback)
         {
@@ -211,15 +223,65 @@ namespace RadiantPool.Game
             }
         }
 
+        /// <summary>Square MMO action-slot chrome for hotbar and compact icon controls.</summary>
+        public static GUIStyle SlotStyle
+        {
+            get
+            {
+                if (_slot != null) return _slot;
+                _slot = new GUIStyle(GUI.skin.button)
+                {
+                    border = new RectOffset(10, 10, 10, 10),
+                    padding = new RectOffset(5, 5, 5, 5),
+                    alignment = TextAnchor.MiddleCenter
+                };
+                _slot.normal.background = SlotTex;
+                _slot.hover.background = RpgMmoUi7Skin.Get("tab_active", BtnStoneHoverTex);
+                _slot.active.background = BtnGoldTex;
+                _slot.focused.background = RpgMmoUi7Skin.Get("tab_active", BtnStoneHoverTex);
+                _slot.normal.textColor = OnSurface;
+                _slot.hover.textColor = Gold;
+                _slot.active.textColor = OnGold;
+                return _slot;
+            }
+        }
+
+        /// <summary>MMO character/category tab chrome. The selected state remains readable
+        /// without disabling the control (Unity's disabled tint muddies licensed artwork).</summary>
+        public static GUIStyle TabStyle(bool selected)
+        {
+            GUIStyle cached = selected ? _tabActive : _tab;
+            if (cached != null) return cached;
+            cached = new GUIStyle(GUI.skin.button)
+            {
+                border = new RectOffset(12, 12, 10, 10),
+                padding = new RectOffset(10, 10, 6, 7),
+                alignment = TextAnchor.MiddleCenter
+            };
+            Texture2D normal = RpgMmoUi7Skin.Get(selected ? "tab_active" : "tab",
+                selected ? BtnBlueTex : BtnStoneTex);
+            cached.normal.background = normal;
+            cached.hover.background = selected ? normal : BtnStoneHoverTex;
+            cached.active.background = normal;
+            cached.focused.background = normal;
+            cached.normal.textColor = selected ? Color.white : OnSurface;
+            cached.hover.textColor = selected ? Color.white : Gold;
+            cached.active.textColor = cached.normal.textColor;
+            if (selected) _tabActive = cached;
+            else _tab = cached;
+            return cached;
+        }
+
         /// <summary>Charcoal stone panel with gold border (Level 1 elevation).</summary>
         public static GUIStyle PanelStyle
         {
             get
             {
                 if (_panel != null) return _panel;
+                int edge = RpgMmoUi7Ready ? 16 : 10;
                 _panel = new GUIStyle(GUI.skin.box)
                 {
-                    border = new RectOffset(10, 10, 10, 10),
+                    border = new RectOffset(edge, edge, edge, edge),
                     padding = new RectOffset(14, 14, 12, 12)
                 };
                 _panel.normal.background = PanelTex;
@@ -276,6 +338,7 @@ namespace RadiantPool.Game
                     wordWrap = false
                 };
                 if (SerifSemi != null) _toast.font = SerifSemi; else _toast.fontStyle = FontStyle.Bold;
+                _toast.normal.background = RpgMmoUi7Skin.Get("tooltip", PanelTex);
                 _toast.normal.textColor = Gold;
                 return _toast;
             }
@@ -342,14 +405,22 @@ namespace RadiantPool.Game
             skin.button.hover.background = BtnStoneHoverTex;
             skin.button.active.background = BtnGoldTex;
             skin.button.focused.background = BtnStoneHoverTex;
+            skin.button.onNormal.background = BtnBlueTex;
+            skin.button.onHover.background = BtnBlueHoverTex;
+            skin.button.onActive.background = BtnBlueTex;
+            skin.button.onFocused.background = BtnBlueHoverTex;
             skin.button.normal.textColor = OnSurface;
             skin.button.hover.textColor = Gold;
             skin.button.active.textColor = OnGold;
             skin.button.focused.textColor = Gold;
+            skin.button.onNormal.textColor = Color.white;
+            skin.button.onHover.textColor = Color.white;
+            skin.button.onActive.textColor = Color.white;
+            skin.button.onFocused.textColor = Color.white;
 
-            skin.textField.normal.background = ParchmentTex;
-            skin.textField.focused.background = ParchmentTex;
-            skin.textField.hover.background = ParchmentTex;
+            skin.textField.normal.background = FieldTex;
+            skin.textField.focused.background = FieldTex;
+            skin.textField.hover.background = FieldTex;
             skin.textField.border = new RectOffset(6, 6, 6, 6);
             skin.textField.padding = new RectOffset(8, 8, 5, 5);
             skin.textField.normal.textColor = Ink;
@@ -360,24 +431,48 @@ namespace RadiantPool.Game
             skin.toggle.normal.textColor = OnSurface;
             skin.toggle.hover.textColor = Gold;
 
-            skin.horizontalScrollbar.normal.background = Solid("scrollBg", Hex("#0e0e0e"));
-            skin.verticalScrollbar.normal.background = Solid("scrollBg", Hex("#0e0e0e"));
-            skin.horizontalScrollbarThumb.normal.background = Solid("scrollThumb", GoldDeep);
-            skin.verticalScrollbarThumb.normal.background = Solid("scrollThumb", GoldDeep);
+            var scrollTrack = RpgMmoUi7Skin.Get("scroll_track",
+                Solid("scrollBg", Hex("#0e0e0e")));
+            var scrollThumb = RpgMmoUi7Skin.Get("scroll_thumb",
+                Solid("scrollThumb", GoldDeep));
+            skin.horizontalScrollbar.normal.background = scrollTrack;
+            skin.verticalScrollbar.normal.background = scrollTrack;
+            skin.horizontalScrollbarThumb.normal.background = scrollThumb;
+            skin.verticalScrollbarThumb.normal.background = scrollThumb;
 
             // Sliders were raw Unity gray and the thumb was a 10 px sliver — the settings
             // panel is the one place the mouse has to hit something small, so the thumb is
             // sized to be grabbable and the groove is themed like the HP wells.
-            skin.horizontalSlider.normal.background = WellTex;
+            skin.horizontalSlider.normal.background = RpgMmoUi7Skin.Get("slider", WellTex);
             skin.horizontalSlider.border = new RectOffset(4, 4, 4, 4);
             skin.horizontalSlider.fixedHeight = 14f;
             skin.horizontalSlider.margin = new RectOffset(4, 4, 8, 8);
-            skin.horizontalSliderThumb.normal.background = BtnGoldTex;
-            skin.horizontalSliderThumb.hover.background = BtnGoldTex;
-            skin.horizontalSliderThumb.active.background = BtnGoldTex;
+            var thumb = RpgMmoUi7Skin.Get("thumb", BtnGoldTex);
+            skin.horizontalSliderThumb.normal.background = thumb;
+            skin.horizontalSliderThumb.hover.background = thumb;
+            skin.horizontalSliderThumb.active.background = thumb;
             skin.horizontalSliderThumb.border = new RectOffset(6, 6, 6, 6);
             skin.horizontalSliderThumb.fixedWidth = 20f;
             skin.horizontalSliderThumb.fixedHeight = 20f;
+
+            var toggleOff = RpgMmoUi7Skin.Get("toggle_off");
+            var toggleOn = RpgMmoUi7Skin.Get("toggle_on");
+            if (toggleOff != null && toggleOn != null)
+            {
+                skin.toggle.normal.background = toggleOff;
+                skin.toggle.hover.background = toggleOff;
+                skin.toggle.active.background = toggleOff;
+                skin.toggle.onNormal.background = toggleOn;
+                skin.toggle.onHover.background = toggleOn;
+                skin.toggle.onActive.background = toggleOn;
+                skin.toggle.border = new RectOffset(8, 8, 8, 8);
+                skin.toggle.padding = new RectOffset(24, 4, 2, 2);
+            }
+
+            Debug.Log(RpgMmoUi7Ready
+                ? $"[RpgMmoUi7] READY - {RpgMmoUi7Skin.LoadedRoleCount}/" +
+                  $"{RpgMmoUi7Skin.Roles.Length} themed roles active on all UI screens."
+                : "[RpgMmoUi7] licensed art unavailable; generated Gilded Quest fallback active.");
         }
 
         // ---------- text markers ----------

@@ -128,6 +128,7 @@ namespace RadiantPool.Game
             GUI.enabled = canDrink;
             bool drink = GUILayout.Button(
                 new GUIContent(CombatClientUI.Icon("potion"), potionTip),
+                Theme.SlotStyle,
                 GUILayout.Width(_slot), GUILayout.Height(_slot));
             // The badge hangs off the button GUILayout actually placed, so it can never
             // drift out of register with the bar the way hand-computed offsets did.
@@ -144,6 +145,7 @@ namespace RadiantPool.Game
             // Session: the invite code and who you are connected to, on demand instead of
             // parked in the corner of the screen for the whole campaign.
             if (GUILayout.Button(new GUIContent(SessionPanel.Icon, "Session / invite code"),
+                    Theme.SlotStyle,
                     GUILayout.Width(_slot), GUILayout.Height(_slot)))
                 Ui.Toggle(Ui.Panel.Session);
             if (Btn("settings", "Settings (Esc)")) Ui.Toggle(Ui.Panel.Settings);
@@ -155,6 +157,7 @@ namespace RadiantPool.Game
             GUILayout.Space(6);
             if (_hideIcon == null) _hideIcon = MakeHideIcon();
             bool stow = GUILayout.Button(new GUIContent("", "Hide the bar (H)"),
+                Theme.SlotStyle,
                 GUILayout.Width(HideW), GUILayout.Height(_slot));
             var stowRect = GUILayoutUtility.GetLastRect();
             GUI.DrawTexture(new Rect(stowRect.center.x - 8f, stowRect.center.y - 8f, 16f, 16f),
@@ -183,6 +186,7 @@ namespace RadiantPool.Game
 
         private bool Btn(string icon, string tooltip) =>
             GUILayout.Button(IconOnly(icon, tooltip),
+                Theme.SlotStyle,
                 GUILayout.Width(_slot), GUILayout.Height(_slot));
 
         /// <summary>Your health, right where your hands are: a slim strip directly above the

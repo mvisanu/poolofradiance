@@ -110,15 +110,13 @@ namespace RadiantPool.Game
                     ? PartyComposition.RoleOf(member.Class).ToString().ToUpperInvariant()
                     : "YOU";
                 bool current = member == selected;
-                GUI.enabled = !current;
                 if (GUILayout.Button($"{role}: {member.CharacterName.Value}",
-                        current ? Theme.BtnPrimary : GUI.skin.button,
-                        GUILayout.MinWidth(118f), GUILayout.Height(28f)))
+                        Theme.TabStyle(current), GUILayout.MinWidth(118f), GUILayout.Height(28f))
+                    && !current)
                 {
                     _selectedName = member.CharacterName.Value;
                     _wornScroll = Vector2.zero;
                 }
-                GUI.enabled = true;
             }
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();

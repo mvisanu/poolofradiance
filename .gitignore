@@ -31,6 +31,22 @@ game/Assets/LowPolyDungeonsLite.meta
 game/Assets/Handpainted_Grass_and_Ground_Textures/
 game/Assets/Handpainted_Grass_and_Ground_Textures.meta
 
+# RPG & MMO UI 7 is a licensed Asset Store pack. The imported source folder name varies
+# between package versions; the adapter bakes its selected sprites into this ignored runtime
+# cache. Never commit either the licensed package or derived sprite crops.
+game/Assets/**/RPG*MMO*UI*7*/
+game/Assets/**/RPG*MMO*UI*7.meta
+game/Assets/LocalLicensed/RpgMmoUi7/
+game/Assets/LocalLicensed/RpgMmoUi7.meta
+game/Assets/LocalLicensed.meta
+game/Assets/Resources/UI/RpgMmoUi7/
+game/Assets/Resources/UI/RpgMmoUi7.meta
+game/Assets/Resources/UI.meta
+
+# Locally imported Asset Store item art. Source textures remain on the purchaser's machine.
+game/Assets/RPG_inventory_icons/
+game/Assets/RPG_inventory_icons.meta
+
 # Locally extracted Asset Store audio. The public repo keeps code/fallbacks only; licensed
 # source clips stay on the purchaser's machine and are packed into their local player build.
 game/Assets/Resources/Music/*.wav
