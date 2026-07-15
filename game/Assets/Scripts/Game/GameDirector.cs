@@ -1395,7 +1395,7 @@ namespace RadiantPool.Game
                 yield break;
             }
             var physicalTarget = combat.ClientUnits.Where(u => !u.IsPc && !u.Dead)
-                .OrderByDescending(u => Chebyshev(mine.Cell, u.Cell)).FirstOrDefault();
+                .OrderBy(u => Chebyshev(mine.Cell, u.Cell)).FirstOrDefault();
             if (physicalTarget == null)
             {
                 Debug.Log("[CombatFlowTest] FAIL - physical turn did not initialize");
@@ -1403,27 +1403,43 @@ namespace RadiantPool.Game
             }
 
             // Default attack has no mode button: the world click is the complete command.
+            string heroName = holder.Sheet.Name;
+            int suffix = physicalTarget.Name.LastIndexOf(" (L", System.StringComparison.Ordinal);
+            string physicalTargetName = suffix > 0
+                ? physicalTarget.Name.Substring(0, suffix) : physicalTarget.Name;
             ui.ClickCell(physicalTarget.Cell);
             deadline = Time.time + 15f;
-            while (combat.InCombat.Value && (combat.ActionLeft || combat.ActionResolving)
-                   && Time.time < deadline)
+            string physicalLine = "";
+            while (combat.InCombat.Value && physicalLine.Length == 0 && Time.time < deadline)
+            {
+                physicalLine = combat.Log.LastOrDefault(l =>
+                    l.StartsWith(heroName + "'s ") && l.Contains(physicalTargetName)) ?? "";
                 yield return null;
-            string heroName = holder.Sheet.Name;
-            string physicalLine = combat.Log.LastOrDefault(l =>
-                l.Contains(heroName) && l.Contains(physicalTarget.Name.Split('(')[0].Trim())) ?? "";
-            bool physicalResolved = physicalLine.Length > 0 && !combat.ActionLeft;
+            }
+            bool physicalResolved = physicalLine.Length > 0;
             Debug.Log($"[CombatFlowTest] physical state {combat.State}, " +
                       $"action {combat.ActionLeft}, rejection '{combat.LastRejection}', " +
                       $"line '{physicalLine}'");
 
             int beforeEnemyTurns = combat.Log.Count;
-            combat.CmdEndTurn();
+            deadline = Time.time + 5f;
+            while (combat.InCombat.Value && combat.IsMyTurn && Time.time < deadline)
+                yield return null;
+            bool attackAutoEnded = !combat.InCombat.Value || !combat.IsMyTurn;
             deadline = Time.time + 25f;
             while (combat.InCombat.Value
                    && (!combat.CanAcceptPlayerInput || combat.Round < 2)
                    && Time.time < deadline)
                 yield return new WaitForSeconds(0.1f);
-            bool enemyActed = combat.Log.Skip(beforeEnemyTurns).Any(l => l.Contains(heroName));
+            string[] monsterNames = combat.ClientUnits.Where(u => !u.IsPc)
+                .Select(u =>
+                {
+                    int at = u.Name.LastIndexOf(" (L", System.StringComparison.Ordinal);
+                    return at > 0 ? u.Name.Substring(0, at) : u.Name;
+                }).ToArray();
+            bool enemyActed = combat.Log.Skip(beforeEnemyTurns).Any(l =>
+                !l.StartsWith(heroName + "'s ") && l.Contains(heroName)
+                && monsterNames.Any(l.Contains));
 
             string magicTarget = combat.ServerPrimeMagicFinishForTest();
             int slotsBefore = combat.MySlots.Sum();
@@ -1460,10 +1476,12 @@ namespace RadiantPool.Game
                 yield return new WaitForSeconds(0.1f);
             bool retried = combat.InCombat.Value;
 
-            bool pass = physicalResolved && enemyActed && magicResolved && slotSpent
+            bool pass = physicalResolved && attackAutoEnded && enemyActed
+                        && magicResolved && slotSpent
                         && victoryModal && defeatModal && retried;
             Debug.Log($"[CombatFlowTest] {(pass ? "PASS" : "FAIL")} - " +
-                      $"physical {physicalResolved}, enemy turn {enemyActed}, " +
+                      $"physical {physicalResolved}, attack auto-end {attackAutoEnded}, " +
+                      $"enemy turn {enemyActed}, " +
                       $"magic+slot {magicResolved && slotSpent}, victory modal {victoryModal}, " +
                       $"defeat modal {defeatModal}, retry {retried}");
         }
@@ -1634,7 +1652,16 @@ namespace RadiantPool.Game
             string narratedEnemy = levelSuffix > 0 ? enemy.Name.Substring(0, levelSuffix) : enemy.Name;
             string blow = combat.Log.LastOrDefault(
                 l => l.Contains(mine.Name) && l.Contains(narratedEnemy)) ?? "";
-            bool struck = !combat.ActionLeft && blow.Length > 0;
+            // Once the automatic handoff reaches the enemy, ActionLeft describes the
+            // ENEMY budget. Narration is the authoritative proof our blow landed.
+            bool struck = blow.Length > 0;
+            float turnEndDeadline = Time.time + 5f;
+            while (combat.InCombat.Value && combat.IsMyTurn
+                   && Time.time < turnEndDeadline)
+                yield return null;
+            bool turnAutoEnded = !combat.InCombat.Value || !combat.IsMyTurn;
+            Debug.Log($"[AttackTurnEndTest] {(turnAutoEnded ? "PASS" : "FAIL")} - " +
+                      "left-click attack ended the player's turn after impact");
             bool visualFeedback = CombatFx.Instance != null
                                   && CombatFx.Instance.CombatPresentationReady
                                   && CombatFx.Instance.AttackFeedbackEvents > feedbackBefore;
@@ -1666,7 +1693,8 @@ namespace RadiantPool.Game
                       $"fire cast + impact, last cue '{GameAudio.Instance?.LastLicensedCue ?? "none"}'");
             bool pass = blockedApproach && weaponsVisible && combatLit && monsterHud
                         && combatUiReady
-                        && struck && visualFeedback && soundFeedback && assetAudio
+                        && struck && turnAutoEnded
+                        && visualFeedback && soundFeedback && assetAudio
                         && licensedWeapon && licensedSpell && battleMusic
                         && (feet <= 5 || walked);   // in reach already? then no walk owed
             Debug.Log($"[AttackTest] {(pass ? "PASS" : "FAIL")} - one click at {feet} ft: " +

@@ -95,7 +95,8 @@ flowchart LR
     E --> F[Rules engine applies attack or spell]
     F --> G[Broadcast impact, reaction, damage number and exact HP]
     G --> H[Evaluate victory or defeat]
-    H --> I[Unlock input or show modal]
+    H --> I[Weapon attack: end actor turn after recovery]
+    H --> J[Other action: unlock input or show modal]
 ```
 
 The fallback timeline is deliberate: an absent animation event cannot strand combat. Damage
@@ -161,7 +162,11 @@ World-space monster HUD
 
 The generic Physical Attack and Magic Attack buttons are intentionally absent. A direct board
 click on a living enemy calls `ClickCell`; a distant target uses the remembered
-close-in-and-strike path. Named spell hotbar slots call `PickSpell` and show only legal targets.
+close-in-and-strike path. Direct clicks and the Attack hotbar picker converge on that same path.
+After a weapon attack completes impact, damage/HP replication, and recovery, the server
+automatically ends the attacker's turn. Movement, Dodge, spells, and consumables keep their
+existing turn budgets and can still be followed by Space to end the turn manually. Named spell
+hotbar slots call `PickSpell` and show only legal targets.
 Monster markers are generated textures rather than font glyphs and are assigned deterministically
 within each encounter.
 Settings includes a persisted Reduced Motion toggle that disables combat camera trauma.
@@ -182,17 +187,18 @@ scripts/ip-scan.ps1
 ```
 
 `RadiantPool.exe -class Wizard -autohost -combatflowtest -savedir <dir>` is the playable
-acceptance encounter. It proves direct world-click targeting, an enemy round, Burning Hands
-and slot deduction, synchronized defeat removal, victory modal, defeat modal, and retry. The
+acceptance encounter. It proves direct world-click targeting, automatic post-attack turn handoff,
+an enemy round, Burning Hands and slot deduction, synchronized defeat removal, victory modal,
+defeat modal, and retry. The
 smoke suite runs it in its own process and rejects runtime exceptions.
 
 Manual checklist:
 
 1. Start an encounter with at least two enemies and confirm deterministic initiative display.
 2. Left-click a distant enemy and confirm walk, wind-up, impact, reaction,
-   damage number, and HP update occur in that order.
+   damage number, HP update, recovery, and automatic turn handoff occur in that order.
 3. Confirm every living enemy has an overhead exact HP bar and a distinct generated target shape.
-4. End the turn and confirm each living enemy selects an in-range authored attack.
+4. Confirm the enemy begins its turn without a second click or Space press.
 5. Choose a named spell from the hotbar, verify invalid/dead/team targets are absent,
    cast a slotted spell,
    and confirm the exact slot is deducted at impact.

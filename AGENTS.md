@@ -32,7 +32,7 @@ scripts/ip-scan.ps1
 Build output: `game/Builds/Win64/RadiantPool.exe`. Exe flags for automation:
 `-name <n> -autohost` / `-name <n> -autojoin localhost`; **self-tests** `-selltest`
 (bag → trader → purse), `-leveltest` (XP → level → point spent), `-attacktest` (one click on
-a distant enemy → walk → blow), `-warpsmith` (park at the smithy so a shop panel can be
+a distant enemy → walk → blow → automatic turn end), `-warpsmith` (park at the smithy so a shop panel can be
 LOOKED at), `-siteactiontest` (Watcher Below E panel → choice → saved decision);
 **visual QA** `-uiskincapture <png>` renders the title/character-creation screen, asserts all
 19 RPG & MMO UI 7 skin roles are present, captures it without input, then quits;
@@ -132,14 +132,18 @@ mouse and the self-test drive the very same code.
   reach it swings, out of reach it orders the walk and REMEMBERS the target, and
   `TickAutoAttack` lands the blow the moment the body settles on its new cell. It used to
   take two clicks — walk, then swing — and the second was the easiest thing in the game to
-  forget). Click ground = move, Space = end turn, **WASD/middle-drag pans the
+  forget). A completed weapon attack **automatically ends that player's turn after impact
+  and recovery**; `CmdAttack` marks its queued action for handoff, so neither damage nor
+  presentation is cut short. Click ground = move, and Space remains the manual end-turn
+  control after movement, Dodge, or another choice. **WASD/middle-drag pans the
   camera and F recentres** (the grid owns movement, so those keys are free).
   Direct world clicks remain the fastest attack control, while the restored **Attack** slot
   opens the same legal hostile-target path; both converge on `ClickCell`, so walk-and-strike
   behavior cannot diverge. Every living monster has an exact overhead `hp/max` bar plus a
   deterministic generated target-shape texture. `RadiantPool.exe -autohost -attacktest`
   opens Attack, asserts the picker/hotbar fit the logical canvas and the instruction window
-  is absent, chooses the FURTHEST enemy, and proves both walk and blow. `smoke-test.ps1` runs
+  is absent, chooses the FURTHEST enemy, and proves walk, blow, and automatic turn handoff.
+  `smoke-test.ps1` runs
   it in its OWN instance — a live fight
   under the sell/level self-tests would fight them for the turn clock.
   `OrbitCamera` **x-rays whatever hides a combatant**: every unit on the board gets a

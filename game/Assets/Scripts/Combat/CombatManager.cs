@@ -90,6 +90,10 @@ namespace RadiantPool.Game
         {
             public BattleState ExecutionState;
             public Func<IEnumerator> CreateRoutine;
+            // A normal weapon attack is the player's complete turn. The turn flips only
+            // after the queued impact/recovery timeline finishes, never while the sword
+            // animation or damage application is still in flight.
+            public string EndTurnUnitId = "";
         }
 
         private readonly CombatActionQueue<ServerCombatAction> _actionQueue =
@@ -766,13 +770,15 @@ namespace RadiantPool.Game
         /// lock until the controlled animation timeline, impact, HP sync, and recovery are
         /// all complete.</summary>
         [Server]
-        private void QueueServerAction(BattleState executionState, Func<IEnumerator> createRoutine)
+        private void QueueServerAction(BattleState executionState,
+            Func<IEnumerator> createRoutine, string endTurnUnitId = "")
         {
             string key = $"{_engine.ActiveCreature.Id}:{_engine.Round}:{++_actionSequence}";
             if (!_actionQueue.TryEnqueue(key, new ServerCombatAction
                 {
                     ExecutionState = executionState,
-                    CreateRoutine = createRoutine
+                    CreateRoutine = createRoutine,
+                    EndTurnUnitId = endTurnUnitId
                 }))
                 throw new InvalidOperationException($"Duplicate combat action '{key}'.");
             if (!_actionQueueRunning) StartCoroutine(DrainActionQueue());
@@ -806,11 +812,19 @@ namespace RadiantPool.Game
                 }
 
                 _actionQueue.Complete();
+                bool endsTurn = action.EndTurnUnitId.Length > 0
+                    && InCombat.Value && _engine != null
+                    && _engine.ActiveCreature.Id == action.EndTurnUnitId;
+                if (endsTurn)
+                {
+                    ServerLog($"{_engine.ActiveCreature.Name}'s attack ends their turn.");
+                    _turnDone = true;
+                }
                 if (!InCombat.Value) break;
                 SetBattleState(BattleState.CheckingBattleResult);
                 if (CheckCombatEnd()) break;
                 BroadcastBudget();
-                if (InCombat.Value && _engine != null
+                if (!endsTurn && InCombat.Value && _engine != null
                     && _engine.ActiveCreature.IsPlayerCharacter)
                     SetBattleState(BattleState.WaitingForPlayerInput);
             }
@@ -1208,7 +1222,7 @@ namespace RadiantPool.Game
             {
                 var attack = unit.Player.BasicAttack();
                 QueueServerAction(BattleState.ExecutingPlayerAction,
-                    () => ResolvePhysicalAction(unit, target, attack));
+                    () => ResolvePhysicalAction(unit, target, attack), unit.Id);
             }
             catch (Exception e)
             {
