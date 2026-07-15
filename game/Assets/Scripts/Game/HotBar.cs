@@ -270,11 +270,12 @@ namespace RadiantPool.Game
                 _hpLabel = new GUIStyle(Theme.Caps)
                     { alignment = TextAnchor.MiddleRight, wordWrap = false };
 
-            // Bar left, numbers right — text laid OVER a red bar is the one place this HUD
-            // cannot hold its 4.5:1 contrast.
+            // Bar left, numbers right — the numbers never sit ON the bar (text over a fill is
+            // the one place this HUD cannot hold its 4.5:1 contrast). Your own health is
+            // green: the party side reads green everywhere, the enemy red.
             const float readout = 96f;
             Theme.Bar(new Rect(strip.x, strip.y + 4f, strip.width - readout - 6f, 9f),
-                fraction, Theme.HpRed);
+                fraction, Theme.HpGreen);
             _hpLabel.normal.textColor = hp == 0 ? Theme.Crimson
                 : fraction <= 0.34f ? Theme.Gold : Theme.OnSurface;
             GUI.Label(new Rect(strip.xMax - readout, strip.y, readout, h),

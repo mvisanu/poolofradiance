@@ -35,7 +35,8 @@ namespace RadiantPool.Game
         public static readonly Color FighterRed     = Hex("#c62828");
         public static readonly Color RangerGreen    = Hex("#2e7d32");
         public static readonly Color ClericGold     = Hex("#ffd700");
-        public static readonly Color HpRed          = Hex("#e53935");
+        public static readonly Color HpRed          = Hex("#e53935");   // enemy HP (their side)
+        public static readonly Color HpGreen        = Hex("#4caf50");   // party HP (our side)
         public static readonly Color MpBlue         = Hex("#3d6ff2");
         public static readonly Color Outline        = Hex("#99907c");
 

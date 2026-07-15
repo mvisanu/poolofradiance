@@ -632,7 +632,8 @@ namespace RadiantPool.Game
         {
             float w = Mathf.Clamp(Ui.W * 0.22f, 190f, 250f);
             float top = MiniMap.MapRect.yMax + 8f;
-            float wanted = 44f + combat.ClientUnits.Count * 36f;
+            // Round title + two grouped section headers (PARTY / ENEMIES) + a row per unit.
+            float wanted = 44f + 40f + combat.ClientUnits.Count * 36f;
             float h = Mathf.Min(wanted, Ui.H - top - 12f);
             return new Rect(Ui.W - w - 12f, top, w, Mathf.Max(h, 80f));
         }
@@ -654,7 +655,7 @@ namespace RadiantPool.Game
             GUI.Label(new Rect(row.x, row.y - 2, 26, 14), "HP", Theme.Caps);
             float barW = Mathf.Max(60f, inner - 28f - 56f);
             Theme.Bar(new Rect(row.x + 28, row.y + 1, barW, 9),
-                mine.MaxHp > 0 ? mine.DisplayHp / mine.MaxHp : 0f, Theme.HpRed);
+                mine.MaxHp > 0 ? mine.DisplayHp / mine.MaxHp : 0f, Theme.HpGreen);
             GUI.Label(new Rect(row.x + 32 + barW, row.y - 2, 56, 14),
                 $"{mine.Hp}/{mine.MaxHp}", Theme.Caps);
 
@@ -739,12 +740,32 @@ namespace RadiantPool.Game
 
             _initScroll = GUILayout.BeginScrollView(_initScroll);
             float barW = Mathf.Max(80f, rect.width - 28f - 52f);
-            foreach (var u in combat.ClientUnits)
+            // Two clearly separated rosters so allies and foes never read as one list:
+            // your party in green, the enemy in red. The active unit still lights gold, so
+            // whose turn it is stays obvious even though the order is grouped by side now.
+            DrawInitiativeGroup(combat, "YOUR PARTY",
+                combat.ClientUnits.Where(u => u.IsPc), Theme.HpGreen, "#8fd694", barW);
+            DrawInitiativeGroup(combat, "ENEMIES",
+                combat.ClientUnits.Where(u => !u.IsPc), Theme.HpRed, "#ff9e9e", barW);
+            GUILayout.EndScrollView();
+            GUILayout.EndArea();
+        }
+
+        /// <summary>One team's roster inside the initiative list: a coloured section title,
+        /// then a name + HP bar per unit. Bar colour encodes the side (green ally / red foe)
+        /// so the two groups never blur together.</summary>
+        private void DrawInitiativeGroup(CombatManager combat, string title,
+            IEnumerable<CombatManager.UnitView> units, Color barColor, string teamColor,
+            float barW)
+        {
+            var roster = units.ToList();
+            if (roster.Count == 0) return;
+            GUILayout.Space(3);
+            GUILayout.Label($"<color={teamColor}><b>{title}</b></color>", Theme.Caps);
+            foreach (var u in roster)
             {
                 bool active = u.Id == combat.ActiveUnitId;
-                string nameColor = u.Dead ? "#948a7c"
-                    : active ? "#f2ca50"
-                    : u.IsPc ? "#b2c5ff" : "#ff9e9e";
+                string nameColor = u.Dead ? "#948a7c" : active ? "#f2ca50" : teamColor;
                 // State in words, never a dingbat: the fonts have no ✝/► glyph and a
                 // missing glyph renders as a tofu box.
                 string state = u.Dead ? "  (slain)" : u.Down ? "  (down)" : "";
@@ -754,14 +775,12 @@ namespace RadiantPool.Game
                 {
                     var row = GUILayoutUtility.GetRect(barW + 48f, 9f);
                     Theme.Bar(new Rect(row.x + 2, row.y, barW, 7),
-                        u.MaxHp > 0 ? u.DisplayHp / u.MaxHp : 0f, Theme.HpRed);
+                        u.MaxHp > 0 ? u.DisplayHp / u.MaxHp : 0f, barColor);
                     GUI.Label(new Rect(row.x + barW + 8f, row.y - 4, 46, 14),
                         $"{u.Hp}/{u.MaxHp}", Theme.Caps);
                 }
                 GUILayout.Space(2);
             }
-            GUILayout.EndScrollView();
-            GUILayout.EndArea();
         }
 
         /// <summary>Rich-text pass over server log lines: wounds red, healing green,

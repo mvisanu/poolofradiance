@@ -835,6 +835,10 @@ namespace RadiantPool.Game
         private void DrawTooltip(Rect frame)
         {
             if (string.IsNullOrEmpty(GUI.tooltip)) return;
+            // GUI.tooltip is GLOBAL to the frame: without this gate the map printed the
+            // hotbar's "Drink Potion of Healing..." hint across its own face whenever that
+            // button was the last control hovered. Only ever show the map's OWN hints.
+            if (!frame.Contains(Ui.Mouse)) return;
             if (_tipStyle == null)
                 _tipStyle = new GUIStyle(Theme.Caps)
                     { alignment = TextAnchor.MiddleCenter, wordWrap = false };
