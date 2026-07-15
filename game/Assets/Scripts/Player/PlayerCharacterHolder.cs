@@ -96,15 +96,26 @@ namespace RadiantPool.Game
         public void ServerInitCompanion(string name, int classIndex)
         {
             var build = CharacterBuild.Default(classIndex);
-            // Hires are session-owned AI, not reconnecting player identities. Always make
-            // a fresh sheet; reusing a same-named roster entry could resurrect a stale
-            // level/loadout from an earlier campaign before leader parity is applied.
+            // New hires are server-owned AI, not reconnecting player identities. Make a
+            // fresh sheet here; persistent former hires use ServerRestoreCompanion instead.
             Sheet = CreateSheetFromBuild(name, build);
             IsCompanionSynced.Value = true;
             ClassIndex.Value = (int)Sheet.Class;
             CharacterName.Value = Sheet.Name;
             ServerSetDefaultEquipment();
             Debug.Log($"[RadiantPool] companion hired: {Sheet.Name} the {Sheet.Class}");
+        }
+
+        /// <summary>Restore a persistent hire before its NetworkObject is spawned, so the
+        /// first observer snapshot already contains the correct identity, stats, and gear.</summary>
+        public void ServerRestoreCompanion(SavedCompanion saved)
+        {
+            Sheet = SaveSystem.Restore(saved.Character);
+            IsCompanionSynced.Value = true;
+            ClassIndex.Value = (int)Sheet.Class;
+            CharacterName.Value = Sheet.Name;
+            ServerSetEquipment(saved.WeaponId, saved.ArmorId, saved.ShieldEquipped);
+            Debug.Log($"[RadiantPool] companion restored: {Sheet.Name} the {Sheet.Class}");
         }
 
         public CharacterClass Class => (CharacterClass)Mathf.Max(0, ClassIndex.Value);

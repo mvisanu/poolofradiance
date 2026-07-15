@@ -4,6 +4,10 @@ using System.Linq;
 
 namespace RadiantPool.Rules
 {
+    /// <summary>The player-facing job a companion fills. Multiple classes may share a
+    /// role, but every hire choice has one unambiguous label in the recruitment UI.</summary>
+    public enum PartyRole { Tank, Healer, Damage }
+
     /// <summary>Who joins when the party musters help. The retinue is picked by ROLE, not
     /// by class order: a healer first (a party without one cannot sustain a four-fight
     /// zone), then damage dealers of two different classes, and only then spare bodies.
@@ -17,6 +21,19 @@ namespace RadiantPool.Rules
 
         public static readonly CharacterClass[] DamageDealers =
             { CharacterClass.Fighter, CharacterClass.Wizard, CharacterClass.Rogue };
+
+        /// <summary>Explicit choices shown by the recruiter: a durable front line, a
+        /// healer, and two distinct damage styles.</summary>
+        public static readonly CharacterClass[] HireChoices =
+            { CharacterClass.Fighter, CharacterClass.Cleric,
+              CharacterClass.Rogue, CharacterClass.Wizard };
+
+        public static PartyRole RoleOf(CharacterClass characterClass) => characterClass switch
+        {
+            CharacterClass.Fighter => PartyRole.Tank,
+            CharacterClass.Cleric => PartyRole.Healer,
+            _ => PartyRole.Damage
+        };
 
         /// <summary>The classes to hire, in order, given who is already in the party and
         /// how many slots are free. Never returns more than <paramref name="slots"/>.</summary>

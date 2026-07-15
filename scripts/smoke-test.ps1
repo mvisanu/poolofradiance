@@ -47,6 +47,17 @@ Stop-Process -Id $recruitProc.Id -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 $recruitText = Get-Content $recruitLog -Raw
 
+# Restart against the exact campaign written above. Active companions must return with
+# the same names, selected classes, level/XP, and individually assigned quest gear.
+Write-Host "Starting persistent companion restore instance (-recruitrestoretest)..."
+$recruitRestoreLog = Join-Path $logDir "recruit-restore.log"
+Remove-Item $recruitRestoreLog -ErrorAction SilentlyContinue
+$recruitRestoreProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Dara","-autohost","-recruitrestoretest","-savedir",$recruitSave,"-logFile",$recruitRestoreLog -PassThru
+Start-Sleep -Seconds 13
+Stop-Process -Id $recruitRestoreProc.Id -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+$recruitRestoreText = Get-Content $recruitRestoreLog -Raw
+
 # A completed pre-Ashen-Ward save must not dead-end on its old finale. Load the exact
 # old four-zone shape and prove the appended commission activates automatically.
 Write-Host "Starting completed-save migration instance..."
@@ -125,9 +136,12 @@ $checks = @(
     @{ Name = "no failed creature visual or capsule fallback"; Ok = $hostText -notmatch "\[CreatureTest\] FAIL|falling back to a capsule" },
     @{ Name = "armed combat NPC weapons are visible"; Ok = $fightText -match "\[WeaponTest\] PASS - combat NPCs" },
     @{ Name = "no failed combat weapon assertion"; Ok = $fightText -notmatch "\[WeaponTest\] FAIL" },
-    @{ Name = "post-campaign solo player can hire three NPC helpers"; Ok = $recruitText -match "\[RecruitTest\] PASS" },
+    @{ Name = "player explicitly chooses tank, healer, and damage companions"; Ok = $recruitText -match "\[RecruitTest\] PASS - chose tank/healer/damage" },
     @{ Name = "all three hires match leader level and equipment tier"; Ok = $recruitText -match "\[RecruitParityTest\] PASS" },
+    @{ Name = "quest gear survives companion release and rehire"; Ok = $recruitText -match "\[RecruitPersistenceTest\] PASS" },
+    @{ Name = "active named companions restore in a new game process"; Ok = $recruitRestoreText -match "\[RecruitRestoreTest\] PASS" },
     @{ Name = "no failed solo recruitment assertion"; Ok = $recruitText -notmatch "\[RecruitTest\] FAIL" },
+    @{ Name = "persistent companion restore has no runtime exception"; Ok = $recruitRestoreText -notmatch "Exception|\[RecruitRestoreTest\] FAIL" },
     @{ Name = "completed four-zone save unlocks the next quest"; Ok = $migrationText -match "\[CampaignMigration\] PASS.+Beyond the Lightwell" },
     @{ Name = "new quest has a live Ashen Ward waypoint"; Ok = $migrationText -match "\[NextQuestWaypointTest\] PASS.+target 'The Ashen Ward'" },
     @{ Name = "save migration has no runtime exception"; Ok = $migrationText -notmatch "Exception|\[CampaignMigration\] FAIL" },
@@ -145,6 +159,6 @@ foreach ($c in $checks) {
     if ($c.Ok) { Write-Host "  PASS  $($c.Name)" -ForegroundColor Green }
     else { Write-Host "  FAIL  $($c.Name)" -ForegroundColor Red; $failed++ }
 }
-Write-Host "Logs: $hostLog | $clientLog | $recruitLog | $migrationLog | $travelLog | $fightLog"
+Write-Host "Logs: $hostLog | $clientLog | $recruitLog | $recruitRestoreLog | $migrationLog | $travelLog | $fightLog"
 if ($failed -gt 0) { exit 1 }
 Write-Host "Smoke test passed - two instances hosted, joined, and spawned characters." -ForegroundColor Green

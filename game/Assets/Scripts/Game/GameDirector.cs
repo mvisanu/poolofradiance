@@ -75,6 +75,11 @@ namespace RadiantPool.Game
         /// <summary>Party-shared loot stash (item ids from content/items).</summary>
         public readonly SyncList<string> Stash = new SyncList<string>();
 
+        /// <summary>Compact `name|class|active` records for the recruitment UI. The full
+        /// sheets and loadouts remain server-only; clients only need to list who can be
+        /// released or rehired.</summary>
+        public readonly SyncList<string> CompanionRoster = new SyncList<string>();
+
         /// <summary>Sell value in gold = half list price (items.json costCp / 100 / 2).</summary>
         public static readonly System.Collections.Generic.Dictionary<string, int> SellValue =
             new System.Collections.Generic.Dictionary<string, int>
@@ -117,6 +122,10 @@ namespace RadiantPool.Game
             _roster = new System.Collections.Generic.Dictionary<string, RadiantPool.Rules.CharacterSheet>();
         private readonly System.Collections.Generic.Dictionary<string, CharacterBuild>
             _builds = new System.Collections.Generic.Dictionary<string, CharacterBuild>();
+        private readonly System.Collections.Generic.Dictionary<string, SavedCompanion>
+            _companions = new System.Collections.Generic.Dictionary<string, SavedCompanion>();
+        private bool _restoreActiveCompanions;
+        private float _nextCompanionRestore;
         private float _serverWorldHour = 20.5f;
         private float _nextWorldTimeSync;
         private bool _allowWorldTimeOverride;
@@ -174,6 +183,8 @@ namespace RadiantPool.Game
                 StartCoroutine(WeaponVisualSelfTest());
             if (System.Array.IndexOf(args, "-recruittest") >= 0)
                 StartCoroutine(SoloRecruitmentSelfTest());
+            if (System.Array.IndexOf(args, "-recruitrestoretest") >= 0)
+                StartCoroutine(RecruitmentRestoreSelfTest());
             if (System.Array.IndexOf(args, "-traveltest") >= 0)
                 StartCoroutine(CampaignTravelSelfTest());
             if (questLampCapture >= 0 && questLampCapture + 1 < args.Length)
@@ -209,6 +220,15 @@ namespace RadiantPool.Game
                     Int = saved.Int, Wis = saved.Wis, Cha = saved.Cha
                 };
             }
+            foreach (var saved in save.Companions
+                         ?? new System.Collections.Generic.List<SavedCompanion>())
+            {
+                if (saved?.Character == null || string.IsNullOrWhiteSpace(saved.Character.Name))
+                    continue;
+                _companions[saved.Character.Name.ToLowerInvariant()] = saved;
+            }
+            RefreshCompanionRoster();
+            _restoreActiveCompanions = _companions.Values.Any(c => c.Active);
             foreach (var id in save.ConsumedEncounters)
             {
                 ConsumedEncounterIds.Add(id);
@@ -350,9 +370,51 @@ namespace RadiantPool.Game
                 ConsumedEncounters = ConsumedEncounterIds.ToList(),
                 CompletedSiteActions = CompletedSiteActions.ToList(),
                 Roster = _roster.Select(kv =>
-                    SaveSystem.Capture(kv.Value, _builds[kv.Key])).ToList()
+                    SaveSystem.Capture(kv.Value, _builds[kv.Key])).ToList(),
+                Companions = ServerCaptureCompanions()
             };
             SaveSystem.Write(save);
+        }
+
+        [Server]
+        private System.Collections.Generic.List<SavedCompanion> ServerCaptureCompanions()
+        {
+            foreach (var holder in FindObjectsByType<PlayerCharacterHolder>(
+                         FindObjectsSortMode.None).Where(p => p.IsCompanion && p.Sheet != null))
+            {
+                string key = holder.Sheet.Name.ToLowerInvariant();
+                // Despawn is synchronized immediately but Unity may keep the object until
+                // end-of-frame. A just-released record is authoritative during that gap.
+                if (_companions.TryGetValue(key, out var existing) && !existing.Active) continue;
+                _companions[key] = SaveSystem.CaptureCompanion(holder, active: true);
+            }
+            RefreshCompanionRoster();
+            return _companions.Values.OrderBy(c => c.Character.Name).ToList();
+        }
+
+        [Server]
+        private void RefreshCompanionRoster()
+        {
+            CompanionRoster.Clear();
+            foreach (var saved in _companions.Values.OrderBy(c => c.Character.Name))
+                CompanionRoster.Add($"{saved.Character.Name}|{saved.Character.ClassIndex}|" +
+                                    $"{(saved.Active ? "1" : "0")}");
+        }
+
+        public static bool TryParseCompanionSummary(string summary, out string name,
+            out CharacterClass characterClass, out bool active)
+        {
+            name = "";
+            characterClass = CharacterClass.Fighter;
+            active = false;
+            var parts = (summary ?? "").Split('|');
+            if (parts.Length != 3 || string.IsNullOrWhiteSpace(parts[0])
+                || !int.TryParse(parts[1], out int classIndex) || classIndex < 0 || classIndex > 3)
+                return false;
+            name = parts[0];
+            characterClass = (CharacterClass)classIndex;
+            active = parts[2] == "1";
+            return true;
         }
 
         [Server]
@@ -424,10 +486,168 @@ namespace RadiantPool.Game
             "Oswin", "Rowena", "Sybilla", "Thurstan", "Wulfric", "Ysolde"
         };
 
-        /// <summary>Fills the party to 4 with AI companions. WHICH classes is
-        /// RadiantPool.Rules.PartyComposition's call (rules lib, unit-tested): a healer
-        /// first, then damage dealers of two different classes, counting whoever is already
-        /// playing. Names are drawn without repeats from a medieval pool.</summary>
+        private PlayerCharacterHolder RecruitingLeader(NetworkConnection conn)
+        {
+            var players = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .Where(h => !h.IsCompanion && h.Sheet != null).ToArray();
+            if (conn != null && conn.IsValid)
+                return players.FirstOrDefault(h => h.Owner == conn);
+            return players.OrderByDescending(h => h.Sheet.Level)
+                .ThenByDescending(h => h.Sheet.Xp).FirstOrDefault();
+        }
+
+        private static bool RecruiterNear(PlayerCharacterHolder leader)
+        {
+            return leader != null && FindObjectsByType<NpcInteract>(FindObjectsSortMode.None)
+                .Any(n => Vector3.Distance(leader.transform.position, n.transform.position)
+                          <= n.InteractRange + 0.75f);
+        }
+
+        private string NextCompanionName()
+        {
+            var used = new System.Collections.Generic.HashSet<string>(
+                _companions.Values.Select(c => c.Character.Name),
+                System.StringComparer.OrdinalIgnoreCase);
+            foreach (var holder in FindObjectsByType<PlayerCharacterHolder>(
+                         FindObjectsSortMode.None).Where(h => h.Sheet != null))
+                used.Add(holder.Sheet.Name);
+            var available = CompanionNames.Where(n => !used.Contains(n)).ToArray();
+            if (available.Length > 0)
+                return available[new System.Random().Next(available.Length)];
+            int suffix = 1;
+            while (used.Contains($"Sellsword {suffix}")) suffix++;
+            return $"Sellsword {suffix}";
+        }
+
+        [Server]
+        private PlayerCharacterHolder ServerSpawnNewCompanion(CharacterClass characterClass,
+            PlayerCharacterHolder leader)
+        {
+            int activeCount = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .Count(p => p.Sheet != null);
+            if (leader == null || activeCount >= PartyComposition.MaxPartySize) return null;
+
+            string name = NextCompanionName();
+            var nob = Instantiate(CompanionPrefab,
+                leader.transform.position + new Vector3(1.5f + activeCount * 0.55f, 0.2f, -1.5f),
+                Quaternion.identity);
+            var holder = nob.GetComponent<PlayerCharacterHolder>();
+            holder.ServerInitCompanion(name, (int)characterClass);
+            ServerMatchCompanionToLeader(holder, leader);
+            var identity = nob.GetComponent<PlayerIdentity>();
+            if (identity != null) identity.ServerSetName(name);
+            FishNet.InstanceFinder.ServerManager.Spawn(nob);
+            _companions[name.ToLowerInvariant()] = SaveSystem.CaptureCompanion(holder, active: true);
+            RefreshCompanionRoster();
+            return holder;
+        }
+
+        [Server]
+        private PlayerCharacterHolder ServerSpawnSavedCompanion(SavedCompanion saved,
+            PlayerCharacterHolder leader)
+        {
+            int activeCount = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .Count(p => p.Sheet != null);
+            if (saved?.Character == null || leader == null
+                || activeCount >= PartyComposition.MaxPartySize) return null;
+
+            saved.Active = true;
+            var nob = Instantiate(CompanionPrefab,
+                leader.transform.position + new Vector3(1.5f + activeCount * 0.55f, 0.2f, -1.5f),
+                Quaternion.identity);
+            var holder = nob.GetComponent<PlayerCharacterHolder>();
+            holder.ServerRestoreCompanion(saved);
+            var identity = nob.GetComponent<PlayerIdentity>();
+            if (identity != null) identity.ServerSetName(saved.Character.Name);
+            FishNet.InstanceFinder.ServerManager.Spawn(nob);
+            _companions[saved.Character.Name.ToLowerInvariant()] = saved;
+            RefreshCompanionRoster();
+            return holder;
+        }
+
+        /// <summary>Hire one explicitly selected class. The UI labels its party role;
+        /// the server validates class, capacity, caller, and recruiter proximity.</summary>
+        [ServerRpc(RequireOwnership = false)]
+        public void CmdHireCompanionClass(int classIndex, NetworkConnection conn = null)
+        {
+            if (CompanionPrefab == null) { RpcNotice("No sellswords available."); return; }
+            if (classIndex < 0 || classIndex > 3) { RpcNotice("That class is unavailable."); return; }
+            var leader = RecruitingLeader(conn);
+            if (leader == null) { RpcNotice("No adventurer is available to lead the hire."); return; }
+            if (conn != null && conn.IsValid && !RecruiterNear(leader))
+            { RpcNotice("Speak with the Council recruiter to hire companions."); return; }
+            ServerHireSelectedClass((CharacterClass)classIndex, leader);
+        }
+
+        [Server]
+        private PlayerCharacterHolder ServerHireSelectedClass(CharacterClass characterClass,
+            PlayerCharacterHolder leader)
+        {
+            var holder = ServerSpawnNewCompanion(characterClass, leader);
+            if (holder == null) { RpcNotice("The party is already full."); return null; }
+            ServerSaveCampaign();
+            RpcNotice($"{holder.Sheet.Name} the {holder.Sheet.Class} " +
+                      $"({PartyComposition.RoleOf(holder.Sheet.Class)}) joined the party!");
+            return holder;
+        }
+
+        /// <summary>Rehire a released named companion with their saved sheet and equipment.</summary>
+        [ServerRpc(RequireOwnership = false)]
+        public void CmdRehireCompanion(string companionName, NetworkConnection conn = null)
+        {
+            var leader = RecruitingLeader(conn);
+            if (leader == null) return;
+            if (conn != null && conn.IsValid && !RecruiterNear(leader))
+            { RpcNotice("Speak with the Council recruiter to rehire companions."); return; }
+            string key = (companionName ?? "").Trim().ToLowerInvariant();
+            if (!_companions.TryGetValue(key, out var saved) || saved.Active)
+            { RpcNotice("That companion is not waiting to be rehired."); return; }
+            ServerRehireSavedCompanion(saved, leader);
+        }
+
+        [Server]
+        private PlayerCharacterHolder ServerRehireSavedCompanion(SavedCompanion saved,
+            PlayerCharacterHolder leader)
+        {
+            var holder = ServerSpawnSavedCompanion(saved, leader);
+            if (holder == null) { RpcNotice("The party is already full."); return null; }
+            ServerSaveCampaign();
+            RpcNotice($"{holder.Sheet.Name} rejoins with their saved level and equipment.");
+            return holder;
+        }
+
+        /// <summary>Release an active hire but retain their exact sheet and loadout in the
+        /// campaign roster. They can later be rehired from the Council recruiter.</summary>
+        [ServerRpc(RequireOwnership = false)]
+        public void CmdReleaseCompanion(string companionName, NetworkConnection conn = null)
+        {
+            if (CombatManager.Instance != null && CombatManager.Instance.InCombat.Value)
+            { RpcNotice("Companions cannot leave during combat."); return; }
+            if (RecruitingLeader(conn) == null) return;
+            string key = (companionName ?? "").Trim().ToLowerInvariant();
+            var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => p.IsCompanion && p.Sheet != null
+                    && p.Sheet.Name.ToLowerInvariant() == key);
+            if (holder == null) { RpcNotice("That companion is not in the active party."); return; }
+
+            ServerReleaseActiveCompanion(holder);
+        }
+
+        [Server]
+        private void ServerReleaseActiveCompanion(PlayerCharacterHolder holder)
+        {
+            var saved = SaveSystem.CaptureCompanion(holder, active: false);
+            saved.Active = false;
+            _companions[holder.Sheet.Name.ToLowerInvariant()] = saved;
+            string name = holder.Sheet.Name;
+            FishNet.InstanceFinder.ServerManager.Despawn(holder.NetworkObject);
+            RefreshCompanionRoster();
+            ServerSaveCampaign();
+            RpcNotice($"{name} leaves the active party and can be rehired later.");
+        }
+
+        /// <summary>Legacy/test convenience: fill every open slot with the balanced rules
+        /// recommendation. Player-facing recruitment uses CmdHireCompanionClass instead.</summary>
         [ServerRpc(RequireOwnership = false)]
         public void CmdRecruitCompanions(NetworkConnection conn = null)
         {
@@ -437,51 +657,50 @@ namespace RadiantPool.Game
             int needed = RadiantPool.Rules.PartyComposition.MaxPartySize - holders.Count;
             if (needed <= 0) { RpcNotice("The party is already full."); return; }
 
-            // The recruiting player's progression/loadout is the parity source. Server-side
-            // self-tests have no RPC connection, so fall back to the highest-level real PC.
-            var leader = holders.FirstOrDefault(h => !h.IsCompanion && h.Owner == conn)
-                         ?? holders.Where(h => !h.IsCompanion)
-                             .OrderByDescending(h => h.Sheet.Level)
-                             .ThenByDescending(h => h.Sheet.Xp)
-                             .FirstOrDefault();
+            var leader = RecruitingLeader(conn);
             if (leader == null) { RpcNotice("No adventurer is available to lead the hires."); return; }
 
             var classes = RadiantPool.Rules.PartyComposition.Recruits(
                 holders.Select(h => h.Sheet.Class), needed);
 
-            var rng = new System.Random();
-            var usedNames = holders.Select(h => h.Sheet.Name).ToHashSet();
-            var namePool = CompanionNames.OrderBy(_ => rng.Next())
-                .Where(n => !usedNames.Contains(n)).ToList();
-
             var hired = new System.Collections.Generic.List<string>();
-            int spawned = 0;
             foreach (var cls in classes)
             {
-                Vector3 pos = leader.transform.position
-                    + new Vector3(1.5f + spawned, 0.2f, -1.5f);
-                var nob = Instantiate(CompanionPrefab, pos, Quaternion.identity);
-                var holder = nob.GetComponent<PlayerCharacterHolder>();
-                string name = spawned < namePool.Count
-                    ? namePool[spawned]
-                    : $"Sellsword {spawned + 1}";   // pool exhausted (never in practice)
-
-                // Populate every replicated appearance field before FishNet builds the
-                // initial observer snapshot. Spawning first briefly (and, for host-side
-                // callbacks, permanently) exposed ClassIndex=-1, leaving the prefab's
-                // placeholder capsule visible instead of attaching the class model.
-                holder.ServerInitCompanion(name, (int)cls);
-                ServerMatchCompanionToLeader(holder, leader);
-                var identity = nob.GetComponent<PlayerIdentity>();
-                if (identity != null) identity.ServerSetName(name);
-                FishNet.InstanceFinder.ServerManager.Spawn(nob);   // no owner = server AI
+                var holder = ServerSpawnNewCompanion(cls, leader);
+                if (holder == null) break;
                 holders.Add(holder);
-                hired.Add($"{name} the {cls}");
-                spawned++;
+                hired.Add($"{holder.Sheet.Name} the {cls}");
             }
+            ServerSaveCampaign();
+            int spawned = hired.Count;
             RpcNotice(spawned == 1
                 ? $"{hired[0]} joined the party!"
                 : $"Sellswords joined the party: {string.Join(", ", hired)}.");
+        }
+
+        [Server]
+        private void ServerRestoreActiveCompanionsWhenReady()
+        {
+            if (!_restoreActiveCompanions || Time.unscaledTime < _nextCompanionRestore) return;
+            _nextCompanionRestore = Time.unscaledTime + 1f;
+            var leader = RecruitingLeader(null);
+            if (leader == null) return;
+
+            var present = new System.Collections.Generic.HashSet<string>(
+                FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                    .Where(p => p.IsCompanion && p.Sheet != null)
+                    .Select(p => p.Sheet.Name), System.StringComparer.OrdinalIgnoreCase);
+            var missing = _companions.Values.Where(c => c.Active
+                    && !present.Contains(c.Character.Name)).OrderBy(c => c.Character.Name).ToList();
+            foreach (var saved in missing)
+            {
+                if (ServerSpawnSavedCompanion(saved, leader) == null) break;
+                present.Add(saved.Character.Name);
+            }
+            _restoreActiveCompanions = _companions.Values
+                .Any(c => c.Active && !present.Contains(c.Character.Name));
+            if (!_restoreActiveCompanions && missing.Count > 0)
+                Debug.Log($"[CompanionRestore] restored {missing.Count} active companion(s)");
         }
 
         /// <summary>Dialogue actions arrive from whichever client is talking to the NPC.</summary>
@@ -882,9 +1101,8 @@ namespace RadiantPool.Game
                       $"{visibleNpcs}/{armedNpcs.Length} visible");
         }
 
-        /// <summary>Regression for Veresk's disappearing solo-help option. Reproduces the
-        /// loaded post-campaign state where companions from the previous session are gone,
-        /// verifies three slots are still offered, and hires exactly three helpers.</summary>
+        /// <summary>Built-player regression for explicit role/class choices, leader parity,
+        /// individual quest-loot equipment, release, and same-name rehire.</summary>
         private System.Collections.IEnumerator SoloRecruitmentSelfTest()
         {
             yield return new WaitForSeconds(8f);
@@ -920,50 +1138,135 @@ namespace RadiantPool.Game
             for (int i = 0; i < ZoneStates.Count; i++)
                 ZoneStates[i] = (int)QuestState.Completed;
 
+            var recruiter = FindObjectsByType<NpcInteract>(FindObjectsSortMode.None).FirstOrDefault();
+            if (recruiter == null)
+            {
+                Debug.Log("[RecruitTest] FAIL - no Council recruiter in the built scene");
+                yield break;
+            }
+            Warp(leader.transform, recruiter.transform.position + Vector3.forward);
+            yield return null;
+
             int offered = NpcInteract.AvailableRecruitSlots();
-            CmdRecruitCompanions();
+            recruiter.ChooseHire(CharacterClass.Fighter);
+            yield return new WaitForSeconds(0.2f);
+            recruiter.ChooseHire(CharacterClass.Cleric);
+            yield return new WaitForSeconds(0.2f);
+            recruiter.ChooseHire(CharacterClass.Rogue);
             yield return new WaitForSeconds(1.5f);
 
-            var hired = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+            var initialHires = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
                 .Where(p => p.IsCompanion && p.Sheet != null).ToArray();
-            int companions = hired.Length;
-            int modeled = hired.Count(p => CharacterVisuals.HasVisibleCharacterModel(p.transform));
-            int armed = hired.Count(p =>
+            bool selectedClasses = new[]
             {
-                var item = GameItem.Get(p.WeaponId.Value);
-                return item != null && CharacterVisuals.HasHandItem(
-                    p.transform, "r", item.HandModel);
-            });
-            int levelMatched = hired.Count(p => p.Sheet.Level == leader.Sheet.Level
-                                                && p.Sheet.Xp == leader.Sheet.Xp);
-            int equipmentMatched = hired.Count(p =>
+                CharacterClass.Fighter, CharacterClass.Cleric, CharacterClass.Rogue
+            }.All(cls => initialHires.Count(p => p.Sheet.Class == cls) == 1);
+            int initialEquipmentMatched = initialHires.Count(p =>
                 p.WeaponId.Value == CompanionLoadout.WeaponFor(
                     p.Sheet.Class, leader.WeaponId.Value)
                 && p.ArmorId.Value == CompanionLoadout.ArmorFor(
                     p.Sheet.Class, leader.ArmorId.Value)
                 && p.ShieldEquipped.Value == CompanionLoadout.ShieldFor(
-                    p.Sheet.Class, leader.ShieldEquipped.Value)
-                && GameItem.Get(p.WeaponId.Value).UsableBy(p.Sheet.Class)
-                && (p.ArmorId.Value.Length == 0
-                    || GameItem.Get(p.ArmorId.Value).UsableBy(p.Sheet.Class)));
+                    p.Sheet.Class, leader.ShieldEquipped.Value));
+            int levelMatched = initialHires.Count(p => p.Sheet.Level == leader.Sheet.Level
+                                                        && p.Sheet.Xp == leader.Sheet.Xp);
+            int modeled = initialHires.Count(p =>
+                CharacterVisuals.HasVisibleCharacterModel(p.transform));
+            int armed = initialHires.Count(p =>
+            {
+                var item = GameItem.Get(p.WeaponId.Value);
+                return item != null && CharacterVisuals.HasHandItem(
+                    p.transform, "r", item.HandModel);
+            });
             int party = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
                 .Count(p => p.Sheet != null);
-            bool parity = levelMatched == companions && equipmentMatched == companions;
-            bool pass = offered == 3 && companions == 3
-                        && modeled == companions && armed == companions
-                        && levelMatched == companions && equipmentMatched == companions
-                        && party == RadiantPool.Rules.PartyComposition.MaxPartySize
-                        && NpcInteract.AvailableRecruitSlots() == 0;
-            Debug.Log($"[RecruitTest] {(pass ? "PASS" : "FAIL")} - post-campaign solo " +
-                      $"offer {offered} slot(s), spawned {companions} companion(s), " +
-                      $"level/XP parity {levelMatched}/{companions} at level {leader.Sheet.Level}, " +
-                      $"equipment parity {equipmentMatched}/{companions}, " +
-                      $"models {modeled}/{companions}, weapons {armed}/{companions}, " +
-                      $"party {party}/{RadiantPool.Rules.PartyComposition.MaxPartySize}");
-            Debug.Log($"[RecruitParityTest] {(parity ? "PASS" : "FAIL")} - " +
-                string.Join("; ", hired.Select(p =>
-                    $"{p.Sheet.Name} L{p.Sheet.Level} {p.WeaponId.Value}/" +
-                    $"{(p.ArmorId.Value.Length > 0 ? p.ArmorId.Value : "unarmored")}")));
+            bool parity = levelMatched == initialHires.Length
+                          && initialEquipmentMatched == initialHires.Length;
+            bool recruitPass = offered == 3 && initialHires.Length == 3 && selectedClasses
+                               && modeled == 3 && armed == 3 && parity && party == 4
+                               && NpcInteract.AvailableRecruitSlots() == 0;
+            string parityDetails = string.Join("; ", initialHires.Select(p =>
+                $"{p.Sheet.Name} L{p.Sheet.Level} {p.WeaponId.Value}/" +
+                $"{(p.ArmorId.Value.Length > 0 ? p.ArmorId.Value : "unarmored")}"));
+            Debug.Log($"[RecruitTest] {(recruitPass ? "PASS" : "FAIL")} - " +
+                      $"chose tank/healer/damage for {offered} slot(s), spawned " +
+                      $"{initialHires.Length} companion(s), level/XP parity " +
+                      $"{levelMatched}/{initialHires.Length} at level {leader.Sheet.Level}, " +
+                      $"initial equipment parity {initialEquipmentMatched}/{initialHires.Length}, " +
+                      $"models {modeled}/{initialHires.Length}, weapons {armed}/{initialHires.Length}, " +
+                      $"party {party}/{PartyComposition.MaxPartySize}");
+            Debug.Log($"[RecruitParityTest] {(parity ? "PASS" : "FAIL")} - {parityDetails}");
+
+            var fighter = initialHires.FirstOrDefault(p => p.Sheet.Class == CharacterClass.Fighter);
+            string persistentName = fighter?.Sheet.Name ?? "";
+
+            // Simulate assigning an independently won quest item from the shared stash.
+            Stash.Add("greataxe");
+            CmdEquipItem("greataxe", persistentName);
+            yield return new WaitForSeconds(0.25f);
+            bool questGearEquipped = fighter != null && fighter.WeaponId.Value == "greataxe"
+                                     && !Stash.Contains("greataxe");
+
+            CmdReleaseCompanion(persistentName);
+            yield return new WaitForSeconds(0.25f);
+            bool released = !FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .Any(p => p.IsCompanion && p.CharacterName.Value == persistentName)
+                && CompanionRoster.Any(s => TryParseCompanionSummary(s, out string n,
+                    out _, out bool active) && n == persistentName && !active);
+            var persisted = SaveSystem.Read()?.Companions;
+            bool savedRoster = persisted != null && persisted.Count == 3
+                               && persisted.Any(c => c.Character.Name == persistentName
+                                                     && !c.Active && c.WeaponId == "greataxe");
+            bool persistencePass = questGearEquipped && released && savedRoster;
+            Debug.Log($"[RecruitPersistenceTest] {(persistencePass ? "PASS" : "FAIL")} - " +
+                $"{persistentName} " +
+                $"equipped quest greataxe, released, and remained saved for rehire");
+        }
+
+        /// <summary>Second-process proof that active named companions restore automatically
+        /// from the campaign written by SoloRecruitmentSelfTest.</summary>
+        private System.Collections.IEnumerator RecruitmentRestoreSelfTest()
+        {
+            yield return new WaitForSeconds(9f);
+            var leader = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => !p.IsCompanion && p.Sheet != null);
+            var initiallyActive = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .Where(p => p.IsCompanion && p.Sheet != null).ToArray();
+            string releasedName = "";
+            foreach (string summary in CompanionRoster)
+                if (TryParseCompanionSummary(summary, out string name,
+                        out CharacterClass cls, out bool active)
+                    && cls == CharacterClass.Fighter && !active)
+                    releasedName = name;
+            bool releasedStayedOut = initiallyActive.Length == 2 && releasedName.Length > 0
+                && !initiallyActive.Any(p => p.Sheet.Name == releasedName);
+
+            var recruiter = FindObjectsByType<NpcInteract>(FindObjectsSortMode.None).FirstOrDefault();
+            if (leader != null && recruiter != null)
+            {
+                Warp(leader.transform, recruiter.transform.position + Vector3.forward);
+                yield return null;
+                recruiter.ChooseRehire(releasedName);
+                yield return new WaitForSeconds(1f);
+            }
+
+            var hired = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .Where(p => p.IsCompanion && p.Sheet != null).ToArray();
+            bool classes = new[] { CharacterClass.Fighter, CharacterClass.Cleric,
+                CharacterClass.Rogue }.All(cls => hired.Count(p => p.Sheet.Class == cls) == 1);
+            bool parity = leader != null && hired.All(p => p.Sheet.Level == leader.Sheet.Level
+                                                           && p.Sheet.Xp == leader.Sheet.Xp);
+            bool gear = hired.Any(p => p.Sheet.Class == CharacterClass.Fighter
+                                       && p.WeaponId.Value == "greataxe");
+            bool roster = CompanionRoster.Count == 3 && CompanionRoster.All(s =>
+                TryParseCompanionSummary(s, out _, out _, out bool active) && active);
+            bool pass = releasedStayedOut && hired.Length == 3 && classes && parity && gear && roster;
+            Debug.Log($"[RecruitRestoreTest] {(pass ? "PASS" : "FAIL")} - " +
+                      $"restored 2 active companions, released {releasedName} stayed benched, " +
+                      $"then rehired {hired.Length}/3 by name; " +
+                      $"classes {(classes ? "kept" : "LOST")}, " +
+                      $"level/XP {(parity ? "kept" : "LOST")}, " +
+                      $"quest gear {(gear ? "kept" : "LOST")}");
         }
 
         /// <summary>Unattended combat check (`RadiantPool.exe -autohost -attacktest`, asserted
@@ -1345,33 +1648,42 @@ namespace RadiantPool.Game
             RpcNotice($"Sold salvage for {total} gold.");
         }
 
-        /// <summary>Equip an item from the party stash onto the calling player's
-        /// character. Class restrictions enforced server-side; the replaced item
-        /// returns to the stash.</summary>
+        /// <summary>Equip shared-stash loot onto the caller or one named active companion.
+        /// Class restrictions are enforced server-side and the replaced item returns to
+        /// the stash. Companion loadouts remain independent after their initial hire.</summary>
         [ServerRpc(RequireOwnership = false)]
-        public void CmdEquipItem(string itemId, NetworkConnection conn = null)
+        public void CmdEquipItem(string itemId, string companionName = "",
+            NetworkConnection conn = null)
         {
             var item = GameItem.Get(itemId);
-            var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
-                .FirstOrDefault(p => p.Owner == conn);
+            var caller = RecruitingLeader(conn);
+            if (caller == null) return;
+            var holder = string.IsNullOrWhiteSpace(companionName) ? caller
+                : FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                    .FirstOrDefault(p => p.IsCompanion && p.Sheet != null
+                        && string.Equals(p.Sheet.Name, companionName.Trim(),
+                            System.StringComparison.OrdinalIgnoreCase));
             if (item == null || holder?.Sheet == null) return;
+            ServerEquipStashItem(item, holder);
+        }
+
+        [Server]
+        private bool ServerEquipStashItem(GameItem item, PlayerCharacterHolder holder)
+        {
             if (CombatManager.Instance != null && CombatManager.Instance.InCombat.Value)
-            { RpcNotice("Not during combat."); return; }
-            int idx = Stash.IndexOf(itemId);
-            if (idx < 0) { RpcNotice("That item is not in the stash."); return; }
+            { RpcNotice("Not during combat."); return false; }
+            int idx = Stash.IndexOf(item.Id);
+            if (idx < 0) { RpcNotice("That item is not in the stash."); return false; }
             if (!item.UsableBy(holder.Sheet.Class))
-            { RpcNotice($"A {holder.Sheet.Class} cannot use {item.Name}."); return; }
+            { RpcNotice($"A {holder.Sheet.Class} cannot use {item.Name}."); return false; }
 
             Stash.RemoveAt(idx);
             string previous = holder.ServerEquip(item);
             if (previous != null) Stash.Add(previous);
-            // Hires keep pace with their leader's equipment after recruitment too. Exact
-            // copies are used where class-legal; otherwise CompanionLoadout maps the tier.
-            foreach (var companion in FindObjectsByType<PlayerCharacterHolder>(
-                         FindObjectsSortMode.None).Where(p => p.IsCompanion && p.Sheet != null))
-                companion.ServerMatchEquipment(holder);
             RpcNotice($"{holder.Sheet.Name} equips {item.Name}" +
                       (item.Slot == ItemSlot.Armor ? $" (AC {holder.Sheet.ArmorClass})" : "") + ".");
+            ServerSaveCampaign();
+            return true;
         }
 
         /// <summary>Party stash potion accessors for CombatManager — drinking mid-fight is
@@ -1532,6 +1844,7 @@ namespace RadiantPool.Game
         {
             if (IsServerStarted)
             {
+                ServerRestoreActiveCompanionsWhenReady();
                 if (!_worldTimeOverride)
                     _serverWorldHour = ComputerLocalHourNow();
                 if (Time.unscaledTime >= _nextWorldTimeSync)

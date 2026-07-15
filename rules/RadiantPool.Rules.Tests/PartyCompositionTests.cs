@@ -75,5 +75,19 @@ namespace RadiantPool.Rules.Tests
             Assert.Equal(PartyComposition.Healer, hires[0]);
             Assert.Equal(PartyComposition.MaxPartySize, hires.Distinct().Count());
         }
+
+        [Fact]
+        public void RecruiterChoices_ExposeTankHealerAndBothDamageClasses()
+        {
+            Assert.Equal(new[]
+            {
+                CharacterClass.Fighter, CharacterClass.Cleric,
+                CharacterClass.Rogue, CharacterClass.Wizard
+            }, PartyComposition.HireChoices);
+            Assert.Equal(PartyRole.Tank, PartyComposition.RoleOf(CharacterClass.Fighter));
+            Assert.Equal(PartyRole.Healer, PartyComposition.RoleOf(CharacterClass.Cleric));
+            Assert.Equal(PartyRole.Damage, PartyComposition.RoleOf(CharacterClass.Rogue));
+            Assert.Equal(PartyRole.Damage, PartyComposition.RoleOf(CharacterClass.Wizard));
+        }
     }
 }

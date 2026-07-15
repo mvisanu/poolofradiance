@@ -71,15 +71,16 @@ mouse and the self-test drive the very same code.
   while location-tiered quest parcels introduce rapier/studded leather at tier 2,
   greatsword/half plate at tier 3, and splint at tier 4. Never attach vault/warcamp/endgame
   tables directly to a reusable monster species; `LootProgressionTests` enforces that gate.
-  **Party roles live in `PartyComposition.cs`**: the sellswords Veresk musters are picked
-  by ROLE, never by class order — a healer first, then damage dealers of two *different*
-  classes, counting whoever is already being played (so nobody is handed a second cleric
-  while the party has no rogue). `GameDirector.CmdRecruitCompanions` only spawns what it
-  returns; `PartyCompositionTests` pins the guarantee. **Hires match the recruiting PC's
-  exact XP/level and equipment tier before spawn** (`CompanionLoadout` copies exact items
-  when class-legal and selects a same-tier class counterpart otherwise). Later player
-  equips resync the hires; normal shared XP keeps them level-locked. `-recruittest` proves
-  all three in a built player.
+  **Party roles live in `PartyComposition.cs`**: Veresk offers four explicit choices —
+  Fighter tank, Cleric healer, Rogue damage, Wizard damage — and the player hires one
+  selected class per open slot. `PartyComposition.Recruits` remains the balanced fallback
+  for automation. **Hires match the recruiting PC's exact XP/level and equipment tier
+  before spawn** (`CompanionLoadout` copies exact items when class-legal and selects a
+  same-tier class counterpart otherwise). After that their gear is individual: Inventory
+  character tabs equip quest loot onto a named companion. The persistent companion roster
+  saves sheets, gear, and active/released state; released companions remain available to
+  rehire by name and active companions respawn on load. `-recruittest` proves choose/equip/
+  release/rehire and `-recruitrestoretest` proves it again in a second built process.
 - `content/` — zones/quests/monsters/items/loot/dialogue as JSON. Cross-referenced and
   IP-scanned by `ContentValidationTests`. In-code mirrors: `MonsterLibrary`,
   `SpellLibrary`, `LootLibrary` (tests keep JSON and code aligned by id).
@@ -164,7 +165,9 @@ mouse and the self-test drive the very same code.
   locked gate = hollow square, party = teal circles); legend when maximized. All icons are
   **generated textures, not font glyphs** — the body font has no box/tick/arrow glyphs and
   a missing glyph renders as tofu (this is why the old `-`/`+` buttons were unreadable).
-- `InventoryUI.cs` (I) — left column = the character sheet: **the six ABILITY SCORES first**
+- `InventoryUI.cs` (I) — party tabs choose the player or any active companion; the selected
+  member receives equipment from the shared stash, and a companion can be released without
+  deleting their saved sheet or gear. Left column = the character sheet: **the six ABILITY SCORES first**
   (score and modifier, from the `*Synced` SyncVars via `PlayerCharacterHolder.ModOf` — the one
   definition the level-up screen also uses), then what they are WEARING (slot rows + each
   piece's stat line + totals: AC with its breakdown, HP, attack, damage); right column =

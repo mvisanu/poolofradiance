@@ -16,6 +16,7 @@ namespace RadiantPool.Game
 
         private Vector2 _scroll, _wornScroll;
         private GUIStyle _slotName, _slotStat, _itemStat, _better, _worse;
+        private string _selectedName = "";
 
         // Who will buy, if anyone. Resolved once a frame in Update (OnGUI runs several times
         // a frame, and this searches the scene); the server re-checks it on every sale.
@@ -30,6 +31,11 @@ namespace RadiantPool.Game
         private PlayerCharacterHolder LocalHolder() =>
             FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
                 .FirstOrDefault(p => p.IsOwner);
+
+        private PlayerCharacterHolder[] PartyHolders() =>
+            FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .Where(p => p.ClassIndex.Value >= 0)
+                .OrderByDescending(p => p.IsOwner).ThenBy(p => p.CharacterName.Value).ToArray();
 
         private void Update()
         {
@@ -61,12 +67,16 @@ namespace RadiantPool.Game
             Ui.Begin();
             if (!Ui.IsOpen(Ui.Panel.Inventory)) return;
             var director = GameDirector.Instance;
-            var holder = LocalHolder();
-            if (director == null || holder == null) return;
+            var local = LocalHolder();
+            if (director == null || local == null) return;
+            var party = PartyHolders();
+            var holder = party.FirstOrDefault(p => p.CharacterName.Value == _selectedName)
+                         ?? local;
+            _selectedName = holder.CharacterName.Value;
             EnsureStyles();
 
             // Fits any window: full size when there is room, shrunk (and scrolled) when not.
-            var rect = Ui.FitTop(620f, 460f, top: 56f, bottomMargin: 96f);
+            var rect = Ui.FitTop(760f, 500f, top: 56f, bottomMargin: 96f);
             GUILayout.BeginArea(rect, Theme.PanelStyle);
             GUILayout.BeginHorizontal();
             GUILayout.Label("Inventory", Theme.Header);
@@ -76,19 +86,48 @@ namespace RadiantPool.Game
                 Ui.Close(Ui.Panel.Inventory);
             GUILayout.EndHorizontal();
 
+            DrawPartyTabs(party, holder);
+            GUILayout.Space(5);
+
             GUILayout.BeginHorizontal();
             // The worn column takes a share of the panel, not a fixed 250 px — on a narrow
             // window the fixed column used to squeeze the stash into nothing.
-            DrawEquipped(holder, Mathf.Clamp(rect.width * 0.42f, 180f, 260f));
+            DrawEquipped(director, local, holder,
+                Mathf.Clamp(rect.width * 0.40f, 190f, 280f));
             GUILayout.Space(10);
             DrawStash(director, holder);
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
         }
 
+        private void DrawPartyTabs(PlayerCharacterHolder[] party,
+            PlayerCharacterHolder selected)
+        {
+            GUILayout.BeginHorizontal(Theme.ParchmentStyle);
+            foreach (var member in party)
+            {
+                string role = member.IsCompanion
+                    ? PartyComposition.RoleOf(member.Class).ToString().ToUpperInvariant()
+                    : "YOU";
+                bool current = member == selected;
+                GUI.enabled = !current;
+                if (GUILayout.Button($"{role}: {member.CharacterName.Value}",
+                        current ? Theme.BtnPrimary : GUI.skin.button,
+                        GUILayout.MinWidth(118f), GUILayout.Height(28f)))
+                {
+                    _selectedName = member.CharacterName.Value;
+                    _wornScroll = Vector2.zero;
+                }
+                GUI.enabled = true;
+            }
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+        }
+
         /// <summary>The "what am I wearing" column: every slot, filled or empty, plus the
         /// totals those pieces produce (AC, HP, to-hit and damage of the equipped weapon).</summary>
-        private void DrawEquipped(PlayerCharacterHolder holder, float width)
+        private void DrawEquipped(GameDirector director, PlayerCharacterHolder local,
+            PlayerCharacterHolder holder, float width)
         {
             GUILayout.BeginVertical(GUILayout.Width(width));
 
@@ -96,6 +135,9 @@ namespace RadiantPool.Game
             GUILayout.Label(holder.CharacterName.Value.Length > 0
                 ? $"{holder.CharacterName.Value.ToUpperInvariant()}, {holder.Class}".ToUpperInvariant()
                 : "YOUR CHARACTER", Theme.Caps);
+            if (holder.IsCompanion)
+                GUILayout.Label($"{PartyComposition.RoleOf(holder.Class).ToString().ToUpperInvariant()} COMPANION",
+                    new GUIStyle(Theme.Body) { fontSize = 11, wordWrap = false });
             ProgressUI.XpBlock(holder);
 
             _wornScroll = GUILayout.BeginScrollView(_wornScroll);
@@ -139,6 +181,18 @@ namespace RadiantPool.Game
                     weapon.DamageType.ToString().ToLowerInvariant());
             }
             GUILayout.EndVertical();
+
+            if (holder.IsCompanion)
+            {
+                GUILayout.Space(8);
+                if (GUILayout.Button($"Release {holder.CharacterName.Value}", GUILayout.Height(26f)))
+                {
+                    director.CmdReleaseCompanion(holder.CharacterName.Value);
+                    _selectedName = local.CharacterName.Value;
+                }
+                GUILayout.Label("They keep this level and gear and can be rehired at Council Hall.",
+                    new GUIStyle(Theme.Body) { fontSize = 10, wordWrap = true });
+            }
             GUILayout.EndScrollView();
             GUILayout.EndVertical();
         }
@@ -209,7 +263,8 @@ namespace RadiantPool.Game
         {
             GUILayout.BeginVertical();
             GUILayout.BeginHorizontal();
-            GUILayout.Label("PARTY STASH", Theme.Caps);
+            GUILayout.Label($"PARTY STASH - EQUIP {holder.CharacterName.Value.ToUpperInvariant()}",
+                Theme.Caps);
             GUILayout.FlexibleSpace();
             GUILayout.Label(
                 $"<color=#f2ca50><b>{director.PartyGold.Value:N0}</b> gold</color>",
@@ -256,7 +311,8 @@ namespace RadiantPool.Game
                         : item.UsableBy(holder.Sheet.Class);
                     GUI.enabled = usable;
                     if (GUILayout.Button(usable ? "Equip" : "Can't use", GUILayout.Width(80)))
-                        director.CmdEquipItem(g.Key);
+                        director.CmdEquipItem(g.Key,
+                            holder.IsCompanion ? holder.CharacterName.Value : "");
                     GUI.enabled = true;
                 }
                 else if (g.Key == "potion_healing")

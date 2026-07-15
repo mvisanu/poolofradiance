@@ -186,8 +186,10 @@ Spells, classes, dialogue follow the same pattern (`content/spells`, `content/cl
 consumes the same files in unit tests. Content changes never require code changes.
 
 **Save file** (host-owned, `%USERPROFILE%\Saved Games\RadiantPool\<campaign>.json`):
-campaign seed, quest states, cleared zones, per-character sheets/inventory/XP, party gold,
-world flags. Versioned with migration on load.
+campaign seed, quest states, cleared zones, player sheets/XP, party gold and stash, plus a
+named companion roster containing each hire's sheet, individual loadout, and active/released
+state. Active companions return on load; released companions remain available for rehire.
+World flags share the same versioned file with migration on load.
 
 ---
 

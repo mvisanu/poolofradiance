@@ -1,4 +1,5 @@
 using System.Linq;
+using RadiantPool.Rules;
 using UnityEngine;
 
 namespace RadiantPool.Game
@@ -42,10 +43,10 @@ namespace RadiantPool.Game
         };
 
         private bool _open;
+        private Vector2 _scroll;
 
-        /// <summary>How many sellswords Veresk can add to the party right now. This is
-        /// deliberately independent of quest/muster state: companions are session-owned,
-        /// so a solo player loading any campaign state must be able to refill the party.</summary>
+        /// <summary>How many companions Veresk can add right now. This is independent of
+        /// quest state: new hires and saved former companions remain available at any point.</summary>
         public static int AvailableRecruitSlots()
         {
             int partySize = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
@@ -67,6 +68,17 @@ namespace RadiantPool.Game
             return player != null
                 && Vector3.Distance(player.position, transform.position) <= InteractRange;
         }
+
+        /// <summary>The single client-side path behind every new-hire button. Built-player
+        /// tests call this too, so the displayed choice and the RPC cannot drift apart.</summary>
+        public void ChooseHire(CharacterClass choice)
+        {
+            if (!PartyComposition.HireChoices.Contains(choice)) return;
+            GameDirector.Instance?.CmdHireCompanionClass((int)choice);
+        }
+
+        public void ChooseRehire(string companionName) =>
+            GameDirector.Instance?.CmdRehireCompanion(companionName);
 
         private void Update()
         {
@@ -94,31 +106,71 @@ namespace RadiantPool.Game
             var director = GameDirector.Instance;
             if (director == null || director.Zones.Length == 0) return;
 
-            GUILayout.BeginArea(Ui.Fit(520f, 280f), Theme.PanelStyle);
+            GUILayout.BeginArea(Ui.Fit(600f, 520f), Theme.PanelStyle);
             GUILayout.Label(NpcName, Theme.Header);
-
-            // Sellswords: offered whenever the party is short of four. The roster they
-            // bring is PartyComposition's (a healer, then two damage classes) — say so, so
-            // the player knows the hire covers what the party is missing.
-            int free = AvailableRecruitSlots();
-            bool RecruitButton()
+            _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.ExpandHeight(true));
+            void FinishPanel()
             {
-                if (free > 0 && GUILayout.Button(
-                        $"We could use sellswords. (hire {free}: support and damage)"))
-                {
-                    director.CmdRecruitCompanions();
-                    _open = false;
-                    return true;
-                }
-                return false;
+                GUILayout.EndScrollView();
+                GUILayout.EndArea();
             }
 
-            // Always available while there is room — before the quest-state branches.
-            // Previously this was only called from Muster and Active, so it vanished at
-            // turn-in and forever after campaign completion even though companions vanish
-            // between sessions and the player was solo again.
-            if (RecruitButton()) { GUILayout.EndArea(); return; }
+            // One explicit role/class choice per open slot; released named companions are
+            // listed below the new-hire choices and retain their prior sheet and equipment.
+            int free = AvailableRecruitSlots();
+            GUILayout.BeginVertical(Theme.ParchmentStyle);
+            GUILayout.Label($"PARTY ROSTER - {free} OPEN SLOT{(free == 1 ? "" : "S")}", Theme.Caps);
+            if (free > 0)
+            {
+                GUILayout.Label("Choose the class and job you want to add:", Theme.BodyInk);
+                for (int i = 0; i < PartyComposition.HireChoices.Length; i += 2)
+                {
+                    GUILayout.BeginHorizontal();
+                    for (int j = i; j < i + 2 && j < PartyComposition.HireChoices.Length; j++)
+                    {
+                        var choice = PartyComposition.HireChoices[j];
+                        string role = PartyComposition.RoleOf(choice).ToString().ToUpperInvariant();
+                        string detail = choice switch
+                        {
+                            CharacterClass.Fighter => "armored front line",
+                            CharacterClass.Cleric => "healing and support",
+                            CharacterClass.Rogue => "precise weapon damage",
+                            _ => "ranged spell damage"
+                        };
+                        if (GUILayout.Button($"{role}: {choice}\n{detail}",
+                                GUILayout.Height(43f), GUILayout.ExpandWidth(true)))
+                            ChooseHire(choice);
+                    }
+                    GUILayout.EndHorizontal();
+                }
+            }
+            else GUILayout.Label(
+                "The active party is full. Release a companion from Inventory (I) to open a slot.",
+                Theme.BodyInk);
 
+            var waiting = new System.Collections.Generic.List<(string name, CharacterClass cls)>();
+            foreach (string summary in director.CompanionRoster)
+                if (GameDirector.TryParseCompanionSummary(summary, out string name,
+                        out CharacterClass cls, out bool active) && !active)
+                    waiting.Add((name, cls));
+            if (waiting.Count > 0)
+            {
+                GUILayout.Space(5);
+                GUILayout.Label("REHIRE FORMER COMPANIONS", Theme.Caps);
+                foreach (var former in waiting)
+                {
+                    GUI.enabled = free > 0;
+                    string role = PartyComposition.RoleOf(former.cls).ToString();
+                    if (GUILayout.Button($"Rehire {former.name} - {former.cls} ({role})"))
+                        ChooseRehire(former.name);
+                    GUI.enabled = true;
+                }
+            }
+            GUILayout.EndVertical();
+            GUILayout.Space(7);
+
+            // Recruitment stays above the quest branches, so it remains available before
+            // muster, between turn-ins, and after the campaign finale.
             if ((QuestState)director.MusterState.Value == QuestState.Active)
             {
                 Say("\"So the Exchange found us another company willing to brave the " +
@@ -126,7 +178,7 @@ namespace RadiantPool.Game
                     "Prove yourselves at the Old Docks and the Council will pay in gold and gratitude.\"");
                 if (GUILayout.Button("We'll clear the docks.", Theme.BtnPrimary))
                 { director.CmdDialogueChoice("muster_accept"); _open = false; }
-                GUILayout.EndArea();
+                FinishPanel();
                 return;
             }
 
@@ -140,7 +192,7 @@ namespace RadiantPool.Game
                         : $"\"Clear {director.Zones[i].DisplayName}, then follow the gold " +
                           "turn-in marker back to me at Council Hall.\"");
                     if (GUILayout.Button("We're on it.")) _open = false;
-                    GUILayout.EndArea();
+                    FinishPanel();
                     return;
                 }
                 if (state == QuestState.ObjectivesMet)
@@ -150,7 +202,7 @@ namespace RadiantPool.Game
                     if (GUILayout.Button($"Turn in at Council Hall: {director.Zones[i].DisplayName}",
                             Theme.BtnPrimary))
                     { director.CmdDialogueChoice($"turnin_{i}"); _open = false; }
-                    GUILayout.EndArea();
+                    FinishPanel();
                     return;
                 }
             }
@@ -166,7 +218,7 @@ namespace RadiantPool.Game
                 Say("\"The Council sits day and night until every quarter is reclaimed.\"");
                 if (GUILayout.Button("Farewell.")) _open = false;
             }
-            GUILayout.EndArea();
+            FinishPanel();
         }
 
         /// <summary>NPC speech on a parchment card, per the theme mockups.</summary>

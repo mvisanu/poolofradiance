@@ -23,6 +23,9 @@ namespace RadiantPool.Game
         /// and player choices. Empty in older saves, which correctly means unresolved.</summary>
         public List<string> CompletedSiteActions = new List<string>();
         public List<SavedCharacter> Roster = new List<SavedCharacter>();
+        /// <summary>Every named hire, including released companions. Older saves omit this
+        /// field and therefore load an empty roster without needing a schema bump.</summary>
+        public List<SavedCompanion> Companions = new List<SavedCompanion>();
     }
 
     [Serializable]
@@ -40,6 +43,18 @@ namespace RadiantPool.Game
         /// levelling existed have no such field and JSON leaves it zeroed, which is the
         /// truth for them. Schema stays at 1 for that reason: an old save must still load.</summary>
         public int[] AbilityIncreases = { 0, 0, 0, 0, 0, 0 };
+    }
+
+    [Serializable]
+    public class SavedCompanion
+    {
+        public SavedCharacter Character = new SavedCharacter();
+        public string WeaponId = "";
+        public string ArmorId = "";
+        public bool ShieldEquipped;
+        /// <summary>Active hires spawn beside the player on load. Released hires remain
+        /// in this roster so the same named character can be rehired later.</summary>
+        public bool Active = true;
     }
 
     /// <summary>Host-owned campaign persistence (Phase 4): quest state, stash, cleared
@@ -113,10 +128,26 @@ namespace RadiantPool.Game
             };
         }
 
+        public static SavedCompanion CaptureCompanion(PlayerCharacterHolder holder, bool active)
+        {
+            var build = CharacterBuild.Default((int)holder.Sheet.Class);
+            return new SavedCompanion
+            {
+                Character = Capture(holder.Sheet, build),
+                WeaponId = holder.WeaponId.Value,
+                ArmorId = holder.ArmorId.Value,
+                ShieldEquipped = holder.ShieldEquipped.Value,
+                Active = active
+            };
+        }
+
         /// <summary>Rebuilds a sheet from a saved character: recreate at level 1 from the
         /// stored base scores, replay XP/level-ups, then restore HP and spent slots.</summary>
         public static CharacterSheet Restore(SavedCharacter saved)
         {
+            saved ??= new SavedCharacter();
+            saved.SlotsRemaining ??= new[] { 0, 0, 0 };
+            saved.AbilityIncreases ??= new[] { 0, 0, 0, 0, 0, 0 };
             var build = new CharacterBuild
             {
                 ClassIndex = saved.ClassIndex, RaceIndex = saved.RaceIndex,
