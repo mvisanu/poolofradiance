@@ -169,6 +169,14 @@ namespace RadiantPool.Game
         public static Texture2D FieldTex => RpgMmoUi7Skin.Get("field", ParchmentTex);
         public static Texture2D SlotTex => RpgMmoUi7Skin.Get("slot", BtnStoneTex);
 
+        // Purpose-built HUD art (null-safe: absent pack keeps the procedural look below).
+        public static Texture2D StatBarGlossTex => RpgMmoUi7Skin.Get("statbar_overlay");
+        public static Texture2D XpBarFrameTex => RpgMmoUi7Skin.Get("xpbar");
+        public static Texture2D CurrencyGoldTex => RpgMmoUi7Skin.Get("currency_gold");
+        public static Texture2D DividerTex => RpgMmoUi7Skin.Get("divider");
+        public static Texture2D DecorationTex => RpgMmoUi7Skin.Get("decoration");
+        public static Texture2D GlowTex => RpgMmoUi7Skin.Get("glow");
+
         // ---------- styles ----------
         private static GUIStyle _header, _headerBig, _headerInk, _caps, _body14, _bodyInk,
             _btnPrimary, _slot, _tab, _tabActive, _panel, _parchment, _goldWash, _toast;
@@ -378,16 +386,85 @@ namespace RadiantPool.Game
         }
 
         // ---------- bars ----------
-        /// <summary>Recessed well + glassy gradient fill, per the mock HP/MP bars.</summary>
+        /// <summary>Recessed well + glassy gradient fill, per the mock HP/MP bars. When the
+        /// licensed pack is present, the fill keeps its exact gameplay colour (HP red / MP
+        /// blue / XP gold) and the pack's StatBar gloss is laid over the tube so every bar in
+        /// the game reads as RPG & MMO UI 7 without the UI computing any gameplay value.</summary>
         public static void Bar(Rect r, float fraction, Color fill)
         {
+            float f = Mathf.Clamp01(fraction);
             GUI.DrawTexture(r, WellTex, ScaleMode.StretchToFill, true, 0,
                 Color.white, Vector4.zero, 4f);
+            if (f > 0f)
+            {
+                var inner = new Rect(r.x + 2, r.y + 2, (r.width - 4) * f, r.height - 4);
+                GUI.DrawTexture(inner, Glassy("glass" + ColorUtility.ToHtmlStringRGB(fill), fill),
+                    ScaleMode.StretchToFill, true, 0, Color.white, Vector4.zero, 3f);
+            }
+            // Pack gloss over the whole tube (filled + empty): the licensed sheen the
+            // procedural well never had. Alpha-only, so it never alters the read value.
+            var gloss = StatBarGlossTex;
+            if (gloss != null)
+                GUI.DrawTexture(new Rect(r.x + 1, r.y + 1, r.width - 2, r.height - 2),
+                    gloss, ScaleMode.StretchToFill, true, 0,
+                    new Color(1f, 1f, 1f, 0.7f), Vector4.zero, 0f);
+        }
+
+        /// <summary>The XP track gets the pack's own gold XP-bar art (a different look from the
+        /// HP/MP tube), clipped to the fraction. No pack ⇒ the standard gold Bar.</summary>
+        public static void XpBar(Rect r, float fraction)
+        {
+            var frame = XpBarFrameTex;
+            var fillTex = RpgMmoUi7Skin.Get("xpbar_fill");
+            if (frame == null || fillTex == null) { Bar(r, fraction, Gold); return; }
             float f = Mathf.Clamp01(fraction);
-            if (f <= 0f) return;
-            var inner = new Rect(r.x + 2, r.y + 2, (r.width - 4) * f, r.height - 4);
-            GUI.DrawTexture(inner, Glassy("glass" + ColorUtility.ToHtmlStringRGB(fill), fill),
-                ScaleMode.StretchToFill, true, 0, Color.white, Vector4.zero, 3f);
+            GUI.DrawTexture(r, frame, ScaleMode.StretchToFill, true);
+            if (f > 0f)
+            {
+                var inner = new Rect(r.x + 2, r.y + 2, (r.width - 4) * f, r.height - 4);
+                GUI.DrawTexture(inner, fillTex, ScaleMode.StretchToFill, true);
+            }
+        }
+
+        // ---------- HUD helpers ----------
+        /// <summary>Draw the licensed gold-coin glyph left of a currency amount, returning the
+        /// x just past it. No pack ⇒ nothing drawn and the amount stands alone.</summary>
+        public static float CurrencyGlyph(float x, float centerY, float size = 16f)
+        {
+            var coin = CurrencyGoldTex;
+            if (coin == null) return x;
+            GUI.DrawTexture(new Rect(x, centerY - size / 2f, size, size), coin,
+                ScaleMode.ScaleToFit, true);
+            return x + size + 3f;
+        }
+
+        /// <summary>Licensed horizontal separator (falls back to a hairline brass rule).</summary>
+        public static void Divider(Rect r)
+        {
+            var tex = DividerTex;
+            if (tex != null)
+                GUI.DrawTexture(r, tex, ScaleMode.StretchToFill, true);
+            else
+                GUI.DrawTexture(new Rect(r.x, r.y + r.height / 2f - 0.5f, r.width, 1f),
+                    Solid("ruleGold", GoldDeep), ScaleMode.StretchToFill, false);
+        }
+
+        /// <summary>Radial glow behind a modal title / hero element (licensed, alpha-only).</summary>
+        public static void Glow(Rect r, float alpha = 0.6f)
+        {
+            var tex = GlowTex;
+            if (tex == null) return;
+            GUI.DrawTexture(r, tex, ScaleMode.StretchToFill, true, 0,
+                new Color(1f, 1f, 1f, Mathf.Clamp01(alpha)), Vector4.zero, 0f);
+        }
+
+        /// <summary>Ornamental crest for a modal header (licensed; nothing without the pack).</summary>
+        public static void Decoration(Rect r, float alpha = 1f)
+        {
+            var tex = DecorationTex;
+            if (tex == null) return;
+            GUI.DrawTexture(r, tex, ScaleMode.ScaleToFit, true, 0,
+                new Color(1f, 1f, 1f, Mathf.Clamp01(alpha)), Vector4.zero, 0f);
         }
 
         // ---------- global skin ----------

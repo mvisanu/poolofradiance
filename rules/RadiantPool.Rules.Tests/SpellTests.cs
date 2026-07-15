@@ -36,7 +36,7 @@ namespace RadiantPool.Rules.Tests
             var events = SpellEngine.Cast(w, SpellLibrary.Get("fire_bolt"),
                 new[] { e }, 0, new FixedRng(10, 6));
             Assert.Equal(14, e.CurrentHp);
-            Assert.Equal(new[] { 2, 0, 0 }, w.SlotsRemaining); // cantrip: no slot
+            Assert.Equal(new[] { 2, 0, 0, 0, 0, 0, 0, 0, 0 }, w.SlotsRemaining); // cantrip: no slot
             Assert.Contains(events, ev => ev is SpellDamageEvent d && d.Damage == 6
                 && d.DamageType == DamageType.Fire);
         }
@@ -50,6 +50,20 @@ namespace RadiantPool.Rules.Tests
             SpellEngine.Cast(w, SpellLibrary.Get("fire_bolt"), new[] { e }, 0,
                 new FixedRng(10, 6, 7));
             Assert.Equal(37, e.CurrentHp);
+        }
+
+        [Theory]
+        [InlineData(11, 30)]
+        [InlineData(17, 40)]
+        public void FireBolt_ScalesAtHighLevelTiers(int level, int expectedDamage)
+        {
+            var w = Wizard(level);
+            var e = Enemy(ac: 1, hp: 100);
+            var rolls = level >= 17
+                ? new FixedRng(10, 10, 10, 10, 10)
+                : new FixedRng(10, 10, 10, 10);
+            SpellEngine.Cast(w, SpellLibrary.Get("fire_bolt"), new[] { e }, 0, rolls);
+            Assert.Equal(100 - expectedDamage, e.CurrentHp);
         }
 
         [Fact]
@@ -78,7 +92,7 @@ namespace RadiantPool.Rules.Tests
             var events = SpellEngine.Cast(w, SpellLibrary.Get("magic_missile"),
                 new[] { e, e, e }, 1, new FixedRng(2, 3, 1));
             Assert.Equal(11, e.CurrentHp);
-            Assert.Equal(new[] { 1, 0, 0 }, w.SlotsRemaining);
+            Assert.Equal(new[] { 1, 0, 0, 0, 0, 0, 0, 0, 0 }, w.SlotsRemaining);
             Assert.Equal(3, events.OfType<SpellDamageEvent>().Count());
 
             // 4 darts on a level-1 slot is illegal
@@ -106,7 +120,7 @@ namespace RadiantPool.Rules.Tests
             SpellEngine.Cast(w2, SpellLibrary.Get("burning_hands"),
                 new[] { e3 }, 2, new FixedRng(2, 1, 1, 1, 1));
             Assert.Equal(26, e3.CurrentHp);
-            Assert.Equal(new[] { 4, 2, 2 }, w2.SlotsRemaining);
+            Assert.Equal(new[] { 4, 2, 2, 0, 0, 0, 0, 0, 0 }, w2.SlotsRemaining);
         }
 
         [Fact]
@@ -148,7 +162,7 @@ namespace RadiantPool.Rules.Tests
                 new Creature[] { t1, t2, t3 }, 1, new FixedRng());
             Assert.All(new[] { t1, t2, t3 },
                 t => Assert.True(t.Conditions.Has(ConditionType.Blessed)));
-            Assert.Equal(new[] { 1, 0, 0 }, c.SlotsRemaining);
+            Assert.Equal(new[] { 1, 0, 0, 0, 0, 0, 0, 0, 0 }, c.SlotsRemaining);
 
             var c2 = Cleric();
             Assert.Throws<RuleViolationException>(() =>

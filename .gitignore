@@ -80,3 +80,7 @@ rules/**/obj.meta
 # Design reference exports (contain third-party placeholder text; local only)
 theme/
 *.log
+
+# Copyrighted third-party walkthrough kept locally as a structural pacing reference
+# only (see CLAUDE.md) — never distribute. Excluded from the repo.
+game/neverwinternight.txt

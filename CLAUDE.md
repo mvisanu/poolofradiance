@@ -39,7 +39,7 @@ LOOKED at); **visual QA** `-worldmapcapture <png>` opens the maximized campaign 
 `MiniMap.ShowCampaignAtlasForTest`, captures it without desktop input, and restores the
 temporary quest states; it also asserts three simultaneous active commissions produce
 exactly one `[WorldMapObjectiveTest]` X. `-uiskincapture <png>` renders the title/character-creation screen,
-asserts all 19 RPG & MMO UI 7 skin roles are present, captures it without input, then quits;
+asserts all 26 RPG & MMO UI 7 skin roles are present, captures it without input, then quits;
 `-savedir <dir>` keeps a test run off the real campaign.
 Player log (first place to look when the user reports bugs):
 `%USERPROFILE%\AppData\LocalLow\RadiantPool\Radiant Pool\Player.log`.
@@ -58,15 +58,16 @@ mouse and the self-test drive the very same code.
   Doubles as Unity local package (`package.json` + asmdef alongside the csproj; dotnet
   artifacts redirect to `/artifacts` via `rules/Directory.Build.props`). **All game math
   lives here and is unit-tested** — `CampaignSimulationTests` plays the whole campaign
-  headlessly and enforces the level-5 XP curve; run it after any balance change.
+  headlessly and enforces the complete level-20 XP curve and two-player difficulty floor;
+  run it after any balance change.
   **Difficulty knobs live in `Difficulty.cs` and nowhere else**: monsters spawn at 85 % HP
   and attack at −1 to hit; PCs stay pure SRD, XP is untouched. Stat blocks in
   `Monsters.cs` stay canonical (ContentValidationTests pins them to the JSON) — retune
   the knobs, never the blocks. `DifficultyTests` pins the current values.
   **Levelling lives in `Progression.cs`** (the PC-side counterpart to `Difficulty.cs`): the
   XP table, hit dice and the 20 cap stay pure SRD, but the ability-point grant is a house
-  rule — **one point per level, two at 4th** — because SRD's single ASI at 4th is one
-  choice in a 1–5 campaign. `ProgressionTests` pins it. XP enters a character through
+  rule — **one point per level, two at 4th** — so every one of the twenty levels carries
+  a build choice. `ProgressionTests` pins it. XP enters a character through
   **`GameDirector.ServerGrantXp` and nowhere else** (quests AND kills; combat used to call
   `Sheet.GainXp` directly and never level anyone). Companions auto-spend their points on
   `Progression.PrimaryAbility`. **Loot gets better as the campaign deepens** (`LootLibrary`,
@@ -80,6 +81,14 @@ mouse and the self-test drive the very same code.
 - `content/` — zones/quests/monsters/items/loot/dialogue as JSON. Cross-referenced and
   IP-scanned by `ContentValidationTests`. In-code mirrors: `MonsterLibrary`,
   `SpellLibrary`, `LootLibrary` (tests keep JSON and code aligned by id).
+  **The complete campaign is 39 zones / 37 quest files / 23 monsters.** The twelve-zone
+  `level20_expansion.json` adds four original three-stage arcs: Stormglass, Frostbound,
+  Titan's Chain, and Hollow Star. Its normal required path reaches level 20 during the
+  Dawnspire finale. High-level quest rewards use tiers 5–7; full-caster slots serialize
+  and replicate across all nine spell levels; fighter Attack actions scale to 2/3/4 swings
+  at levels 5/11/20. `CampaignRewardLibrary` remains the reward authority.
+  `game/neverwinternight.txt` is a copyrighted walkthrough used only as a structural pacing
+  reference. Never copy its names, prose, characters, creatures, locations, or plot beats.
 - `game/Assets/Scripts` — runtime (FishNet networking). Server-authoritative: clients
   send intents (`Cmd*` ServerRpcs), server validates via the rules lib, broadcasts
   results (`Rpc*`). `CombatManager` = explicit `BattleState` FSM + grid + one serial
@@ -96,10 +105,18 @@ mouse and the self-test drive the very same code.
   The UI7 package itself contains no font files. All IMGUI styling
   flows through `Ui.Begin()` → `Theme.Apply()`; tune look there, never inline styles.
   `RpgMmoUi7Art` selectively imports the locally licensed **RPG & MMO UI 7** textures and
-  bakes 19 semantic runtime roles (panels, button states, fields, slots, bars, sliders,
-  toggles, tooltips, scrollbars, tabs) into ignored `Resources/UI/RpgMmoUi7`. `Theme.Apply`
-  consumes them globally, while `Theme.SlotStyle` covers compact hotbar/minimap controls and
-  `Theme.TabStyle` covers character tabs. No pack means the generated Gilded Quest fallback.
+  bakes 26 semantic runtime roles (panels, button states, fields, slots, bars, sliders,
+  toggles, tooltips, scrollbars, tabs, plus HUD art: `statbar_overlay` bar gloss,
+  `xpbar`/`xpbar_fill` XP bar, `currency_gold` coin, `divider`, `decoration`, `glow`) into
+  ignored `Resources/UI/RpgMmoUi7`. `Theme.Apply` consumes the chrome globally, while
+  `Theme.SlotStyle` covers compact hotbar/minimap controls, `Theme.TabStyle` covers character
+  tabs, and the HUD art flows through `Theme.Bar` (every HP/MP bar gets the pack gloss),
+  `Theme.XpBar`, `Theme.CurrencyGlyph`, `Theme.Divider`, `Theme.Glow`, and `Theme.Decoration`.
+  **New roles need a `PreferredSuffix` entry (exact lowercased vendor path) in `RpgMmoUi7Art`
+  AND a name in `RpgMmoUi7Skin.Roles`** — the `-uiskincapture` gate asserts
+  `LoadedRoleCount == Roles.Length`, so a role that fails to bake fails the smoke test. Bake
+  only what a `Theme.*` helper actually consumes; don't bake decorative art nothing draws.
+  No pack means the generated Gilded Quest fallback.
   **Gold lives on the HotBar** (`{PartyGold:N0}g`, always visible): it used to exist only
   inside the bags and the shops, so the purse never visibly moved and the total read like a
   placeholder. Format gold `:N0` everywhere — "1,234", never "1234".
@@ -233,7 +250,7 @@ mouse and the self-test drive the very same code.
   to URP and re-bootstraps — no editor clicking to import.
   For **RPG & MMO UI 7**, use `scripts/import-rpg-mmo-ui7.ps1`: it extracts only image/sprite
   art and metadata into ignored `Assets/LocalLicensed`, excludes the legacy scripts/prefabs,
-  rebakes the 19-role IMGUI skin, and fails unless the skin and global typography stack are
+  rebakes the 26-role IMGUI skin, and fails unless the skin and global typography stack are
   complete. The skin applies to every screen through `Theme.Apply`, never per-panel.
   For **PBR Graveyard and Nature Set 2.0**, run
   `python scripts/install-graveyard-assets.py`; it dependency-closes 29 authored prefabs
@@ -246,7 +263,21 @@ mouse and the self-test drive the very same code.
   until it is imported — and any similar low-poly pack drops into the same slots. Absent
   ⇒ `Available == false` ⇒ Kenney fallback, so the world always builds. PBR Graveyard uses
   authored prefabs only (never raw FBX submeshes) and supplies the dominant perimeter at all
-  22 remote sites plus grave rings at crypt/necropolis sites. Asset Store packs ship
+  22 remote sites. **Necropolis/Crypt sites are composed as designed graveyards, not a grave
+  ring** (`ProjectBootstrap.RemoteSite`, gated on `graveyard`): a walled cemetery perimeter
+  (`Kind.Ruin` walls, tangent-rotated) with two gaps — a gate lane on the front (−Z) axis and
+  a rear frame for the mausoleum (+Z) — a `church_tower` **mausoleum landmark placed OUTSIDE
+  the back wall as a backdrop** (never between camera and the fighting centre, or the combat
+  x-ray occlusion fades it to a translucent blob — that bit once), a warm gate lantern + violet
+  ritual light, flanking `death_statue`s, clustered graves varied in rotation/scale, and
+  storytelling props (`coffin_broken`, `rock_skull`, `dead_fern`/`Ivy_02`). All decoration is
+  collider-free, so grid combat is unaffected and nothing is network-spawned. **Haunted
+  non-cemetery themes (`Keep`/`Manor`/`Observatory` = Drowned Bastion, Blackbriar Manor, the
+  Observatory trio) get graveyard ACCENTS** (a `haunted` block: two grave clusters, a watching
+  statue, a skull-stone, corrupted ferns/ivy, one violet candle) over their own settlement/dungeon
+  dressing — small props only, never a walled necropolis. Verify with
+  `RadiantPool.exe -autohost -sitecapture <png> -sitezone lanternfall_necropolis` (or
+  `blackbriar_manor` / `drowned_bastion`). Asset Store packs ship
   **legacy/proprietary materials that render MAGENTA or black under URP** —
   `SetupMaterials()` reads serialized albedo/normal/metallic/occlusion slots even when the
   source shader is missing, then converts all 40 selected PBR materials to URP Lit.

@@ -56,6 +56,9 @@ namespace RadiantPool.Rules
             const string T2 = "lt_quest_tier2";
             const string T3 = "lt_quest_tier3";
             const string T4 = "lt_quest_tier4";
+            const string T5 = "lt_quest_tier5";
+            const string T6 = "lt_quest_tier6";
+            const string T7 = "lt_quest_tier7";
             var rewards = new[]
             {
                 new CampaignReward("old_docks", 1, 2, 300, 100, T1, 100, 35, T1),
@@ -85,7 +88,20 @@ namespace RadiantPool.Rules
                 new CampaignReward("cinder_gate", 4, 5, 1300, 650, T4),
                 new CampaignReward("crownless_citadel", 5, 5, 700, 400, T4),
                 new CampaignReward("thornmaze", 5, 5, 800, 400, T4),
-                new CampaignReward("ember_crown_spire", 5, 5, 2000, 1200, T4)
+                new CampaignReward("ember_crown_spire", 5, 5, 2000, 1200, T4),
+
+                new CampaignReward("duskmire_crossing", 9, 10, 4000, 1500, T5),
+                new CampaignReward("whispervault", 9, 11, 4500, 1800, T5),
+                new CampaignReward("stormglass_foundry", 10, 12, 5000, 2200, T5),
+                new CampaignReward("frostvein_pass", 11, 13, 5500, 2600, T5),
+                new CampaignReward("hoarfire_halls", 12, 14, 14600, 3200, T6),
+                new CampaignReward("winter_crown_vault", 14, 16, 20400, 4000, T6),
+                new CampaignReward("shattered_coast", 15, 17, 15600, 4500, T6),
+                new CampaignReward("colossus_road", 17, 18, 17500, 5200, T7),
+                new CampaignReward("titan_foundry", 18, 19, 24900, 6500, T7),
+                new CampaignReward("veil_threshold", 18, 19, 7000, 6000, T7),
+                new CampaignReward("hollow_star_depths", 19, 19, 3000, 7000, T7),
+                new CampaignReward("dawnspire_nexus", 19, 20, 20500, 10000, T7)
             };
             return rewards.ToDictionary(r => r.ZoneId);
         }

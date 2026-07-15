@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"grave_wraith","name":"Grave Wraith","srdRef":"Wraith (SRD 5.1)","size":"Medium","ac":13,"hpDice":"9d8+27","speed":60,"abilities":{"str":6,"dex":16,"con":16,"int":12,"wis":14,"cha":15},"attacks":[{"name":"Life Drain","toHit":6,"damage":"4d8+3","damageType":"necrotic","rangeFeet":5}],"xp":1800,"ai":"skirmisher","lootTable":"lt_undead"}

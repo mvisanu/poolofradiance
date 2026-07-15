@@ -46,7 +46,7 @@ namespace RadiantPool.Game
         public bool ActionLeft { get; private set; }
         public bool BonusLeft { get; private set; }
         public int Round { get; private set; }
-        public int[] MySlots { get; private set; } = { 0, 0, 0 };
+        public int[] MySlots { get; private set; } = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
         public string LastRejection { get; private set; } = "";
         public Vector3 GridOrigin { get; private set; }
         public BattleState State { get; private set; } = BattleState.Inactive;
@@ -754,7 +754,8 @@ namespace RadiantPool.Game
                 && u.Creature is CharacterSheet sheet)
             {
                 var slots = sheet.SlotsRemaining;
-                TargetSlots(u.Player.Owner, slots[0], slots[1], slots[2]);
+                TargetSlots(u.Player.Owner, slots[0], slots[1], slots[2], slots[3],
+                    slots[4], slots[5], slots[6], slots[7], slots[8]);
             }
         }
 
@@ -841,9 +842,15 @@ namespace RadiantPool.Game
             {
                 try
                 {
-                    var result = CombatMath.ResolveAttack(
-                        attacker.Creature, target.Creature, attack, _rng);
-                    Narrate(attacker.Creature, target.Creature, attack, result);
+                    int swings = attacker.Creature is CharacterSheet sheet
+                        ? ClassData.AttacksPerAction(sheet.Class, sheet.Level)
+                        : 1;
+                    for (int swing = 0; swing < swings && !target.Creature.IsDead; swing++)
+                    {
+                        var result = CombatMath.ResolveAttack(
+                            attacker.Creature, target.Creature, attack, _rng);
+                        Narrate(attacker.Creature, target.Creature, attack, result);
+                    }
                     SyncHp(target.Id);
                 }
                 catch (Exception e)
@@ -1232,9 +1239,15 @@ namespace RadiantPool.Game
             int distFeet = Chebyshev(unit.Cell, target.Cell) * 5;
             if (spell.RangeFeet > 0 && distFeet > spell.RangeFeet)
             { TargetReject(conn, $"Out of range ({distFeet} ft > {spell.RangeFeet} ft)."); return; }
-            int slotLevel = Math.Max(1, spell.Level);
-            if (spell.Level > 0 && !sheet.HasSlot(slotLevel))
-            { TargetReject(conn, $"No level-{slotLevel} spell slot remains."); return; }
+            int slotLevel = 1;
+            if (spell.Level > 0)
+            {
+                slotLevel = 0;
+                for (int candidate = spell.Level; candidate <= sheet.SlotsRemaining.Count; candidate++)
+                    if (sheet.HasSlot(candidate)) { slotLevel = candidate; break; }
+                if (slotLevel == 0)
+                { TargetReject(conn, $"No level-{spell.Level} or higher spell slot remains."); return; }
+            }
 
             try
             {
@@ -1506,6 +1519,18 @@ namespace RadiantPool.Game
             // A goblin is a small brutish humanoid: the orc model shrunk reads far better
             // than a green-tinted human rogue did.
             { "goblin", ("Goblin|Orc|Barbarian", new Color(0.85f, 1f, 0.75f), 0.72f) },
+            { "ashfang_stalker", ("Bear", new Color(0.32f, 0.27f, 0.24f), 0.72f) },
+            { "ironbound_veteran", ("Knight", new Color(0.72f, 0.76f, 0.8f), 1.05f) },
+            { "veil_adept", ("Mage|Rogue_Hooded", new Color(0.55f, 0.42f, 0.72f), 1f) },
+            { "mire_troll", ("Orc|Barbarian", new Color(0.55f, 0.72f, 0.48f), 1.55f) },
+            { "grave_wraith", ("Skeleton_Mage", new Color(0.48f, 0.66f, 0.72f), 1.2f) },
+            { "storm_magus", ("Mage", new Color(0.42f, 0.65f, 0.92f), 1.05f) },
+            { "frost_reaver", ("Barbarian|Knight", new Color(0.72f, 0.86f, 0.95f), 1.15f) },
+            { "stone_colossus", ("Knight", new Color(0.48f, 0.5f, 0.54f), 1.9f) },
+            { "cinder_giant", ("Orc_Skull|Barbarian", new Color(1f, 0.48f, 0.3f), 1.9f) },
+            { "night_regent", ("Rogue_Hooded|Knight", new Color(0.48f, 0.3f, 0.58f), 1.3f) },
+            { "starbound_juggernaut", ("Knight", new Color(0.7f, 0.78f, 0.88f), 2.15f) },
+            { "hollow_star_lich", ("Skeleton_Mage", new Color(0.62f, 0.4f, 0.82f), 1.45f) },
         };
 
         /// <summary>Visible combat loadouts mirror each humanoid monster's authored
@@ -1520,6 +1545,13 @@ namespace RadiantPool.Game
             { "orc", ("greataxe", false) },
             { "orc_warchief", ("greataxe", false) },
             { "goblin", ("shortsword", false) },
+            { "ironbound_veteran", ("longsword", true) },
+            { "veil_adept", ("dagger", false) },
+            { "storm_magus", ("runed_staff", false) },
+            { "frost_reaver", ("warhammer", true) },
+            { "cinder_giant", ("greatsword", false) },
+            { "night_regent", ("rapier", false) },
+            { "hollow_star_lich", ("runed_staff", false) },
         };
 
         public static bool HasWeaponLoadout(string monsterId) =>
@@ -1802,8 +1834,9 @@ namespace RadiantPool.Game
         }
 
         [FishNet.Object.TargetRpc]
-        private void TargetSlots(NetworkConnection conn, int s1, int s2, int s3) =>
-            MySlots = new[] { s1, s2, s3 };
+        private void TargetSlots(NetworkConnection conn, int s1, int s2, int s3,
+            int s4, int s5, int s6, int s7, int s8, int s9) =>
+            MySlots = new[] { s1, s2, s3, s4, s5, s6, s7, s8, s9 };
 
         [FishNet.Object.TargetRpc]
         private void TargetReject(NetworkConnection conn, string reason) =>

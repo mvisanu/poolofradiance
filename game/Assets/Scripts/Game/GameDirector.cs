@@ -1824,8 +1824,8 @@ namespace RadiantPool.Game
                       $"{returned}/{Zones.Length} hub returns");
         }
 
-        /// <summary>Built-player proof for the complete dynamic loop: a level-5 hero
-        /// receives tier-4 gear from an authored tier-1 quest parcel and spawns level-4
+        /// <summary>Built-player proof for the complete dynamic loop: a level-20 hero
+        /// receives tier-7 gear from an authored tier-1 quest parcel and spawns level-19
         /// quest monsters. Kept isolated from attacktest because it starts its own fight.</summary>
         private System.Collections.IEnumerator EncounterScalingSelfTest()
         {
@@ -1843,11 +1843,11 @@ namespace RadiantPool.Game
                                   - holder.Sheet.Xp);
             int stashBefore = Stash.Count;
             string reward = ServerAwardRewardLoot("lt_quest_tier1");
-            var tier4 = LootLibrary.Get("lt_quest_tier4").Entries
+            var tier7 = LootLibrary.Get("lt_quest_tier7").Entries
                 .Where(e => e.ItemId != null).Select(e => e.ItemId).ToHashSet();
             var newItems = Stash.Skip(stashBefore).ToArray();
-            bool rewardScaled = newItems.Length == LootLibrary.Get("lt_quest_tier4").Rolls
-                                && newItems.All(tier4.Contains);
+            bool rewardScaled = newItems.Length == LootLibrary.Get("lt_quest_tier7").Rolls
+                                && newItems.All(tier7.Contains);
             var staff = GameItem.Get("runed_staff");
             var quarterstaff = GameItem.Get("quarterstaff");
             bool casterUpgrade = staff != null && quarterstaff != null
@@ -1871,7 +1871,7 @@ namespace RadiantPool.Game
                         && rewardScaled && casterUpgrade && monsterScaled;
             Debug.Log($"[ScalingTest] {(pass ? "PASS" : "FAIL")} - hero L{holder.Sheet.Level} " +
                       $"spawned monsters L{combat.EncounterMonsterLevel}; authored tier1 -> " +
-                      $"tier4 items x{newItems.Length} ({reward}); Runed Staff caster upgrade " +
+                      $"tier7 items x{newItems.Length} ({reward}); Runed Staff caster upgrade " +
                       $"{(casterUpgrade ? "ready" : "missing")}");
         }
 

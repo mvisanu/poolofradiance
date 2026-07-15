@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "radiant_horizons",
+  "name": "Radiant Horizons",
+  "designIntent": "Four original multi-stage high-level arcs extend the reclamation through level 20 with investigations, branching site decisions, dungeon descents, alliance choices, construct gauntlets, and a three-stage finale.",
+  "locations": [
+    { "id": "duskmire_crossing", "name": "Duskmire Crossing", "kind": "frontier_marsh", "levelBand": [9,10], "maps": 1, "features": ["caravan_investigation","fenfolk_choice","bridge_defense"] },
+    { "id": "whispervault", "name": "The Whispervault", "kind": "oathbound_crypt", "levelBand": [9,11], "maps": 1, "features": ["speaking_crypts","three_floor_descent","warden_choice"] },
+    { "id": "stormglass_foundry", "name": "Stormglass Foundry", "kind": "storm_foundry", "levelBand": [10,12], "maps": 1, "features": ["engine_sabotage","furnace_galleries","repair_or_destroy"] },
+    { "id": "frostvein_pass", "name": "Frostvein Pass", "kind": "mountain_pass", "levelBand": [11,13], "maps": 1, "features": ["refuge_beacons","caravan_rescue","reaver_hunt"] },
+    { "id": "hoarfire_halls", "name": "Hoarfire Halls", "kind": "occupied_stronghold", "levelBand": [12,14], "maps": 1, "features": ["giant_halls","quartermaster_rescue","supply_choice"] },
+    { "id": "winter_crown_vault", "name": "Winter Crown Vault", "kind": "rime_vault", "levelBand": [14,16], "maps": 1, "features": ["frozen_machinery","colossus_guardians","rime_fissure"] },
+    { "id": "shattered_coast", "name": "The Shattered Coast", "kind": "coastal_alliance", "levelBand": [15,17], "maps": 1, "features": ["watchpost_rally","alliance_choice","titan_road_clue"] },
+    { "id": "colossus_road", "name": "Colossus Road", "kind": "construct_gauntlet", "levelBand": [17,18], "maps": 1, "features": ["marching_constructs","prisoner_rescue","titanworks"] },
+    { "id": "titan_foundry", "name": "Titan Foundry", "kind": "titan_forge", "levelBand": [18,19], "maps": 1, "features": ["crucible_sabotage","forge_choice","night_regent"] },
+    { "id": "veil_threshold", "name": "The Veil Threshold", "kind": "breach_necropolis", "levelBand": [18,19], "maps": 1, "features": ["breach_sealing","vanished_vanguard","veiled_descent"] },
+    { "id": "hollow_star_depths", "name": "Hollow Star Depths", "kind": "memory_labyrinth", "levelBand": [19,19], "maps": 1, "features": ["memory_recovery","impossible_halls","seal_choice"] },
+    { "id": "dawnspire_nexus", "name": "Dawnspire Nexus", "kind": "level_twenty_finale", "levelBand": [19,20], "maps": 1, "features": ["three_stage_boss","starbound_guardian","final_choice"] }
+  ],
+  "commissions": [
+    { "order": 16, "id": "q_secure_duskmire", "name": "The Stormglass Engine: Crossing", "objectiveKind": "investigate_and_defend", "locationIds": ["duskmire_crossing"], "prerequisites": ["q_assault_ember_crown"], "rewards": {"xpEach":4000,"gold":1500,"lootTable":"lt_quest_tier5"} },
+    { "order": 17, "id": "q_settle_whispervault", "name": "The Stormglass Engine: Whispervault", "objectiveKind": "multi_floor_dungeon", "locationIds": ["whispervault"], "prerequisites": ["q_secure_duskmire"], "rewards": {"xpEach":4500,"gold":1800,"lootTable":"lt_quest_tier5"} },
+    { "order": 18, "id": "q_break_stormglass_engine", "name": "The Stormglass Engine: Foundry", "objectiveKind": "dungeon_choice_boss", "locationIds": ["stormglass_foundry"], "prerequisites": ["q_settle_whispervault"], "rewards": {"xpEach":5000,"gold":2200,"lootTable":"lt_quest_tier5"} },
+    { "order": 19, "id": "q_light_frostvein", "name": "The Frostbound Crown: Pass", "objectiveKind": "beacon_defense", "locationIds": ["frostvein_pass"], "prerequisites": ["q_break_stormglass_engine"], "rewards": {"xpEach":5500,"gold":2600,"lootTable":"lt_quest_tier5"} },
+    { "order": 20, "id": "q_reclaim_hoarfire", "name": "The Frostbound Crown: Halls", "objectiveKind": "rescue_and_reclaim", "locationIds": ["hoarfire_halls"], "prerequisites": ["q_light_frostvein"], "rewards": {"xpEach":14600,"gold":3200,"lootTable":"lt_quest_tier6"} },
+    { "order": 21, "id": "q_seal_winter_crown", "name": "The Frostbound Crown: Vault", "objectiveKind": "mechanical_dungeon", "locationIds": ["winter_crown_vault"], "prerequisites": ["q_reclaim_hoarfire"], "rewards": {"xpEach":20400,"gold":4000,"lootTable":"lt_quest_tier6"} },
+    { "order": 22, "id": "q_rally_shattered_coast", "name": "The Titan's Chain: Coast", "objectiveKind": "rally_and_choose", "locationIds": ["shattered_coast"], "prerequisites": ["q_seal_winter_crown"], "rewards": {"xpEach":15600,"gold":4500,"lootTable":"lt_quest_tier6"} },
+    { "order": 23, "id": "q_free_colossus_road", "name": "The Titan's Chain: Road", "objectiveKind": "construct_gauntlet", "locationIds": ["colossus_road"], "prerequisites": ["q_rally_shattered_coast"], "rewards": {"xpEach":17500,"gold":5200,"lootTable":"lt_quest_tier7"} },
+    { "order": 24, "id": "q_silence_titan_foundry", "name": "The Titan's Chain: Foundry", "objectiveKind": "sabotage_and_boss", "locationIds": ["titan_foundry"], "prerequisites": ["q_free_colossus_road"], "rewards": {"xpEach":24900,"gold":6500,"lootTable":"lt_quest_tier7"} },
+    { "order": 25, "id": "q_close_veil_threshold", "name": "The Hollow Star: Threshold", "objectiveKind": "breach_sealing", "locationIds": ["veil_threshold"], "prerequisites": ["q_silence_titan_foundry"], "rewards": {"xpEach":7000,"gold":6000,"lootTable":"lt_quest_tier7"} },
+    { "order": 26, "id": "q_anchor_hollow_star", "name": "The Hollow Star: Depths", "objectiveKind": "labyrinth_recovery", "locationIds": ["hollow_star_depths"], "prerequisites": ["q_close_veil_threshold"], "rewards": {"xpEach":3000,"gold":7000,"lootTable":"lt_quest_tier7"} },
+    { "order": 27, "id": "q_last_dawn", "name": "The Hollow Star: Last Dawn", "objectiveKind": "three_stage_finale", "locationIds": ["dawnspire_nexus"], "prerequisites": ["q_anchor_hollow_star"], "rewards": {"xpEach":20500,"gold":10000,"lootTable":"lt_quest_tier7"} }
+  ],
+  "sideQuests": []
+}

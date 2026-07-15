@@ -166,6 +166,138 @@ namespace RadiantPool.Rules
                         new AttackDefinition("Shortbow", 4, "1d6+2", DamageType.Piercing, 80)
                     }
                 },
+                new MonsterDefinition
+                {
+                    Id = "ashfang_stalker", Name = "Ashfang Stalker",
+                    ArmorClass = 14, HpDice = "5d10+10", Speed = 50,
+                    Abilities = new AbilityScores(17, 15, 15, 3, 12, 7),
+                    Xp = 200, LootTable = "lt_beast_den", SrdRef = "Dire Wolf (SRD 5.1)",
+                    Attacks = { new AttackDefinition("Ashfang Bite", 5, "2d6+3", DamageType.Piercing, 5) }
+                },
+                new MonsterDefinition
+                {
+                    Id = "ironbound_veteran", Name = "Ironbound Veteran",
+                    ArmorClass = 17, HpDice = "9d8+18", Speed = 30,
+                    Abilities = new AbilityScores(16, 13, 14, 10, 11, 10),
+                    Xp = 700, LootTable = "lt_warden", SrdRef = "Veteran (SRD 5.1)",
+                    Attacks =
+                    {
+                        new AttackDefinition("Tempered Longsword", 5, "1d8+3", DamageType.Slashing, 5),
+                        new AttackDefinition("Heavy Crossbow", 3, "1d10+1", DamageType.Piercing, 100)
+                    }
+                },
+                new MonsterDefinition
+                {
+                    Id = "veil_adept", Name = "Veil Adept",
+                    ArmorClass = 13, HpDice = "6d8+6", Speed = 30,
+                    Abilities = new AbilityScores(11, 14, 12, 10, 13, 14),
+                    Xp = 450, LootTable = "lt_kindled", SrdRef = "Cult Fanatic (SRD 5.1)",
+                    Attacks =
+                    {
+                        new AttackDefinition("Veil Knife", 4, "1d4+2", DamageType.Piercing, 5),
+                        new AttackDefinition("Umbral Spark", 4, "2d6", DamageType.Necrotic, 60)
+                    }
+                },
+                new MonsterDefinition
+                {
+                    Id = "mire_troll", Name = "Mire Troll",
+                    ArmorClass = 15, HpDice = "8d10+40", Speed = 30,
+                    Abilities = new AbilityScores(18, 13, 20, 7, 9, 7),
+                    Xp = 1800, LootTable = "lt_beast_den", SrdRef = "Troll (SRD 5.1)",
+                    Attacks =
+                    {
+                        new AttackDefinition("Rending Claw", 7, "2d6+4", DamageType.Slashing, 5),
+                        new AttackDefinition("Bite", 7, "1d6+4", DamageType.Piercing, 5)
+                    }
+                },
+                new MonsterDefinition
+                {
+                    Id = "grave_wraith", Name = "Grave Wraith",
+                    ArmorClass = 13, HpDice = "9d8+27", Speed = 60,
+                    Abilities = new AbilityScores(6, 16, 16, 12, 14, 15),
+                    Xp = 1800, LootTable = "lt_undead", SrdRef = "Wraith (SRD 5.1)",
+                    Attacks = { new AttackDefinition("Life Drain", 6, "4d8+3", DamageType.Necrotic, 5) }
+                },
+                new MonsterDefinition
+                {
+                    Id = "storm_magus", Name = "Storm Magus",
+                    ArmorClass = 12, HpDice = "9d8", Speed = 30,
+                    Abilities = new AbilityScores(9, 14, 11, 17, 12, 11),
+                    Xp = 2300, LootTable = "lt_warden", SrdRef = "Mage (SRD 5.1)",
+                    Attacks =
+                    {
+                        new AttackDefinition("Stormglass Ray", 5, "3d8", DamageType.Lightning, 90),
+                        new AttackDefinition("Quarterstaff", 2, "1d6-1", DamageType.Bludgeoning, 5)
+                    }
+                },
+                new MonsterDefinition
+                {
+                    Id = "frost_reaver", Name = "Frost Reaver",
+                    ArmorClass = 16, HpDice = "15d8+45", Speed = 30,
+                    Abilities = new AbilityScores(18, 15, 16, 10, 12, 15),
+                    Xp = 1800, LootTable = "lt_raider", SrdRef = "Gladiator (SRD 5.1)",
+                    Attacks =
+                    {
+                        new AttackDefinition("Rime Spear", 7, "2d8+4", DamageType.Piercing, 5),
+                        new AttackDefinition("Cast Spear", 7, "2d6+4", DamageType.Piercing, 60)
+                    }
+                },
+                new MonsterDefinition
+                {
+                    Id = "stone_colossus", Name = "Stone Colossus",
+                    ArmorClass = 17, HpDice = "17d10+85", Speed = 30,
+                    Abilities = new AbilityScores(22, 9, 20, 3, 11, 1),
+                    Xp = 5900, LootTable = "lt_warden", SrdRef = "Stone Golem (SRD 5.1)",
+                    Attacks = { new AttackDefinition("Granite Slam", 10, "3d8+6", DamageType.Bludgeoning, 5) }
+                },
+                new MonsterDefinition
+                {
+                    Id = "cinder_giant", Name = "Cinder Giant",
+                    ArmorClass = 18, HpDice = "13d12+78", Speed = 30,
+                    Abilities = new AbilityScores(25, 9, 23, 10, 14, 13),
+                    Xp = 5000, LootTable = "lt_raider", SrdRef = "Fire Giant (SRD 5.1)",
+                    Attacks =
+                    {
+                        new AttackDefinition("Cinder Greatblade", 11, "6d6+7", DamageType.Slashing, 10),
+                        new AttackDefinition("Furnace Rock", 11, "4d10+7", DamageType.Bludgeoning, 120)
+                    }
+                },
+                new MonsterDefinition
+                {
+                    Id = "night_regent", Name = "Night Regent",
+                    ArmorClass = 16, HpDice = "17d8+68", Speed = 30,
+                    Abilities = new AbilityScores(18, 18, 18, 17, 15, 18),
+                    Xp = 10000, LootTable = "lt_warden", SrdRef = "Vampire (SRD 5.1)",
+                    Attacks =
+                    {
+                        new AttackDefinition("Regent's Talons", 9, "2d8+4", DamageType.Slashing, 5),
+                        new AttackDefinition("Sanguine Bolt", 9, "3d8+4", DamageType.Necrotic, 60)
+                    }
+                },
+                new MonsterDefinition
+                {
+                    Id = "starbound_juggernaut", Name = "Starbound Juggernaut",
+                    ArmorClass = 20, HpDice = "20d10+100", Speed = 30,
+                    Abilities = new AbilityScores(24, 9, 20, 3, 11, 1),
+                    Xp = 15000, LootTable = "lt_warden", SrdRef = "Iron Golem (SRD 5.1)",
+                    Attacks =
+                    {
+                        new AttackDefinition("Star-Iron Slam", 13, "3d8+7", DamageType.Bludgeoning, 5),
+                        new AttackDefinition("Furnace Breath", 10, "6d8", DamageType.Fire, 30)
+                    }
+                },
+                new MonsterDefinition
+                {
+                    Id = "hollow_star_lich", Name = "The Hollow Star",
+                    ArmorClass = 17, HpDice = "18d8+54", Speed = 30,
+                    Abilities = new AbilityScores(11, 16, 16, 20, 14, 16),
+                    Xp = 33000, LootTable = "lt_warden", SrdRef = "Lich (SRD 5.1)",
+                    Attacks =
+                    {
+                        new AttackDefinition("Starfall Lance", 12, "6d8", DamageType.Force, 90),
+                        new AttackDefinition("Grave Touch", 12, "3d6+3", DamageType.Necrotic, 5)
+                    }
+                },
             };
 
             var dict = new Dictionary<string, MonsterDefinition>();

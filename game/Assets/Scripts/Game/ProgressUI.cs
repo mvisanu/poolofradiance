@@ -61,7 +61,7 @@ namespace RadiantPool.Game
             GUILayout.EndHorizontal();
 
             var track = GUILayoutUtility.GetRect(60f, 12f, GUILayout.ExpandWidth(true));
-            Theme.Bar(track, capped ? 1f : fraction, Theme.Gold);
+            Theme.XpBar(track, capped ? 1f : fraction);
 
             if (points > 0)
             {

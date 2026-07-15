@@ -77,9 +77,11 @@ namespace RadiantPool.Game
         private bool _ready;
         private float _nextPartyScan;
 
-        private static readonly Color DaySky = new Color(0.26f, 0.30f, 0.34f);
+        // Daylight palette warmed and brightened to the RPG & MMO UI 7 identity (gilded oak
+        // and parchment, not cold overcast): a luminous warm sky and a bright parchment haze.
+        private static readonly Color DaySky = new Color(0.50f, 0.53f, 0.58f);
         private static readonly Color NightSky = new Color(0.050f, 0.068f, 0.115f);
-        private static readonly Color DayFog = new Color(0.31f, 0.34f, 0.35f);
+        private static readonly Color DayFog = new Color(0.69f, 0.63f, 0.52f);
         private static readonly Color NightFog = new Color(0.055f, 0.075f, 0.105f);
         private static readonly Color Amber = new Color(1f, 0.55f, 0.22f);
         private float _syncLogAt;
@@ -316,9 +318,11 @@ namespace RadiantPool.Game
 
             if (_sun != null)
             {
-                _sun.intensity = daylight * 0.95f + twilight * 0.08f;
+                _sun.intensity = daylight * 1.45f + twilight * 0.12f;
+                // Warm golden daylight (was cool blue-white) so the sun reads as the pack's
+                // gilded tone; dawn/dusk keep their amber.
                 _sun.color = Color.Lerp(new Color(1f, 0.46f, 0.25f),
-                    new Color(0.82f, 0.88f, 0.92f), daylight);
+                    new Color(1f, 0.95f, 0.82f), daylight);
                 float yaw = Mathf.Repeat((hour - 6f) * 15f - 65f, 360f);
                 float pitch = Mathf.Lerp(7f, 54f, Mathf.Clamp01(solar));
                 _sun.transform.rotation = Quaternion.Euler(pitch, yaw, 0f);
@@ -347,12 +351,14 @@ namespace RadiantPool.Game
 
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
             RenderSettings.ambientSkyColor = combat
-                ? Color.Lerp(sky * 0.82f, new Color(0.20f, 0.17f, 0.15f), 0.70f)
-                : sky * 0.82f;
+                ? Color.Lerp(sky * 1.15f, new Color(0.22f, 0.18f, 0.15f), 0.62f)
+                : sky * 1.2f;
+            // Warm, brighter fill so daylit surfaces glow with the gilded palette instead of
+            // sitting in flat gray; a small night floor keeps things navigable after dusk.
             RenderSettings.ambientEquatorColor = Color.Lerp(
-                new Color(0.045f, 0.060f, 0.090f), new Color(0.25f, 0.27f, 0.25f), daylight);
+                new Color(0.075f, 0.085f, 0.105f), new Color(0.52f, 0.47f, 0.37f), daylight);
             RenderSettings.ambientGroundColor = Color.Lerp(
-                new Color(0.022f, 0.030f, 0.046f), new Color(0.12f, 0.13f, 0.11f), daylight);
+                new Color(0.048f, 0.052f, 0.060f), new Color(0.30f, 0.25f, 0.18f), daylight);
             if (combat)
             {
                 RenderSettings.ambientEquatorColor = Color.Lerp(
@@ -363,8 +369,8 @@ namespace RadiantPool.Game
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Exponential;
             RenderSettings.fogColor = fog;
-            RenderSettings.fogDensity = Mathf.Max(0.008f,
-                Mathf.Lerp(0.029f, 0.011f, daylight)
+            RenderSettings.fogDensity = Mathf.Max(0.006f,
+                Mathf.Lerp(0.022f, 0.007f, daylight)
                 + twilight * 0.003f - combatWeight * 0.004f);
 
             if (_sky != null)
@@ -372,9 +378,9 @@ namespace RadiantPool.Game
                 if (_sky.HasProperty("_SkyTint")) _sky.SetColor("_SkyTint", sky);
                 if (_sky.HasProperty("_GroundColor"))
                     _sky.SetColor("_GroundColor", Color.Lerp(new Color(0.012f, 0.015f, 0.025f),
-                        new Color(0.18f, 0.19f, 0.17f), daylight));
+                        new Color(0.30f, 0.26f, 0.19f), daylight));
                 if (_sky.HasProperty("_Exposure"))
-                    _sky.SetFloat("_Exposure", Mathf.Lerp(0.34f, 0.82f, daylight)
+                    _sky.SetFloat("_Exposure", Mathf.Lerp(0.42f, 1.12f, daylight)
                         + combatWeight * 0.06f);
                 if (_sky.HasProperty("_AtmosphereThickness"))
                     _sky.SetFloat("_AtmosphereThickness", Mathf.Lerp(0.45f, 0.85f, daylight));

@@ -54,19 +54,20 @@ mouse and the self-test drive the very same code.
   Doubles as Unity local package (`package.json` + asmdef alongside the csproj; dotnet
   artifacts redirect to `/artifacts` via `rules/Directory.Build.props`). **All game math
   lives here and is unit-tested** — `CampaignSimulationTests` plays the whole campaign
-  headlessly and enforces the level-5 XP curve; run it after any balance change.
+  headlessly and enforces the complete level-20 XP curve and two-player difficulty floor;
+  run it after any balance change.
   **Difficulty knobs live in `Difficulty.cs` and nowhere else**: monsters spawn at 85 % HP
   and attack at −1 to hit; PCs stay pure SRD, XP is untouched. Stat blocks in
   `Monsters.cs` stay canonical (ContentValidationTests pins them to the JSON) — retune
   the knobs, never the blocks. `DifficultyTests` pins the current values.
   **Levelling lives in `Progression.cs`** (the PC-side counterpart to `Difficulty.cs`): the
   XP table, hit dice and the 20 cap stay pure SRD, but the ability-point grant is a house
-  rule — **one point per level, two at 4th** — because SRD's single ASI at 4th is one
-  choice in a 1–5 campaign. `ProgressionTests` pins it. XP enters a character through
+  rule — **one point per level, two at 4th** — so every one of the twenty levels carries
+  a build choice. `ProgressionTests` pins it. XP enters a character through
   **`GameDirector.ServerGrantXp` and nowhere else** (quests AND kills; combat used to call
   `Sheet.GainXp` directly and never level anyone). Companions auto-spend their points on
   `Progression.PrimaryAbility`. **Campaign rewards live in `CampaignRewards.cs` and nowhere
-  else**: all 27 level bands, quest XP/gold, turn-in loot tiers, and the two embedded
+  else**: all 39 level bands, quest XP/gold, turn-in loot tiers, and the embedded
   side-quest bonuses are consumed directly by Unity and mirrored into zone/quest/catalog
   JSON. `CampaignBalanceTests` pins every mirror, every multi-map stage total, and the
   two-player encounter-XP ceilings. **Loot gets better as the campaign deepens**
@@ -87,6 +88,13 @@ mouse and the self-test drive the very same code.
 - `content/` — zones/quests/monsters/items/loot/dialogue as JSON. Cross-referenced and
   IP-scanned by `ContentValidationTests`. In-code mirrors: `MonsterLibrary`,
   `SpellLibrary`, `LootLibrary` (tests keep JSON and code aligned by id).
+  **The complete campaign is 39 zones / 37 quest files / 23 monsters.** The twelve-zone
+  `level20_expansion.json` adds four original three-stage arcs: Stormglass, Frostbound,
+  Titan's Chain, and Hollow Star. Its required path reaches level 20 during the Dawnspire
+  finale. High-level rewards use tiers 5–7; caster slots persist/replicate across all nine
+  spell levels; fighter Attack actions scale to 2/3/4 swings at levels 5/11/20.
+  `game/neverwinternight.txt` is a copyrighted walkthrough used only as a structural pacing
+  reference. Never copy its names, prose, characters, creatures, locations, or plot beats.
 - `game/Assets/Scripts` — runtime (FishNet networking). Server-authoritative: clients
   send intents (`Cmd*` ServerRpcs), server validates via the rules lib, broadcasts
   results (`Rpc*`). `CombatManager` = combat FSM + grid (click-to-move via `CmdMoveTo`,

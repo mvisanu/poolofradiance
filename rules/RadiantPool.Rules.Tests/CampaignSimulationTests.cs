@@ -12,7 +12,7 @@ namespace RadiantPool.Rules.Tests
     /// (fighter + cleric) fights every encounter from the content JSON in order, with a
     /// long rest between encounters and quest XP on zone completion. Validates the two
     /// design claims the game makes: the campaign is survivable with basic tactics, and
-    /// the XP curve lands the party at level 5 by the final turn-in.</summary>
+    /// the XP curve lands the party at level 20 during the final dungeon.</summary>
     public class CampaignSimulationTests
     {
         private const int MusterXp = 50;
@@ -47,7 +47,19 @@ namespace RadiantPool.Rules.Tests
             ("cinder_gate", 1300),
             ("crownless_citadel", 700),
             ("thornmaze", 800),
-            ("ember_crown_spire", 2000)
+            ("ember_crown_spire", 2000),
+            ("duskmire_crossing", 4000),
+            ("whispervault", 4500),
+            ("stormglass_foundry", 5000),
+            ("frostvein_pass", 5500),
+            ("hoarfire_halls", 14600),
+            ("winter_crown_vault", 20400),
+            ("shattered_coast", 15600),
+            ("colossus_road", 17500),
+            ("titan_foundry", 24900),
+            ("veil_threshold", 7000),
+            ("hollow_star_depths", 3000),
+            ("dawnspire_nexus", 20500)
         };
 
         private static string ContentRoot()
@@ -117,8 +129,7 @@ namespace RadiantPool.Rules.Tests
                     if (active == fighter)
                     {
                         engine.SpendAction();
-                        // At level 5 the SRD fighter attacks twice (Extra Attack).
-                        int swings = fighter.Level >= 5 ? 2 : 1;
+                        int swings = ClassData.AttacksPerAction(fighter.Class, fighter.Level);
                         for (int s = 0; s < swings && target != null; s++)
                         {
                             CombatMath.ResolveAttack(fighter, target, sword, rng);
@@ -133,8 +144,8 @@ namespace RadiantPool.Rules.Tests
                             fighter.IsDown ? fighter :
                             cleric.IsDown ? cleric :
                             fighter.CurrentHp * 3 < fighter.MaxHp ? fighter : null;
-                        int slot = cleric.HasSlot(1) ? 1 : cleric.HasSlot(2) ? 2
-                            : cleric.HasSlot(3) ? 3 : 0;   // upcast when low slots run dry
+                        int slot = Enumerable.Range(1, cleric.SlotsRemaining.Count).Reverse()
+                            .FirstOrDefault(cleric.HasSlot); // high-tier fights demand real upcasts
                         engine.SpendAction();
                         if (hurt != null && slot > 0)
                             SpellEngine.Cast(cleric, SpellLibrary.Get("cure_wounds"),
@@ -175,6 +186,19 @@ namespace RadiantPool.Rules.Tests
         {
             sheet.GainXp(xp);
             while (sheet.CanLevelUp) sheet.LevelUp();
+            // The campaign assumes players use the level-up screen instead of carrying
+            // a growing pile of unspent points into high-tier encounters.
+            var priorities = new[]
+            {
+                Progression.PrimaryAbility(sheet.Class), Ability.Con, Ability.Dex,
+                Ability.Wis, Ability.Str, Ability.Int, Ability.Cha
+            };
+            while (sheet.PendingAbilityPoints > 0)
+            {
+                var ability = priorities.FirstOrDefault(sheet.CanSpendPointOn);
+                if (!sheet.CanSpendPointOn(ability)) break;
+                sheet.SpendAbilityPoint(ability);
+            }
         }
 
         [Theory]
@@ -183,7 +207,7 @@ namespace RadiantPool.Rules.Tests
         [InlineData(777)]
         [InlineData(2026)]
         [InlineData(31337)]
-        public void TwoPlayerParty_CompletesCampaign_AtLevel5(int seed)
+        public void TwoPlayerParty_CompletesCampaign_AtLevel20(int seed)
         {
             var rng = new SeededRng(seed);
             var (fighter, cleric) = Party();
@@ -230,17 +254,17 @@ namespace RadiantPool.Rules.Tests
                 Award(cleric, questXp);
             }
 
-            Assert.Equal(5, fighter.Level);
-            Assert.Equal(5, cleric.Level);
+            Assert.Equal(20, fighter.Level);
+            Assert.Equal(20, cleric.Level);
             Assert.False(fighter.IsDead);
             Assert.False(cleric.IsDead);
             // Difficulty sanity across 81 required fights: basic tactics should still
             // average well below one wipe per location.
-            Assert.True(totalWipes <= 18, $"campaign too hard: {totalWipes} wipes at seed {seed}");
+            Assert.True(totalWipes <= 30, $"campaign too hard: {totalWipes} wipes at seed {seed}");
         }
 
         [Fact]
-        public void XpBudget_RequiredContentAlone_ReachesLevel5()
+        public void XpBudget_RequiredContentAlone_ReachesLevel20()
         {
             // Pure math check, independent of combat outcomes.
             int xp = MusterXp;
@@ -250,8 +274,26 @@ namespace RadiantPool.Rules.Tests
                     .Sum(e => e.units.Sum(u => MonsterLibrary.Get(u).Xp));
                 xp += questXp;
             }
-            Assert.True(xp >= ClassData.XpThresholds[4],
-                $"required-content XP {xp} < level-5 threshold {ClassData.XpThresholds[4]}");
+            Assert.True(xp >= ClassData.XpThresholds[19],
+                $"required-content XP {xp} < level-20 threshold {ClassData.XpThresholds[19]}");
+        }
+
+        [Fact]
+        public void FinalArc_DeliversLevelTwentyBeforeTheLastBoss()
+        {
+            int xp = MusterXp;
+            foreach (var (zoneId, questXp) in ZoneChain)
+            {
+                var encounters = ZoneEncounters(zoneId).Where(e => e.required).ToList();
+                for (int i = 0; i < encounters.Count; i++)
+                {
+                    xp += encounters[i].units.Sum(u => MonsterLibrary.Get(u).Xp);
+                    if (zoneId == "dawnspire_nexus" && i == 0)
+                        Assert.True(xp >= ClassData.XpThresholds[19],
+                            "the normal campaign path must reach level 20 during the finale");
+                }
+                xp += questXp;
+            }
         }
     }
 }

@@ -1395,6 +1395,12 @@ namespace RadiantPool.EditorTools
                 // the same deterministic composition and the world still builds.
                 var surroundSource = PolyPackArt.Has(PolyPackArt.Source.GraveyardNature)
                     ? PolyPackArt.Source.GraveyardNature : PolyPackArt.Source.SimpleNature;
+                // Necropolis/crypt sites read as a walled cemetery, not a generic clearing:
+                // the perimeter becomes graveyard walls (with rocky gaps for sight-lines)
+                // instead of logs and bushes.
+                bool graveyard = (site.Theme == CampaignSiteTheme.Necropolis
+                                  || site.Theme == CampaignSiteTheme.Crypt)
+                                 && PolyPackArt.Has(PolyPackArt.Source.GraveyardNature);
                 for (int i = 0; i < 14; i++)
                 {
                     float angle = (i / 14f) * Mathf.PI * 2f + (float)(random.NextDouble() - 0.5) * 0.24f;
@@ -1403,33 +1409,155 @@ namespace RadiantPool.EditorTools
                     PolyPackArt.Kind kind;
                     if (site.Theme == CampaignSiteTheme.Wilds) kind = i % 4 == 0 ? PolyPackArt.Kind.Bush : PolyPackArt.Kind.Tree;
                     else if (site.Theme == CampaignSiteTheme.Marsh) kind = i % 3 == 0 ? PolyPackArt.Kind.Tree : PolyPackArt.Kind.Bush;
+                    // Two openings in the wall ring: the gate lane on the front (-Z, i≈10/11)
+                    // and a rear frame for the mausoleum (+Z, i≈3/4). Rocks fill the gaps.
+                    else if (graveyard) kind = (i == 3 || i == 4 || i == 10 || i == 11)
+                        ? PolyPackArt.Kind.Rock
+                        : i % 4 == 0 ? PolyPackArt.Kind.Rock : PolyPackArt.Kind.Ruin;
                     else kind = i % 5 == 0 ? PolyPackArt.Kind.Log : i % 2 == 0 ? PolyPackArt.Kind.Rock : PolyPackArt.Kind.Bush;
                     float size = kind == PolyPackArt.Kind.Tree ? 4.5f + (float)random.NextDouble() * 1.8f
                         : kind == PolyPackArt.Kind.Bush ? 0.65f + (float)random.NextDouble() * 0.65f
+                        : kind == PolyPackArt.Kind.Ruin ? 4.0f + (float)random.NextDouble() * 1.1f
                         : 0.9f + (float)random.NextDouble() * 1.1f;
+                    // Walls face tangent to the ring so they line up into a cemetery wall
+                    // instead of scattering at random bearings.
+                    float rot = kind == PolyPackArt.Kind.Ruin
+                        ? -angle * Mathf.Rad2Deg + 90f
+                        : (float)random.NextDouble() * 360f;
                     if (SiteVisual(surroundSource, kind, siteIndex * 31 + i,
-                            site, pos, (float)random.NextDouble() * 360f, size,
+                            site, pos, rot, size,
                             kind == PolyPackArt.Kind.Tree || kind == PolyPackArt.Kind.Bush) == null)
                         FallbackSiteArt(site, i, pos);
                 }
 
-                // Necropolis/crypt destinations get a readable inner cemetery rather than
-                // generic ruins: authored headstones and crosses, collider-free so combat
-                // navigation remains governed only by the invisible arena boundaries.
-                if ((site.Theme == CampaignSiteTheme.Necropolis
-                     || site.Theme == CampaignSiteTheme.Crypt)
-                    && PolyPackArt.Has(PolyPackArt.Source.GraveyardNature))
+                // A designed cemetery rather than a uniform headstone ring: a gate on the
+                // entrance axis, a mausoleum landmark at the back lit warm, flanking death
+                // statues, clustered graves varied in rotation and scale, and abandoned
+                // coffins, skull-stones and corrupted ferns that tell the story of the seal
+                // the quest sends you to close. Every piece is collider-free, so grid combat
+                // is governed only by the invisible arena boundaries.
+                if (graveyard)
                 {
-                    for (int i = 0; i < 12; i++)
+                    var gsrc = PolyPackArt.Source.GraveyardNature;
+
+                    // Cemetery gate on the front (-Z) axis, in the gap the perimeter left.
+                    var gatePos = site.Center + new Vector3(0f, 0f, -20f);
+                    if (SiteVisual(gsrc, PolyPackArt.Kind.Ruin,
+                            PolyPackArt.IndexOf(gsrc, PolyPackArt.Kind.Ruin, "Gate"),
+                            site, gatePos, 0f, 5.0f, false) != null)
+                        SitePointLight(site, 90, gatePos + new Vector3(0f, 0f, 1.6f),
+                            new Color(1f, 0.62f, 0.28f));   // warm lantern over the entrance
+
+                    // The "black mausoleum" the Necropolis quest names — a church tower framed
+                    // in the rear wall gap. It sits just OUTSIDE the arena as a backdrop
+                    // landmark, never between the camera and the fighting centre, so the
+                    // combat x-ray occlusion can't fade it into a translucent blob.
+                    var mausPos = site.Center + new Vector3(0f, 0f, 23f);
+                    var maus = SiteVisual(gsrc, PolyPackArt.Kind.House,
+                        PolyPackArt.IndexOf(gsrc, PolyPackArt.Kind.House, "tower"),
+                        site, mausPos, 180f, 9f, true);
+                    if (maus != null)
                     {
-                        float angle = i * Mathf.PI * 2f / 12f + 0.22f;
-                        float radius = i % 2 == 0 ? 14.8f : 17.2f;
-                        var pos = site.Center + new Vector3(
-                            Mathf.Cos(angle) * radius, 0f, Mathf.Sin(angle) * radius);
-                        SiteVisual(PolyPackArt.Source.GraveyardNature, PolyPackArt.Kind.Grave,
-                            siteIndex * 43 + i, site, pos, -angle * Mathf.Rad2Deg + 90f,
-                            2.2f + (i % 3) * 0.25f, false);
+                        SitePointLight(site, 91, mausPos + new Vector3(0f, 1f, -3f),
+                            new Color(0.62f, 0.44f, 1f));   // violet ritual glow at the door
+                        int statue = PolyPackArt.IndexOf(gsrc, PolyPackArt.Kind.Grave, "statue");
+                        SiteVisual(gsrc, PolyPackArt.Kind.Grave, statue, site,
+                            site.Center + new Vector3(-5f, 0f, 17f), 150f, 2.4f, false);
+                        SiteVisual(gsrc, PolyPackArt.Kind.Grave, statue, site,
+                            site.Center + new Vector3(5f, 0f, 17f), 210f, 2.4f, false);
                     }
+
+                    // Clustered graves — small groups at varied angle/radius/rotation/scale,
+                    // never a perfect ring, kept off the front lane and the combat centre.
+                    var graveRng = new System.Random(siteIndex * 6151 + 29);
+                    float[] clusterAngles = { 0.9f, 2.1f, 3.5f, 4.3f, 5.4f };
+                    int graveNo = 0;
+                    foreach (float ca in clusterAngles)
+                    {
+                        int inCluster = 2 + graveRng.Next(0, 2);
+                        float cr = 9.5f + (float)graveRng.NextDouble() * 4.5f;
+                        for (int j = 0; j < inCluster; j++)
+                        {
+                            float a = ca + (float)(graveRng.NextDouble() - 0.5) * 0.4f;
+                            float r = cr + (float)(graveRng.NextDouble() - 0.5) * 2.4f;
+                            var gp = site.Center + new Vector3(Mathf.Cos(a) * r, 0f, Mathf.Sin(a) * r);
+                            SiteVisual(gsrc, PolyPackArt.Kind.Grave, siteIndex * 43 + graveNo,
+                                site, gp, (float)graveRng.NextDouble() * 360f,
+                                2.0f + (float)graveRng.NextDouble() * 0.7f, false);
+                            graveNo++;
+                        }
+                    }
+
+                    // Environmental storytelling: a disturbed grave spilling an open coffin,
+                    // skull-stones, and corrupted ferns and ivy creeping over the plots.
+                    SiteVisual(gsrc, PolyPackArt.Kind.Grave,
+                        PolyPackArt.IndexOf(gsrc, PolyPackArt.Kind.Grave, "coffin"), site,
+                        site.Center + new Vector3(-8.5f, 0f, -6f), 40f, 2.3f, false);
+                    int skull = PolyPackArt.IndexOf(gsrc, PolyPackArt.Kind.Rock, "skull");
+                    SiteVisual(gsrc, PolyPackArt.Kind.Rock, skull, site,
+                        site.Center + new Vector3(7.5f, 0f, -3f), 120f, 1.4f, false);
+                    SiteVisual(gsrc, PolyPackArt.Kind.Rock, skull, site,
+                        site.Center + new Vector3(-6f, 0f, 8.5f), 250f, 1.2f, false);
+                    int fern = PolyPackArt.IndexOf(gsrc, PolyPackArt.Kind.Bush, "fern");
+                    int ivy = PolyPackArt.IndexOf(gsrc, PolyPackArt.Kind.Bush, "ivy");
+                    for (int i = 0; i < 5; i++)
+                    {
+                        float a = i * 1.256f + 0.5f;
+                        float r = 9f + (i % 3) * 3.5f;
+                        SiteVisual(gsrc, PolyPackArt.Kind.Bush, i == 2 ? ivy : fern, site,
+                            site.Center + new Vector3(Mathf.Cos(a) * r, 0f, Mathf.Sin(a) * r),
+                            i * 63f, 0.9f + (i % 2) * 0.4f, true);
+                    }
+                }
+
+                // Haunted (non-cemetery) sites — the drowned Keep, Blackbriar Manor, and the
+                // Observatory trio — get graveyard ACCENTS layered over their own dressing, not
+                // a walled necropolis: a couple of grave clusters, a watching statue, a
+                // skull-stone, creeping dead ferns and one violet ritual candle. Small props
+                // only, so the combat x-ray can fade an individual one without a looming blob.
+                bool haunted = (site.Theme == CampaignSiteTheme.Keep
+                                || site.Theme == CampaignSiteTheme.Manor
+                                || site.Theme == CampaignSiteTheme.Observatory)
+                               && PolyPackArt.Has(PolyPackArt.Source.GraveyardNature);
+                if (haunted)
+                {
+                    var gsrc = PolyPackArt.Source.GraveyardNature;
+                    var hRng = new System.Random(siteIndex * 5077 + 61);
+                    int gno = 0;
+                    foreach (float ca in new[] { 2.4f, 4.0f })   // tucked to the back corners
+                    {
+                        int n = 2 + hRng.Next(0, 2);
+                        float cr = 10.5f + (float)hRng.NextDouble() * 4f;
+                        for (int j = 0; j < n; j++)
+                        {
+                            float a = ca + (float)(hRng.NextDouble() - 0.5) * 0.5f;
+                            float r = cr + (float)(hRng.NextDouble() - 0.5) * 2f;
+                            SiteVisual(gsrc, PolyPackArt.Kind.Grave, siteIndex * 47 + gno, site,
+                                site.Center + new Vector3(Mathf.Cos(a) * r, 0f, Mathf.Sin(a) * r),
+                                (float)hRng.NextDouble() * 360f,
+                                1.9f + (float)hRng.NextDouble() * 0.6f, false);
+                            gno++;
+                        }
+                    }
+                    var statuePos = site.Center + new Vector3(-9f, 0f, 10f);
+                    SiteVisual(gsrc, PolyPackArt.Kind.Grave,
+                        PolyPackArt.IndexOf(gsrc, PolyPackArt.Kind.Grave, "statue"), site,
+                        statuePos, 130f, 2.3f, false);
+                    SiteVisual(gsrc, PolyPackArt.Kind.Rock,
+                        PolyPackArt.IndexOf(gsrc, PolyPackArt.Kind.Rock, "skull"), site,
+                        site.Center + new Vector3(8.5f, 0f, 9f), 200f, 1.3f, false);
+                    int hfern = PolyPackArt.IndexOf(gsrc, PolyPackArt.Kind.Bush, "fern");
+                    int hivy = PolyPackArt.IndexOf(gsrc, PolyPackArt.Kind.Bush, "ivy");
+                    for (int i = 0; i < 3; i++)
+                    {
+                        float a = 1.9f + i * 1.7f;
+                        float r = 11f + i * 2f;
+                        SiteVisual(gsrc, PolyPackArt.Kind.Bush, i == 1 ? hivy : hfern, site,
+                            site.Center + new Vector3(Mathf.Cos(a) * r, 0f, Mathf.Sin(a) * r),
+                            i * 77f, 0.85f + (i % 2) * 0.35f, true);
+                    }
+                    SitePointLight(site, 92, statuePos + Vector3.up * 0.5f,
+                        new Color(0.55f, 0.4f, 0.95f));   // one violet ritual candle
                 }
 
                 if (DungeonSite(site.Theme))

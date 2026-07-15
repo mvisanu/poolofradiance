@@ -54,7 +54,8 @@ namespace RadiantPool.Rules
                               AbilityScores baseScores, int level = 1)
             : base(id, name, ApplyRace(baseScores, race), baseAc: 10, maxHp: 1)
         {
-            if (level < 1 || level > 5) throw new ArgumentOutOfRangeException(nameof(level));
+            if (level < 1 || level > Progression.MaxLevel)
+                throw new ArgumentOutOfRangeException(nameof(level));
             Race = race;
             Class = cls;
             Level = level;

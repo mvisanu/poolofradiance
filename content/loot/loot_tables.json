@@ -30,6 +30,12 @@
     { "id": "lt_quest_tier3", "gold": "0", "rolls": 1,
       "entries": [ { "weight": 14, "item": "potion_healing" }, { "weight": 18, "item": "greatsword" }, { "weight": 16, "item": "longbow" }, { "weight": 15, "item": "greataxe" }, { "weight": 14, "item": "half_plate" }, { "weight": 9, "item": "studded_leather" }, { "weight": 14, "item": "runed_staff" } ] },
     { "id": "lt_quest_tier4", "gold": "0", "rolls": 2,
-      "entries": [ { "weight": 10, "item": "potion_healing" }, { "weight": 17, "item": "greatsword" }, { "weight": 15, "item": "longbow" }, { "weight": 15, "item": "greataxe" }, { "weight": 16, "item": "half_plate" }, { "weight": 14, "item": "splint" }, { "weight": 13, "item": "runed_staff" } ] }
+      "entries": [ { "weight": 10, "item": "potion_healing" }, { "weight": 17, "item": "greatsword" }, { "weight": 15, "item": "longbow" }, { "weight": 15, "item": "greataxe" }, { "weight": 16, "item": "half_plate" }, { "weight": 14, "item": "splint" }, { "weight": 13, "item": "runed_staff" } ] },
+    { "id": "lt_quest_tier5", "gold": "0", "rolls": 2,
+      "entries": [ { "weight": 5, "item": "potion_healing" }, { "weight": 20, "item": "greatsword" }, { "weight": 18, "item": "longbow" }, { "weight": 18, "item": "greataxe" }, { "weight": 16, "item": "half_plate" }, { "weight": 16, "item": "splint" }, { "weight": 7, "item": "runed_staff" } ] },
+    { "id": "lt_quest_tier6", "gold": "0", "rolls": 3,
+      "entries": [ { "weight": 4, "item": "potion_healing" }, { "weight": 21, "item": "greatsword" }, { "weight": 18, "item": "longbow" }, { "weight": 18, "item": "greataxe" }, { "weight": 18, "item": "half_plate" }, { "weight": 18, "item": "splint" }, { "weight": 3, "item": "runed_staff" } ] },
+    { "id": "lt_quest_tier7", "gold": "0", "rolls": 3,
+      "entries": [ { "weight": 2, "item": "potion_healing" }, { "weight": 22, "item": "greatsword" }, { "weight": 19, "item": "longbow" }, { "weight": 19, "item": "greataxe" }, { "weight": 19, "item": "half_plate" }, { "weight": 19, "item": "splint" } ] }
   ]
 }

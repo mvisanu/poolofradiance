@@ -68,7 +68,9 @@ namespace RadiantPool.Game
             // shops, so it never visibly MOVED — loot landed, the number changed behind a
             // closed panel, and the total read like a placeholder someone had typed in.
             string gold = director.PartyGold.Value.ToString("N0");   // 1,234 — not "1234"
-            float goldW = Mathf.Min(96f, Mathf.Max(64f, 26f + gold.Length * 9f));
+            var coin = Theme.CurrencyGoldTex;                        // licensed gold glyph
+            float goldW = Mathf.Min(112f, Mathf.Max(64f, 26f + gold.Length * 9f))
+                          + (coin != null ? 18f : 0f);
 
             // Fit the bar to the window. If even comfortable minimum-size slots would not
             // fit, combat actions become a first row and utilities a second row.
@@ -106,14 +108,25 @@ namespace RadiantPool.Game
             }
             GUILayout.BeginHorizontal();
 
-            GUILayout.Label(new GUIContent($"<color=#f2ca50><b>{gold}</b>g</color>",
+            // Coin glyph rides left of the amount (licensed art, drawn at a fixed 16 px so
+            // the large baked source never blows up the layout); without the pack the number
+            // keeps its "g" suffix so the purse still reads as gold.
+            GUILayout.Label(new GUIContent(
+                    coin != null ? $"<color=#f2ca50><b>{gold}</b></color>"
+                                 : $"<color=#f2ca50><b>{gold}</b>g</color>",
                     $"{gold} gold — the party's purse"),
                 new GUIStyle(Theme.Body)
                 {
                     richText = true, fontSize = 13, wordWrap = false,
-                    alignment = TextAnchor.MiddleCenter
+                    alignment = TextAnchor.MiddleCenter,
+                    padding = coin != null ? new RectOffset(16, 0, 0, 0) : new RectOffset()
                 },
                 GUILayout.Width(goldW), GUILayout.Height(_slot));
+            if (coin != null)
+            {
+                var gr = GUILayoutUtility.GetLastRect();
+                Theme.CurrencyGlyph(gr.x + 2f, gr.center.y, 16f);
+            }
 
             if (inCombat && !wrapCombat)
             {
@@ -208,7 +221,7 @@ namespace RadiantPool.Game
                 bool usable = myTurn && (spell.Level == 0
                     ? combat.ActionLeft
                     : (spell.IsBonusAction ? combat.BonusLeft : combat.ActionLeft)
-                      && combat.MySlots[Mathf.Clamp(spell.Level - 1, 0, 2)] > 0);
+                      && combat.MySlots.Skip(Mathf.Max(0, spell.Level - 1)).Any(s => s > 0));
                 GUI.enabled = usable;
                 if (Btn(id, spell.Name))
                 {

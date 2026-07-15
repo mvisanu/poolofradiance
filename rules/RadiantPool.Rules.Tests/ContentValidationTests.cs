@@ -200,7 +200,7 @@ namespace RadiantPool.Rules.Tests
                 .ToList();
             try
             {
-                Assert.Equal(25, quests.Count); // 24 catalog quests plus the opening muster.
+                Assert.Equal(37, quests.Count); // 36 catalog quests plus the opening muster.
                 Assert.Equal(quests.Count, quests.Select(d =>
                     d.RootElement.GetProperty("id").GetString()).Distinct().Count());
                 Assert.True(quests.Select(d => d.RootElement.GetProperty("campaignRole").GetString())
@@ -228,15 +228,19 @@ namespace RadiantPool.Rules.Tests
         public void FullCampaignCatalog_CoversEveryPlannedPlaceAndCommissionStructure()
         {
             using var doc = Load(Path.Combine("campaign", "full_campaign.json"));
+            using var expansion = Load(Path.Combine("campaign", "level20_expansion.json"));
             var root = doc.RootElement;
-            var locations = root.GetProperty("locations").EnumerateArray().ToList();
-            var commissions = root.GetProperty("commissions").EnumerateArray().ToList();
-            var sideQuests = root.GetProperty("sideQuests").EnumerateArray().ToList();
+            var locations = root.GetProperty("locations").EnumerateArray()
+                .Concat(expansion.RootElement.GetProperty("locations").EnumerateArray()).ToList();
+            var commissions = root.GetProperty("commissions").EnumerateArray()
+                .Concat(expansion.RootElement.GetProperty("commissions").EnumerateArray()).ToList();
+            var sideQuests = root.GetProperty("sideQuests").EnumerateArray()
+                .Concat(expansion.RootElement.GetProperty("sideQuests").EnumerateArray()).ToList();
 
             // Multi-level strongholds are separate playable map spaces, not one journal
             // label pretending that an approach, underworks, maze, and tower all exist.
-            Assert.Equal(28, locations.Count);
-            Assert.Equal(15, commissions.Count);
+            Assert.Equal(40, locations.Count);
+            Assert.Equal(27, commissions.Count);
             Assert.True(sideQuests.Count >= 9);
 
             var locationIds = locations.Select(l => l.GetProperty("id").GetString()!)
@@ -250,7 +254,7 @@ namespace RadiantPool.Rules.Tests
             Assert.Contains(locations, l => l.GetProperty("kind").GetString() == "castle_maze");
             Assert.Contains(locations, l => l.GetProperty("kind").GetString() == "final_tower");
 
-            Assert.Equal(Enumerable.Range(1, 15),
+            Assert.Equal(Enumerable.Range(1, 27),
                 commissions.Select(q => q.GetProperty("order").GetInt32()));
             var mainIds = commissions.Select(q => q.GetProperty("id").GetString()!).ToList();
             Assert.Equal(mainIds.Count, mainIds.Distinct().Count());
@@ -276,7 +280,7 @@ namespace RadiantPool.Rules.Tests
             var zoneIds = Directory.EnumerateFiles(Path.Combine(ContentRoot, "zones"), "*.json")
                 .Select(f => JsonDocument.Parse(File.ReadAllText(f)).RootElement
                     .GetProperty("id").GetString()!).ToHashSet();
-            Assert.Equal(27, zoneIds.Count);
+            Assert.Equal(39, zoneIds.Count);
             Assert.Equal(locationIds.Where(id => id != "council_quarter").ToHashSet(), zoneIds);
 
             var authoredQuestIds = QuestIds();

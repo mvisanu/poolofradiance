@@ -31,7 +31,7 @@ namespace RadiantPool.Rules.Tests
         {
             var files = Directory.EnumerateFiles(Path.Combine(ContentRoot, "zones"), "*.json")
                 .ToList();
-            Assert.Equal(27, files.Count);
+            Assert.Equal(39, files.Count);
             Assert.Equal(files.Count, CampaignRewardLibrary.All.Count);
 
             foreach (string file in files)
@@ -104,7 +104,10 @@ namespace RadiantPool.Rules.Tests
             // These are raw canonical XP ceilings per encounter, not altered stat blocks.
             var maxEncounterXp = new Dictionary<int, int>
             {
-                [1] = 200, [2] = 600, [3] = 800, [4] = 1000, [5] = 1200
+                [1] = 200, [2] = 600, [3] = 800, [4] = 1000, [5] = 1200,
+                [9] = 6000, [10] = 6000, [11] = 6500, [12] = 12000,
+                [14] = 14000, [15] = 11000, [17] = 13000,
+                [18] = 17000, [19] = 34000
             };
 
             foreach (string file in Directory.EnumerateFiles(
@@ -135,7 +138,10 @@ namespace RadiantPool.Rules.Tests
             try
             {
                 using var catalog = Load("campaign", "full_campaign.json");
-                foreach (var location in catalog.RootElement.GetProperty("locations").EnumerateArray())
+                using var expansion = Load("campaign", "level20_expansion.json");
+                var locations = catalog.RootElement.GetProperty("locations").EnumerateArray()
+                    .Concat(expansion.RootElement.GetProperty("locations").EnumerateArray());
+                foreach (var location in locations)
                 {
                     string id = location.GetProperty("id").GetString()!;
                     if (id == "council_quarter") continue;
@@ -147,7 +153,9 @@ namespace RadiantPool.Rules.Tests
                 }
 
                 var entries = catalog.RootElement.GetProperty("commissions").EnumerateArray()
-                    .Concat(catalog.RootElement.GetProperty("sideQuests").EnumerateArray());
+                    .Concat(catalog.RootElement.GetProperty("sideQuests").EnumerateArray())
+                    .Concat(expansion.RootElement.GetProperty("commissions").EnumerateArray())
+                    .Concat(expansion.RootElement.GetProperty("sideQuests").EnumerateArray());
                 foreach (var entry in entries)
                 {
                     string id = entry.GetProperty("id").GetString()!;

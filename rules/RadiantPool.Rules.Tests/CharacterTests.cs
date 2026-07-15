@@ -66,11 +66,13 @@ namespace RadiantPool.Rules.Tests
         public void SpellSlots_FollowFullCasterTable()
         {
             var w = Wizard(1);
-            Assert.Equal(new[] { 2, 0, 0 }, w.SlotsRemaining);
+            Assert.Equal(new[] { 2, 0, 0, 0, 0, 0, 0, 0, 0 }, w.SlotsRemaining);
             var w5 = Wizard(5);
-            Assert.Equal(new[] { 4, 3, 2 }, w5.SlotsRemaining);
-            var f = Fighter(5);
-            Assert.Equal(new[] { 0, 0, 0 }, f.SlotsRemaining);
+            Assert.Equal(new[] { 4, 3, 2, 0, 0, 0, 0, 0, 0 }, w5.SlotsRemaining);
+            var w20 = Wizard(20);
+            Assert.Equal(new[] { 4, 3, 3, 3, 3, 2, 2, 1, 1 }, w20.SlotsRemaining);
+            var f = Fighter(20);
+            Assert.Equal(new[] { 0, 0, 0, 0, 0, 0, 0, 0, 0 }, f.SlotsRemaining);
         }
 
         [Fact]
@@ -109,13 +111,13 @@ namespace RadiantPool.Rules.Tests
         }
 
         [Fact]
-        public void ProficiencyBonus_BecomesThreeAtLevel5()
+        public void ProficiencyBonus_ReachesSixAtLevel17()
         {
             var f = Fighter(1);
-            f.GainXp(6500);
+            f.GainXp(225000);
             while (f.CanLevelUp) f.LevelUp();
-            Assert.Equal(5, f.Level);
-            Assert.Equal(3, f.ProficiencyBonus);
+            Assert.Equal(17, f.Level);
+            Assert.Equal(6, f.ProficiencyBonus);
         }
 
         [Fact]
@@ -126,7 +128,20 @@ namespace RadiantPool.Rules.Tests
             Assert.Equal(3, ClassData.LevelForXp(900));
             Assert.Equal(4, ClassData.LevelForXp(2700));
             Assert.Equal(5, ClassData.LevelForXp(6500));
-            Assert.Equal(5, ClassData.LevelForXp(999999));
+            Assert.Equal(10, ClassData.LevelForXp(64000));
+            Assert.Equal(15, ClassData.LevelForXp(165000));
+            Assert.Equal(20, ClassData.LevelForXp(355000));
+            Assert.Equal(20, ClassData.LevelForXp(999999));
+        }
+
+        [Fact]
+        public void FighterExtraAttack_ScalesAtFiveElevenAndTwenty()
+        {
+            Assert.Equal(1, ClassData.AttacksPerAction(CharacterClass.Fighter, 4));
+            Assert.Equal(2, ClassData.AttacksPerAction(CharacterClass.Fighter, 5));
+            Assert.Equal(3, ClassData.AttacksPerAction(CharacterClass.Fighter, 11));
+            Assert.Equal(4, ClassData.AttacksPerAction(CharacterClass.Fighter, 20));
+            Assert.Equal(1, ClassData.AttacksPerAction(CharacterClass.Rogue, 20));
         }
     }
 }

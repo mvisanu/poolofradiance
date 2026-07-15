@@ -50,7 +50,7 @@ namespace RadiantPool.Rules.Tests
         [InlineData(3, 2)]
         [InlineData(4, 3)]
         [InlineData(5, 4)]
-        [InlineData(99, 4)]
+        [InlineData(99, 19)]
         public void QuestMonsterLevel_IsOneBelowHero_WithLevelOneFloor(int hero, int monster)
         {
             Assert.Equal(monster, Difficulty.TargetMonsterLevel(hero));

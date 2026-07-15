@@ -25,7 +25,7 @@ namespace RadiantPool.Rules
         public EffectOpKind Kind { get; set; }
         public string? Dice { get; set; }                 // "1d10", scaling handled below
         public string? DicePerExtraSlotLevel { get; set; }// e.g. Burning Hands "1d6"
-        public string? DicePerCasterTier { get; set; }    // cantrip scaling at char level 5 ("1d10")
+        public string? DicePerCasterTier { get; set; }    // extra die at character levels 5, 11, and 17
         public DamageType? DamageType { get; set; }
         public ConditionType? Condition { get; set; }
         public int ConditionRounds { get; set; } = -1;
@@ -117,8 +117,10 @@ namespace RadiantPool.Rules
 
             var events = new List<SpellEvent>();
             int upcast = spell.Level > 0 ? slotLevel - spell.Level : 0;
-            // Cantrip damage tier: +1 die at character level 5.
-            int cantripTier = spell.Level == 0 && caster.Level >= 5 ? 1 : 0;
+            // Cantrip damage gains one die at character levels 5, 11, and 17.
+            int cantripTier = spell.Level == 0
+                ? (caster.Level >= 17 ? 3 : caster.Level >= 11 ? 2 : caster.Level >= 5 ? 1 : 0)
+                : 0;
 
             foreach (var target in ResolveTargets(spell, targets, upcast))
             {

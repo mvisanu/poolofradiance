@@ -10,8 +10,12 @@ SUCCESS CRITERIA:
     their own character, and complete the first zone-clearing quest together.
   - Real-time exploration (WASD + WoW-style mouse camera) transitions cleanly into
     turn-based tactical grid combat when enemies are engaged — synced in multiplayer.
-  - Full SRD 5.1 character depth: 6 ability scores, 4 classes (fighter/wizard/cleric/
-    rogue), levels 1–5, spell slots, AC/HP, saving throws, death saves.
+  - Full SRD 5.1 character progression: 6 ability scores, 4 classes (fighter/wizard/
+    cleric/rogue), levels 1–20, full proficiency/XP/spell-slot tables, AC/HP, saving
+    throws, death saves, cantrip scaling, and fighter extra attacks.
+  - A complete authored path reaches level 20 through 39 playable locations, including
+    four multi-stage high-level arcs, twelve new quests, twelve new SRD-backed monster
+    families, branching site decisions, dungeon descents, and a three-boss finale.
   - 60fps on a mid-range gaming PC; server-authoritative HP/position/loot so basic
     state can't be trivially cheated.
   - A non-technical friend can install, join via code, and play with no manual.
@@ -79,7 +83,7 @@ PROCESS — do these as separate checkpoints, wait for my OK between each:
   PHASE 3 — BUILD: Remaining workflows one at a time, playable after each:
     3a. Rules library — character model, dice, attacks, AC/HP, 10 SRD spells, unit tests.
     3b. Turn-based grid combat, one monster type, synced for 2 players.
-    3c. Character creation + level-up, levels 1–5, four classes.
+    3c. Character creation + level-up, levels 1–20, four classes.
     3d. Quest loop — hub town, quest-giver, first clearable zone, journal, rewards.
     3e. Inventory, equipment, vendors, loot tables, rest system.
     3f. Art pass — swap gray-box for stylized packs, lighting, UI theme.

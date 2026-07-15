@@ -75,9 +75,9 @@ public entry point takes an injected `IRng`. Unit-tested with xUnit, runs in CI 
 RadiantPool.Rules/
   Dice.cs            // Roll("2d6+3", rng) → RollResult { Total, Dice[], Modifier }
   Abilities.cs       // Str/Dex/Con/Int/Wis/Cha, modifier = (score-10)/2 floor
-  CharacterSheet.cs  // race, class, level 1..5, abilities, prof bonus, AC, HP, speed,
+  CharacterSheet.cs  // race, class, level 1..20, abilities, prof bonus, AC, HP, speed,
                      // saving-throw/skill proficiencies, spell slots, known/prepared spells
-  Classes/           // Fighter, Wizard, Cleric, Rogue — level tables 1–5 as data
+  Classes/           // Fighter, Wizard, Cleric, Rogue — level tables 1–20 as data
   CombatMath.cs      // ResolveAttack(attacker, target, attack) → AttackResult
                      //   (adv/disadv, crit on nat 20, auto-miss nat 1)
                      // ResolveSave(target, dc, ability) → SaveResult
@@ -91,7 +91,7 @@ RadiantPool.Rules/
   TurnEngine.cs      // initiative roll + order, per-turn budget {Move, Action, Bonus},
                      //   ValidateAction(state, intent) → Ok | RuleViolation(reason)
                      //   ExecuteAction(state, intent, rng) → ActionEvents[]
-  Progression.cs     // XP thresholds L1–5, level-up deltas (HP, slots, features)
+  Progression.cs     // XP thresholds L1–20, level-up deltas (HP, slots, features)
   Loot.cs            // roll on LootTable JSON → item instances + gold
 ```
 
@@ -111,6 +111,12 @@ prevents a missing animation event from stalling the turn.
 
 10 SRD spells for 3a: Fire Bolt, Sacred Flame, Magic Missile, Burning Hands, Cure Wounds,
 Healing Word, Bless, Shield, Sleep, Guiding Bolt.
+
+The level-20 expansion is split into a base catalog and `content/campaign/level20_expansion.json`.
+Together they define 39 playable zones. Four original three-stage arcs progress through
+Duskmire/Stormglass, Frostvein, the Titan's Chain, and the Hollow Star finale. Runtime site
+plans use the same reward authority as JSON, old completed saves unlock the appended graph on
+load, and `CampaignSimulationTests` proves the required two-player path reaches level 20.
 
 ---
 

@@ -43,7 +43,14 @@ namespace RadiantPool.EditorTools
                 { "scroll_track", "bar" },
                 { "scroll_thumb", "thumb" },
                 { "tab", "button" },
-                { "tab_active", "primary" }
+                { "tab_active", "primary" },
+                { "statbar_overlay", "bar" },
+                { "xpbar", "bar" },
+                { "xpbar_fill", "primary" },
+                { "currency_gold", "slot" },
+                { "divider", "panel_plain" },
+                { "decoration", "panel_plain" },
+                { "glow", "panel_plain" }
             };
 
         // UI 7 ships its controls as composable primitives rather than state-complete IMGUI
@@ -69,7 +76,14 @@ namespace RadiantPool.EditorTools
                 { "scroll_track", "/textures/miscellaneous/loading bar/loadingbar_background.png" },
                 { "scroll_thumb", "/textures/controls/scroll bars/scrollbar_handle.png" },
                 { "tab", "/textures/hud/chat/tabs/chat_tab_background.png" },
-                { "tab_active", "/textures/hud/chat/tabs/chat_tab_active.png" }
+                { "tab_active", "/textures/hud/chat/tabs/chat_tab_active.png" },
+                { "statbar_overlay", "/textures/hud/action bar/stat bar/statbar_overlay.png" },
+                { "xpbar", "/textures/hud/action bar/xp bar/xpbar_background.png" },
+                { "xpbar_fill", "/textures/hud/action bar/xp bar/xpbar_fill.png" },
+                { "currency_gold", "/textures/miscellaneous/currencies/currency_gold.png" },
+                { "divider", "/textures/controls/separators/separator_horizontal.png" },
+                { "decoration", "/textures/miscellaneous/general/general_decoration.png" },
+                { "glow", "/textures/miscellaneous/general/general_glow.png" }
             };
 
         [MenuItem("RadiantPool/Art/Rebuild RPG MMO UI 7 Skin")]

@@ -84,7 +84,10 @@ namespace RadiantPool.Rules
             if (threat <= 1) return "lt_quest_tier1";
             if (threat == 2) return "lt_quest_tier2";
             if (threat == 3) return "lt_quest_tier3";
-            return "lt_quest_tier4";
+            if (characterLevel <= 8) return "lt_quest_tier4";
+            if (characterLevel <= 12) return "lt_quest_tier5";
+            if (characterLevel <= 16) return "lt_quest_tier6";
+            return "lt_quest_tier7";
         }
 
         public static bool IsQuestTable(string tableId) =>
@@ -168,6 +171,17 @@ namespace RadiantPool.Rules
                     { (10, "potion_healing"), (17, "greatsword"), (15, "longbow"),
                       (15, "greataxe"), (16, "half_plate"), (14, "splint"),
                       (13, "runed_staff") }),
+                new LootTable("lt_quest_tier5", "0", 2, new (int, string?)[]
+                    { (5, "potion_healing"), (20, "greatsword"), (18, "longbow"),
+                      (18, "greataxe"), (16, "half_plate"), (16, "splint"),
+                      (7, "runed_staff") }),
+                new LootTable("lt_quest_tier6", "0", 3, new (int, string?)[]
+                    { (4, "potion_healing"), (21, "greatsword"), (18, "longbow"),
+                      (18, "greataxe"), (18, "half_plate"), (18, "splint"),
+                      (3, "runed_staff") }),
+                new LootTable("lt_quest_tier7", "0", 3, new (int, string?)[]
+                    { (2, "potion_healing"), (22, "greatsword"), (19, "longbow"),
+                      (19, "greataxe"), (19, "half_plate"), (19, "splint") }),
             };
             return tables.ToDictionary(t => t.Id);
         }

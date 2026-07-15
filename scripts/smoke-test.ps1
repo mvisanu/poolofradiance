@@ -114,7 +114,7 @@ $travelSave = Join-Path $logDir "travelsave"
 Remove-Item -Recurse -Force $travelSave -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $travelSave | Out-Null
 $travelProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Fara","-autohost","-traveltest","-savedir",$travelSave,"-logFile",$travelLog -PassThru
-Start-Sleep -Seconds 22
+Start-Sleep -Seconds 34
 Stop-Process -Id $travelProc.Id -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 $travelText = Get-Content $travelLog -Raw
@@ -185,9 +185,9 @@ $checks = @(
     @{ Name = "no failed atmosphere assertion"; Ok = $hostText -notmatch "\[AtmosphereTest\] FAIL" },
     @{ Name = "quest turn-in guidance points to Council Hall"; Ok = $hostText -match "\[QuestGuidanceTest\] PASS" },
     @{ Name = "no failed quest-guidance assertion"; Ok = $hostText -notmatch "\[QuestGuidanceTest\] FAIL" },
-    @{ Name = "world atlas nests every destination inside six campaign regions"; Ok = $hostText -match "\[WorldMap\] PASS - 6 regions contain 27/27 campaign destinations" },
+    @{ Name = "world atlas nests every destination inside ten campaign regions"; Ok = $hostText -match "\[WorldMap\] PASS - 10 regions contain 39/39 campaign destinations" },
     @{ Name = "world atlas hierarchy has no structural failure"; Ok = $hostText -notmatch "\[WorldMap\] FAIL" },
-    @{ Name = "every creature mapping produces a visible real model"; Ok = $hostText -match "\[CreatureTest\] PASS - all creature visuals 11/11 visible, mappings 11/11" },
+    @{ Name = "every creature mapping produces a visible real model"; Ok = $hostText -match "\[CreatureTest\] PASS - all creature visuals 23/23 visible, mappings 23/23" },
     @{ Name = "no failed creature visual or capsule fallback"; Ok = $hostText -notmatch "\[CreatureTest\] FAIL|falling back to a capsule" },
     @{ Name = "armed combat NPC weapons are visible"; Ok = $fightText -match "\[WeaponTest\] PASS - combat NPCs" },
     @{ Name = "no failed combat weapon assertion"; Ok = $fightText -notmatch "\[WeaponTest\] FAIL" },
@@ -202,10 +202,10 @@ $checks = @(
     @{ Name = "save migration has no runtime exception"; Ok = $migrationText -notmatch "Exception|\[CampaignMigration\] FAIL" },
     @{ Name = "Watcher Below E panel survives all distant objective updates"; Ok = $siteActionText -match "\[SiteActionInputTest\] PASS.+E opened the spectral-watch choice.+decision recorded as 'Honor their oath'" },
     @{ Name = "Watcher Below site action has no runtime exception"; Ok = $siteActionText -notmatch "Exception|\[SiteActionInputTest\] FAIL" },
-    @{ Name = "campaign reaches every site and pays side/main quest rewards"; Ok = $travelText -match "\[TravelTest\] PASS - 27/27 sites reached; 27/27 encounter sets authored; 27/27 objectives anchored; site objective resolved; side/main rewards paid;.*27/27 hub returns" },
-    @{ Name = "all installed environment packs dress the campaign"; Ok = $travelText -match "environment art RPG x[1-9][0-9]*, nature x[1-9][0-9]*, graveyard/nature2 x[3-9][0-9]{2,}, dungeon x[1-9][0-9]*, painted ground x22" },
+    @{ Name = "campaign reaches every site and pays side/main quest rewards"; Ok = $travelText -match "\[TravelTest\] PASS - 39/39 sites reached; 39/39 encounter sets authored; 39/39 objectives anchored; site objective resolved; side/main rewards paid;.*39/39 hub returns" },
+    @{ Name = "all installed environment packs dress the campaign"; Ok = $travelText -match "environment art RPG x[1-9][0-9]*, nature x[1-9][0-9]*, graveyard/nature2 x[3-9][0-9]{2,}, dungeon x[1-9][0-9]*, painted ground x34" },
     @{ Name = "campaign travel has no runtime exception"; Ok = $travelText -notmatch "Exception|\[TravelTest\] FAIL" },
-    @{ Name = "level-5 hero spawns level-4 quest monsters and tier-4 rewards"; Ok = $scalingText -match "\[ScalingTest\] PASS - hero L5 spawned monsters L4; authored tier1 -> tier4 items x2" },
+    @{ Name = "level-20 hero spawns level-19 quest monsters and tier-7 rewards"; Ok = $scalingText -match "\[ScalingTest\] PASS - hero L20 spawned monsters L19; authored tier1 -> tier7 items x3" },
     @{ Name = "caster receives a real level-matched weapon upgrade"; Ok = $scalingText -match "Runed Staff caster upgrade ready" },
     @{ Name = "encounter scaling has no runtime exception"; Ok = $scalingText -notmatch "Exception|\[ScalingTest\] FAIL" },
     @{ Name = "one click on a distant enemy closes in and attacks"; Ok = $fightText -match "\[AttackTest\] PASS" },

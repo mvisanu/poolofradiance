@@ -103,7 +103,7 @@ namespace RadiantPool.Game
             Coast = coast, Places = places
         };
 
-        // Six readable landmasses mirror the actual campaign hierarchy. The nested
+        // Ten readable landmasses mirror the actual campaign hierarchy. The nested
         // Observatory floors remain one region; the five Aldenmere districts surround
         // Council Hall; and the final four commissions form one eastward ascent.
         private static readonly AtlasRegion[] AtlasRegions =
@@ -169,15 +169,50 @@ namespace RadiantPool.Game
 
             Ar("EMBER CROWN", .81f, .205f, new Color(.50f, .22f, .25f), new[]
             {
-                new Vector2(.66f,.19f), new Vector2(.76f,.095f), new Vector2(.90f,.135f),
-                new Vector2(.965f,.31f), new Vector2(.91f,.49f), new Vector2(.95f,.69f),
-                new Vector2(.84f,.91f), new Vector2(.70f,.835f), new Vector2(.635f,.64f),
-                new Vector2(.69f,.43f)
+                new Vector2(.65f,.38f), new Vector2(.72f,.275f), new Vector2(.84f,.285f),
+                new Vector2(.90f,.405f), new Vector2(.855f,.61f), new Vector2(.72f,.63f),
+                new Vector2(.64f,.52f)
             },
                 Ap("cinder_gate", "Cinder Gate", .72f, .52f, 0f, 9f),
                 Ap("crownless_citadel", "Crownless Citadel", .79f, .405f, 0f, -13f),
                 Ap("thornmaze", "Thornmaze", .865f, .56f, 0f, 9f),
-                Ap("ember_crown_spire", "Crown Spire", .865f, .30f, 0f, -13f))
+                Ap("ember_crown_spire", "Crown Spire", .84f, .325f, 0f, -13f)),
+
+            Ar("STORMGLASS MARCH", .70f, .055f, new Color(.32f, .49f, .55f), new[]
+            {
+                new Vector2(.625f,.06f), new Vector2(.70f,.025f), new Vector2(.805f,.055f),
+                new Vector2(.83f,.22f), new Vector2(.765f,.295f), new Vector2(.65f,.265f)
+            },
+                Ap("duskmire_crossing", "Duskmire", .67f, .15f, -2f, -13f),
+                Ap("whispervault", "Whispervault", .73f, .225f, 0f, 9f),
+                Ap("stormglass_foundry", "Stormglass", .785f, .13f, 0f, -13f)),
+
+            Ar("FROSTVEIN", .90f, .055f, new Color(.55f, .66f, .72f), new[]
+            {
+                new Vector2(.825f,.055f), new Vector2(.90f,.02f), new Vector2(.975f,.07f),
+                new Vector2(.985f,.29f), new Vector2(.93f,.39f), new Vector2(.855f,.335f)
+            },
+                Ap("frostvein_pass", "Frostvein Pass", .875f, .145f, -4f, -13f),
+                Ap("hoarfire_halls", "Hoarfire Halls", .93f, .225f, -2f, 9f),
+                Ap("winter_crown_vault", "Winter Vault", .90f, .325f, -3f, 9f)),
+
+            Ar("TITAN REACH", .70f, .68f, new Color(.43f, .39f, .34f), new[]
+            {
+                new Vector2(.62f,.69f), new Vector2(.69f,.605f), new Vector2(.80f,.63f),
+                new Vector2(.83f,.88f), new Vector2(.76f,.975f), new Vector2(.64f,.94f)
+            },
+                Ap("shattered_coast", "Shattered Coast", .665f, .77f, 1f, -13f),
+                Ap("colossus_road", "Colossus Road", .72f, .875f, 0f, 9f),
+                Ap("titan_foundry", "Titan Foundry", .785f, .775f, 0f, -13f)),
+
+            Ar("DAWNSPIRE VEIL", .89f, .655f, new Color(.38f, .28f, .49f), new[]
+            {
+                new Vector2(.825f,.67f), new Vector2(.90f,.57f), new Vector2(.98f,.625f),
+                new Vector2(.985f,.91f), new Vector2(.93f,.98f), new Vector2(.84f,.93f)
+            },
+                Ap("veil_threshold", "Veil Threshold", .865f, .75f, -2f, -13f),
+                Ap("hollow_star_depths", "Star Depths", .92f, .84f, -2f, 9f),
+                Ap("dawnspire_nexus", "Dawnspire", .955f, .925f, -8f, -13f))
         };
 
         /// <summary>Map size in logical units. The normal map gives ground back on a short
@@ -765,7 +800,7 @@ namespace RadiantPool.Game
             bool unique = mapped.Length == actual.Count;
             bool covered = expected.SetEquals(actual);
             int routes = director.Zones.Sum(z => Mathf.Max(1, z.PrerequisiteZoneIds.Length));
-            if (unique && covered && AtlasRegions.Length == 6)
+            if (unique && covered && AtlasRegions.Length == 10)
                 Debug.Log($"[WorldMap] PASS - {AtlasRegions.Length} regions contain " +
                           $"{actual.Count}/{expected.Count} campaign destinations; " +
                           $"{routes} prerequisite routes charted");

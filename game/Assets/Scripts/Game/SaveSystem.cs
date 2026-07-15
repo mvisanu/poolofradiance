@@ -35,7 +35,7 @@ namespace RadiantPool.Game
         public int ClassIndex, RaceIndex;
         public int Str, Dex, Con, Int, Wis, Cha;   // pre-racial base scores
         public int Xp, CurrentHp;
-        public int[] SlotsRemaining = { 0, 0, 0 };
+        public int[] SlotsRemaining = { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
         /// <summary>Points spent per ability, in Ability order — NOT the final scores. The
         /// scores are derived (base + race + these), and derived state is never persisted:
@@ -146,7 +146,7 @@ namespace RadiantPool.Game
         public static CharacterSheet Restore(SavedCharacter saved)
         {
             saved ??= new SavedCharacter();
-            saved.SlotsRemaining ??= new[] { 0, 0, 0 };
+            saved.SlotsRemaining ??= new[] { 0, 0, 0, 0, 0, 0, 0, 0, 0 };
             saved.AbilityIncreases ??= new[] { 0, 0, 0, 0, 0, 0 };
             var build = new CharacterBuild
             {
@@ -175,7 +175,11 @@ namespace RadiantPool.Game
                 }
 
             sheet.RestoreAllSlots();
-            for (int lvl = 1; lvl <= 3; lvl++)
+            // Old saves contain three entries; newly unlocked higher-level slots start
+            // full. New saves restore spent slots across all nine caster levels.
+            int savedSlotLevels = Mathf.Min(saved.SlotsRemaining.Length,
+                sheet.SlotsRemaining.Count);
+            for (int lvl = 1; lvl <= savedSlotLevels; lvl++)
             {
                 int spend = sheet.SlotsRemaining[lvl - 1]
                             - Mathf.Clamp(saved.SlotsRemaining[lvl - 1], 0,

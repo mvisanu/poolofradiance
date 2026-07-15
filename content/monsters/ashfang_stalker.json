@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"ashfang_stalker","name":"Ashfang Stalker","srdRef":"Dire Wolf (SRD 5.1)","size":"Large","ac":14,"hpDice":"5d10+10","speed":50,"abilities":{"str":17,"dex":15,"con":15,"int":3,"wis":12,"cha":7},"attacks":[{"name":"Ashfang Bite","toHit":5,"damage":"2d6+3","damageType":"piercing","rangeFeet":5}],"xp":200,"ai":"hunter","lootTable":"lt_beast_den"}

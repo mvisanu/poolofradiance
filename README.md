@@ -2,7 +2,8 @@
 
 A 3D online co-op party CRPG for 2–4 friends: create characters, take quests from the
 hub town of **Aldenmere**, clear the ruined quarters block-by-block (turn-based tactical
-combat, SRD 5.1 rules), level 1→5, and free the city from the Hollow Flame. Structure
+combat, SRD 5.1 rules), progress from level 1→20 across 39 playable locations, and free
+the city and its surrounding realms from the Hollow Flame and Hollow Star. Structure
 inspired by classic late-80s party CRPGs; all names, setting, and lore are original.
 Explicitly **not** an MMO — think Baldur's Gate 3 / Solasta co-op sessions with a
 WoW-style camera.

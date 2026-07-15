@@ -124,6 +124,34 @@ namespace RadiantPool.Game
                 case "ember_crown_spire":
                     action = "Decide the defeated lieutenant's fate and claim the crown seal.";
                     choiceA = "Accept surrender"; choiceB = "Demand final justice"; return;
+                case "duskmire_crossing":
+                    action = "Choose how the crossing will be secured.";
+                    choiceA = "Evacuate the fenfolk"; choiceB = "Fortify their homes"; return;
+                case "whispervault":
+                    action = "Settle the oath bound into the lowest crypt.";
+                    choiceA = "Release the wardens"; choiceB = "Renew the vigil"; return;
+                case "stormglass_foundry":
+                    action = "Decide the fate of the stormglass engine.";
+                    choiceA = "Repair the engine"; choiceB = "Shatter its heart"; return;
+                case "frostvein_pass": action = "Light the three refuge beacons."; return;
+                case "hoarfire_halls":
+                    action = "Choose who receives the recovered winter stores.";
+                    choiceA = "Supply the frontier"; choiceB = "Arm the Council"; return;
+                case "winter_crown_vault": action = "Seal the rime fissure beneath the vault."; return;
+                case "shattered_coast":
+                    action = "Set the terms of the coastward alliance.";
+                    choiceA = "Share command"; choiceB = "Guarantee independence"; return;
+                case "colossus_road": action = "Free the road crews trapped in the titanworks."; return;
+                case "titan_foundry":
+                    action = "Choose how the last colossus forge will fall.";
+                    choiceA = "Overload the crucible"; choiceB = "Claim the controls"; return;
+                case "veil_threshold": action = "Close the three breaches in the dusk veil."; return;
+                case "hollow_star_depths":
+                    action = "Choose which memory anchors the failing seal.";
+                    choiceA = "The city's first dawn"; choiceB = "The party's oath"; return;
+                case "dawnspire_nexus":
+                    action = "End the Hollow Star and decide the nexus's future.";
+                    choiceA = "Seal it forever"; choiceB = "Turn it toward the dawn"; return;
                 default: action = ""; return;
             }
         }
@@ -323,11 +351,119 @@ namespace RadiantPool.Game
             new CampaignSitePlan("ember_crown_spire", "Ember Crown Spire",
                 "The Ember Crown: Final Ascent",
                 Travel("Ember Crown Spire", "Take the secret stair, defeat the last guard, and end the campaign at the crown chamber."),
-                new[] { "thornmaze" }, false, true,
+                new[] { "thornmaze" }, false, false,
                 new Vector3(150f, 0f, 150f), CampaignSiteTheme.Spire,
                 E("stair", "the secret stair", "kindled_zealot", "kindled_zealot", "orc"),
                 E("guard", "the ember guard", "orc_warchief", "kindled_zealot", "kindled_zealot"),
-                E("crown", "the ember crown chamber", "hollow_warden", "orc_warchief", "kindled_zealot"))
+                E("crown", "the ember crown chamber", "hollow_warden", "orc_warchief", "kindled_zealot")),
+
+            new CampaignSitePlan("duskmire_crossing", "Duskmire Crossing",
+                "The Stormglass Engine: Crossing",
+                Travel("Duskmire Crossing", "Investigate the vanished caravans, defend the fenfolk, and open the road to the Whispervault."),
+                new[] { "ember_crown_spire" }, false, false,
+                new Vector3(-150f, 0f, 205f), CampaignSiteTheme.Marsh,
+                E("trail", "the ashfang trail", "ashfang_stalker", "ashfang_stalker", "ashfang_stalker"),
+                E("bridge", "the broken bridge", "ironbound_veteran", "ironbound_veteran", "ashfang_stalker"),
+                E("crossing", "the flooded crossing", "mire_troll", "ashfang_stalker", "ashfang_stalker")),
+
+            new CampaignSitePlan("whispervault", "The Whispervault",
+                "The Stormglass Engine: Whispervault",
+                Travel("the Whispervault", "Descend through the speaking crypts and discover who awakened their oathbound dead."),
+                new[] { "duskmire_crossing" }, false, false,
+                new Vector3(-100f, 0f, 205f), CampaignSiteTheme.Crypt,
+                E("vestibule", "the oathbound vestibule", "ironbound_veteran", "veil_adept", "grave_wraith"),
+                E("choir", "the whispering choir", "grave_wraith", "grave_wraith", "ironbound_veteran"),
+                E("seal", "the lowest seal", "grave_wraith", "mire_troll", "ironbound_veteran")),
+
+            new CampaignSitePlan("stormglass_foundry", "Stormglass Foundry",
+                "The Stormglass Engine: Foundry",
+                Travel("Stormglass Foundry", "Breach the furnace galleries and stop the storm engine before it drowns the eastern road."),
+                new[] { "whispervault" }, false, false,
+                new Vector3(-50f, 0f, 205f), CampaignSiteTheme.Redoubt,
+                E("gate", "the thunder gate", "ironbound_veteran", "ironbound_veteran", "storm_magus"),
+                E("furnace", "the storm furnace", "mire_troll", "storm_magus", "ironbound_veteran"),
+                E("engine", "the stormglass engine", "storm_magus", "storm_magus", "veil_adept")),
+
+            new CampaignSitePlan("frostvein_pass", "Frostvein Pass",
+                "The Frostbound Crown: Pass",
+                Travel("Frostvein Pass", "Relight the refuge beacons and break the reavers hunting the mountain road."),
+                new[] { "stormglass_foundry" }, false, false,
+                new Vector3(0f, 0f, 205f), CampaignSiteTheme.Wilds,
+                E("beacon", "the buried beacon", "frost_reaver", "frost_reaver", "ironbound_veteran"),
+                E("shelf", "the windcut shelf", "storm_magus", "frost_reaver", "ironbound_veteran"),
+                E("summit", "the pass summit", "mire_troll", "storm_magus", "frost_reaver")),
+
+            new CampaignSitePlan("hoarfire_halls", "Hoarfire Halls",
+                "The Frostbound Crown: Halls",
+                Travel("Hoarfire Halls", "Search the frozen feast halls, rescue the quartermasters, and end the giant occupation."),
+                new[] { "frostvein_pass" }, false, false,
+                new Vector3(50f, 0f, 205f), CampaignSiteTheme.Citadel,
+                E("feast", "the frozen feast hall", "cinder_giant", "frost_reaver"),
+                E("stores", "the winter stores", "storm_magus", "cinder_giant"),
+                E("throne", "the hoarfire throne", "cinder_giant", "frost_reaver")),
+
+            new CampaignSitePlan("winter_crown_vault", "Winter Crown Vault",
+                "The Frostbound Crown: Vault",
+                Travel("the Winter Crown Vault", "Cross the rime machinery and seal the fissure beneath the crown chamber."),
+                new[] { "hoarfire_halls" }, false, false,
+                new Vector3(100f, 0f, 205f), CampaignSiteTheme.Caves,
+                E("gallery", "the rime gallery", "stone_colossus", "frost_reaver"),
+                E("gears", "the frozen gears", "stone_colossus", "storm_magus"),
+                E("fissure", "the crown fissure", "stone_colossus", "ironbound_veteran")),
+
+            new CampaignSitePlan("shattered_coast", "The Shattered Coast",
+                "The Titan's Chain: Coast",
+                Travel("the Shattered Coast", "Rally its isolated watchposts and uncover the road feeding the titan foundry."),
+                new[] { "winter_crown_vault" }, false, false,
+                new Vector3(-150f, 0f, 260f), CampaignSiteTheme.Anchorage,
+                E("watch", "the drowned watchpost", "storm_magus", "frost_reaver"),
+                E("causeway", "the shattered causeway", "stone_colossus", "frost_reaver"),
+                E("signal", "the coastward signal", "cinder_giant", "ironbound_veteran")),
+
+            new CampaignSitePlan("colossus_road", "Colossus Road",
+                "The Titan's Chain: Road",
+                Travel("Colossus Road", "Break the marching constructs and free the crews forced to repair the titanworks."),
+                new[] { "shattered_coast" }, false, false,
+                new Vector3(-100f, 0f, 260f), CampaignSiteTheme.Ruins,
+                E("march", "the stone march", "stone_colossus", "ironbound_veteran"),
+                E("quarry", "the chained quarry", "stone_colossus", "storm_magus"),
+                E("road", "the titan road", "cinder_giant", "ironbound_veteran")),
+
+            new CampaignSitePlan("titan_foundry", "Titan Foundry",
+                "The Titan's Chain: Foundry",
+                Travel("Titan Foundry", "Sabotage the crucible lines and defeat the regent commanding the last colossus forge."),
+                new[] { "colossus_road" }, false, false,
+                new Vector3(-50f, 0f, 260f), CampaignSiteTheme.Redoubt,
+                E("crucible", "the outer crucible", "cinder_giant", "ironbound_veteran"),
+                E("forge", "the titan forge", "stone_colossus", "frost_reaver"),
+                E("regent", "the regent's dais", "night_regent")),
+
+            new CampaignSitePlan("veil_threshold", "The Veil Threshold",
+                "The Hollow Star: Threshold",
+                Travel("the Veil Threshold", "Close the dusk breaches and find the descent followed by the vanished vanguard."),
+                new[] { "titan_foundry" }, false, false,
+                new Vector3(0f, 0f, 260f), CampaignSiteTheme.Necropolis,
+                E("breach", "the first breach", "grave_wraith", "storm_magus", "veil_adept"),
+                E("court", "the lightless court", "grave_wraith", "grave_wraith", "storm_magus"),
+                E("descent", "the veiled descent", "storm_magus", "storm_magus", "veil_adept")),
+
+            new CampaignSitePlan("hollow_star_depths", "Hollow Star Depths",
+                "The Hollow Star: Depths",
+                Travel("the Hollow Star Depths", "Recover the vanguard's memory seals and cross the impossible halls beneath the city."),
+                new[] { "veil_threshold" }, false, false,
+                new Vector3(50f, 0f, 260f), CampaignSiteTheme.Maze,
+                E("memory", "the stolen memory", "grave_wraith", "storm_magus", "veil_adept"),
+                E("mirror", "the inverted gallery", "grave_wraith", "grave_wraith", "storm_magus"),
+                E("anchor", "the memory anchor", "storm_magus", "storm_magus", "veil_adept")),
+
+            new CampaignSitePlan("dawnspire_nexus", "Dawnspire Nexus",
+                "The Hollow Star: Last Dawn",
+                Travel("Dawnspire Nexus", "Defeat the night regent, break the starbound guardian, and end the Hollow Star at the nexus."),
+                new[] { "hollow_star_depths" }, false, true,
+                new Vector3(100f, 0f, 260f), CampaignSiteTheme.Spire,
+                E("regent", "the last regent", "night_regent"),
+                E("guardian", "the nexus guardian", "starbound_juggernaut"),
+                E("star", "the hollow star", "hollow_star_lich"))
         };
     }
 }

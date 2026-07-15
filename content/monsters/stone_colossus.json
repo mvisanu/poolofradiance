@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"stone_colossus","name":"Stone Colossus","srdRef":"Stone Golem (SRD 5.1)","size":"Large","ac":17,"hpDice":"17d10+85","speed":30,"abilities":{"str":22,"dex":9,"con":20,"int":3,"wis":11,"cha":1},"attacks":[{"name":"Granite Slam","toHit":10,"damage":"3d8+6","damageType":"bludgeoning","rangeFeet":5}],"xp":5900,"ai":"guardian","lootTable":"lt_warden"}

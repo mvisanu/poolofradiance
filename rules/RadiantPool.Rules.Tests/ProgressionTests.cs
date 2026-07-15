@@ -21,22 +21,22 @@ namespace RadiantPool.Rules.Tests
             Assert.Equal(1, Progression.AbilityPointsForLevel(3));
             Assert.Equal(2, Progression.AbilityPointsForLevel(4));   // the SRD's ASI
             Assert.Equal(1, Progression.AbilityPointsForLevel(5));
-            Assert.Equal(5, Progression.TotalAbilityPointsByLevel(Progression.MaxLevel));
+            Assert.Equal(20, Progression.TotalAbilityPointsByLevel(Progression.MaxLevel));
         }
 
         [Fact]
-        public void LevellingToFive_LeavesFivePointsToSpend()
+        public void LevellingToTwenty_LeavesTwentyPointsToSpend()
         {
             var f = Fighter();
             Assert.Equal(0, f.PendingAbilityPoints);
 
-            f.GainXp(6500);
+            f.GainXp(355000);
             int granted = 0;
             while (f.CanLevelUp) granted += f.LevelUp().AbilityPointsGranted;
 
-            Assert.Equal(5, f.Level);
-            Assert.Equal(5, granted);
-            Assert.Equal(5, f.PendingAbilityPoints);
+            Assert.Equal(20, f.Level);
+            Assert.Equal(20, granted);
+            Assert.Equal(20, f.PendingAbilityPoints);
         }
 
         [Fact]

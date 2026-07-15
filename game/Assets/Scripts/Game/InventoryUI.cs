@@ -85,6 +85,8 @@ namespace RadiantPool.Game
             if (GUILayout.Button("X", GUILayout.Width(28), GUILayout.Height(22)))
                 Ui.Close(Ui.Panel.Inventory);
             GUILayout.EndHorizontal();
+            Theme.Divider(GUILayoutUtility.GetRect(10f, 6f, GUILayout.ExpandWidth(true)));
+            GUILayout.Space(3);
 
             DrawPartyTabs(party, holder);
             GUILayout.Space(5);

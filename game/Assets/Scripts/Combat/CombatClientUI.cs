@@ -547,8 +547,19 @@ namespace RadiantPool.Game
                 if (x < -80f || x > Ui.W + 80f || y < -40f || y > Ui.H + 40f) continue;
 
                 const float barWidth = 96f;
+                // Rounded dark nameplate so the name and bar stay legible over bright scenery
+                // (contrast > decoration); the current target gets a gold-lit rim behind it.
+                bool targeted = unit.Id == _autoTarget;
+                var plate = new Rect(x - barWidth * 0.5f - 4f, y - 22f, barWidth + 8f, 36f);
+                if (targeted)
+                    GUI.DrawTexture(new Rect(plate.x - 1.5f, plate.y - 1.5f,
+                        plate.width + 3f, plate.height + 3f), Texture2D.whiteTexture,
+                        ScaleMode.StretchToFill, true, 0, Theme.Gold, Vector4.zero, 7f);
+                GUI.DrawTexture(plate, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0,
+                    new Color(0.05f, 0.045f, 0.035f, 0.62f), Vector4.zero, 6f);
+
                 var marker = new Rect(x - barWidth * 0.5f, y - 19f, 16f, 16f);
-                Color markerColor = unit.Id == _autoTarget
+                Color markerColor = targeted
                     ? Theme.Gold : new Color(1f, 0.38f, 0.32f);
                 DrawTargetShape(marker, unit.TargetShape, markerColor);
                 GUI.Label(new Rect(x - barWidth * 0.5f + 19f, y - 20f,
@@ -664,17 +675,32 @@ namespace RadiantPool.Game
         {
             if (!combat.OutcomeOpen || combat.BannerTitle.Length == 0) return;
 
-            var rect = Ui.Fit(460f, 188f);
+            var rect = Ui.Fit(460f, 200f);
             rect.y = Ui.H * 0.22f;
             GUI.Box(rect, GUIContent.none, Theme.PanelStyle);
+
+            // Pack flourish: a soft glow lights the crest and title (gold for victory, a
+            // cold red for defeat), an ornamental crest sits on the header, and a licensed
+            // separator rules off the title from the reward/summary text below.
+            var glowRect = new Rect(rect.center.x - 150f, rect.y - 6f, 300f, 96f);
+            Color glowTint = combat.BannerVictory
+                ? new Color(1f, 0.82f, 0.35f) : new Color(1f, 0.38f, 0.32f);
+            var oldColor = GUI.color;
+            GUI.color = glowTint;
+            Theme.Glow(glowRect, combat.BannerVictory ? 0.55f : 0.4f);
+            GUI.color = oldColor;
+            // Wide filigree along the modal's top edge (the pack's General_Decoration reads as
+            // a thin flourish, not a crest, so it frames the header rather than sitting in it).
+            Theme.Decoration(new Rect(rect.x + 26f, rect.y + 6f, rect.width - 52f, 14f), 0.85f);
 
             var titleStyle = new GUIStyle(Theme.HeaderBig)
             {
                 alignment = TextAnchor.MiddleCenter
             };
             string color = combat.BannerVictory ? "#f2ca50" : "#ff7a6b";
-            GUI.Label(new Rect(rect.x, rect.y + 12, rect.width, 46),
+            GUI.Label(new Rect(rect.x, rect.y + 24, rect.width, 46),
                 $"<color={color}>{combat.BannerTitle}</color>", titleStyle);
+            Theme.Divider(new Rect(rect.x + 40f, rect.y + 70f, rect.width - 80f, 6f));
 
             var detailStyle = new GUIStyle(Theme.Body)
             {
@@ -682,7 +708,7 @@ namespace RadiantPool.Game
                 fontSize = 16,
                 wordWrap = true
             };
-            GUI.Label(new Rect(rect.x + 12, rect.y + 62, rect.width - 24, rect.height - 70),
+            GUI.Label(new Rect(rect.x + 16, rect.y + 84, rect.width - 32, rect.height - 130),
                 combat.BannerDetail, detailStyle);
 
             float buttonY = rect.yMax - 42f;

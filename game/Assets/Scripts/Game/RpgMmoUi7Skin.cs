@@ -18,7 +18,11 @@ namespace RadiantPool.Game
             "panel", "panel_plain", "button", "button_hover", "button_pressed",
             "primary", "primary_hover", "field", "slot", "bar", "slider",
             "thumb", "toggle_off", "toggle_on", "tooltip", "scroll_track",
-            "scroll_thumb", "tab", "tab_active"
+            "scroll_thumb", "tab", "tab_active",
+            // HUD-specific art (bar gloss, XP bar, currency, window flourishes) — the pack
+            // ships purpose-built combat chrome the frame/control roles above never touched.
+            "statbar_overlay", "xpbar", "xpbar_fill", "currency_gold",
+            "divider", "decoration", "glow"
         };
 
         public static Texture2D Get(string role)

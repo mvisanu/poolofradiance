@@ -4,10 +4,9 @@ namespace RadiantPool.Rules
 {
     /// <summary>Levelling, and the one place the campaign's ability-point house rule lives.
     ///
-    /// SRD 5.1 grants an Ability Score Improvement at 4th level only — across a level 1–5
-    /// campaign that is exactly ONE choice about who your character becomes, which is too
-    /// few for a game whose whole arc is those five levels. So: a point at every level-up,
-    /// and the SRD's two at 4th. Nothing else about the PC is house-ruled — the XP table,
+    /// Radiant Pool keeps its established one-point-per-level house rule, with two at 4th,
+    /// across the full level 1-20 campaign so every level-up offers a build decision.
+    /// Nothing else about the PC is house-ruled — the XP table,
     /// hit dice, proficiency bonus and the 20 cap are all still SRD (monster easing stays in
     /// Difficulty.cs, and XP is untouched there).
     ///
@@ -15,7 +14,7 @@ namespace RadiantPool.Rules
     /// nothing else in the game gets to invent its own answer.</summary>
     public static class Progression
     {
-        public const int MaxLevel = 5;
+        public const int MaxLevel = 20;
 
         /// <summary>SRD ceiling for a player-character ability score.</summary>
         public const int MaxAbilityScore = 20;
