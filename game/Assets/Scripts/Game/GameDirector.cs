@@ -1466,6 +1466,11 @@ namespace RadiantPool.Game
             int returned = 0;
             var triggers = FindObjectsByType<EncounterTrigger>(FindObjectsSortMode.None);
             var actions = FindObjectsByType<CampaignObjectiveInteract>(FindObjectsSortMode.None);
+            var environmentArt = FindObjectsByType<EnvironmentArtTag>(FindObjectsSortMode.None);
+            int rpgPolyArt = environmentArt.Count(a => a.SourcePack == "RpgPoly");
+            int natureArt = environmentArt.Count(a => a.SourcePack == "SimpleNature");
+            int dungeonArt = environmentArt.Count(a => a.SourcePack == "Dungeon");
+            int paintedGround = environmentArt.Count(a => a.SourcePack == "HandpaintedGrass");
             for (int i = 0; i < Zones.Length; i++)
             {
                 if (i < ZoneStates.Count) ZoneStates[i] = (int)QuestState.Active;
@@ -1535,6 +1540,8 @@ namespace RadiantPool.Game
                         && objectiveAnchors == Zones.Length
                         && actionResolved
                         && rewardPaid
+                        && rpgPolyArt > 0 && natureArt > 0 && dungeonArt > 0
+                        && paintedGround == CampaignExpansionContent.Sites.Length
                         && returned == Zones.Length;
             Debug.Log($"[TravelTest] {(pass ? "PASS" : "FAIL")} - " +
                       $"{reached}/{Zones.Length} sites reached; " +
@@ -1542,6 +1549,8 @@ namespace RadiantPool.Game
                       $"{objectiveAnchors}/{Zones.Length} objectives anchored; " +
                       $"site objective {(actionResolved ? "resolved" : "failed")}; " +
                       $"side/main rewards {(rewardPaid ? "paid" : "failed")}; " +
+                      $"environment art RPG x{rpgPolyArt}, nature x{natureArt}, " +
+                      $"dungeon x{dungeonArt}, painted ground x{paintedGround}; " +
                       $"{returned}/{Zones.Length} hub returns");
         }
 
@@ -1658,7 +1667,11 @@ namespace RadiantPool.Game
             yield return new WaitForSeconds(8f);
             var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
                 .FirstOrDefault(p => !p.IsCompanion && p.Owner != null && p.Owner.IsValid);
-            int zone = System.Array.FindIndex(Zones, z => z.ZoneId == "ember_crown_spire");
+            var args = System.Environment.GetCommandLineArgs();
+            int requestedIndex = System.Array.IndexOf(args, "-sitezone");
+            string requestedZone = requestedIndex >= 0 && requestedIndex + 1 < args.Length
+                ? args[requestedIndex + 1] : "ember_crown_spire";
+            int zone = System.Array.FindIndex(Zones, z => z.ZoneId == requestedZone);
             var destination = FindObjectsByType<CampaignDestination>(FindObjectsSortMode.None)
                 .FirstOrDefault(d => d.ZoneIndex == zone);
             if (holder == null || zone < 0 || destination == null)
@@ -1688,7 +1701,7 @@ namespace RadiantPool.Game
             MusterState.Value = oldMuster;
             for (int i = 0; i < oldStates.Length; i++) ZoneStates[i] = oldStates[i];
             ServerClearWorldHourTestOverride();
-            Debug.Log($"[SiteCapture] wrote Ember Crown Spire frame to {path}");
+            Debug.Log($"[SiteCapture] wrote {Zones[zone].QuestName} frame to {path}");
         }
 
         /// <summary>A teleport that sticks. A CharacterController overwrites a direct

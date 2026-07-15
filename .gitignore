@@ -24,6 +24,12 @@ game/Assets/AssetStoreTools*
 # See docs/asset-store-import.md.
 game/Assets/RPGPP_LT/
 game/Assets/RPGPP_LT.meta
+game/Assets/SimpleNaturePack/
+game/Assets/SimpleNaturePack.meta
+game/Assets/LowPolyDungeonsLite/
+game/Assets/LowPolyDungeonsLite.meta
+game/Assets/Handpainted_Grass_and_Ground_Textures/
+game/Assets/Handpainted_Grass_and_Ground_Textures.meta
 
 # Locally extracted Asset Store audio. The public repo keeps code/fallbacks only; licensed
 # source clips stay on the purchaser's machine and are packed into their local player build.

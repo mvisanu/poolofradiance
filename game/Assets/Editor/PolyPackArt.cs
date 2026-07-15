@@ -1,27 +1,17 @@
 using System.Collections.Generic;
 using System.Linq;
+using RadiantPool.Game;
 using UnityEditor;
 using UnityEngine;
 
 namespace RadiantPool.EditorTools
 {
-    /// <summary>Integration for the Asset Store "RPG Poly Pack - Lite" (and any similar
-    /// low-poly environment pack dropped under Assets/Art/AssetStore).
-    ///
-    /// It is DISCOVERY-BASED on purpose: nothing here hard-codes a prefab name, because
-    /// the pack's exact contents can't be read until it is imported (Asset Store packs
-    /// need an editor sign-in and can't be fetched headlessly). Instead it finds the pack
-    /// wherever it landed, sorts every prefab into buckets by the words in its name
-    /// (tree / rock / house / …), and the bootstrap dresses the world out of those
-    /// buckets. Import the pack anywhere under Assets and the world re-dresses itself;
-    /// with no pack present, Available is false and the bootstrap falls back to the CC0
-    /// Kenney kits, so the build is never broken by a missing purchase.</summary>
+    /// <summary>Discovery-first integration for the locally owned low-poly environment
+    /// packs. Licensed assets remain gitignored; importing any subset still produces a
+    /// valid world because every placement call can fall back to the CC0 kits.</summary>
     public static class PolyPackArt
     {
-        /// <summary>Where the pack is looked for. Any folder whose name contains one of
-        /// these is treated as the pack root, wherever it sits under Assets/.</summary>
-        private static readonly string[] RootHints =
-            { "RPG Poly Pack", "RPGPolyPack", "RPGPP", "PolyPack", "AssetStore/PolyPack" };
+        public enum Source { RpgPoly, SimpleNature, Dungeon }
 
         public enum Kind
         {
@@ -29,20 +19,42 @@ namespace RadiantPool.EditorTools
             House, Ruin, Fence, Prop, Tent, Path
         }
 
-        /// <summary>Never scattered into the world: the pack's skybox and clouds, and its
-        /// big terrain tiles — those are GROUND, and bounds-normalising one down to a 0.6 m
-        /// "bush" would drop a shrunken landscape on the lawn.</summary>
+        private sealed class PackSpec
+        {
+            public Source Source;
+            public string[] ExactRoots;
+            public string[] Hints;
+        }
+
+        private static readonly PackSpec[] Specs =
+        {
+            new PackSpec
+            {
+                Source = Source.RpgPoly,
+                ExactRoots = new[] { "Assets/RPGPP_LT" },
+                Hints = new[] { "RPG Poly Pack", "RPGPolyPack", "RPGPP", "PolyPack" }
+            },
+            new PackSpec
+            {
+                Source = Source.SimpleNature,
+                ExactRoots = new[] { "Assets/SimpleNaturePack" },
+                Hints = new[] { "SimpleNaturePack", "Low-Poly Simple Nature", "Simple Nature Pack" }
+            },
+            new PackSpec
+            {
+                Source = Source.Dungeon,
+                ExactRoots = new[] { "Assets/LowPolyDungeonsLite" },
+                Hints = new[] { "LowPolyDungeonsLite", "Low Poly Dungeons Lite" }
+            }
+        };
+
         private static readonly string[] Skip =
             { "sky", "cloud", "terrain_grass", "terrain_sand", "preset", "_lod", "collider" };
 
-        /// <summary>Name fragments that sort a prefab into a bucket. FIRST MATCH WINS, so
-        /// the ORDER is the whole design: specific before generic. Two traps this pack
-        /// sprang: half its props are named *_wood_* (shed_wood, fence_wood, bench_wood),
-        /// so "wood" cannot mean Log; and `bird_house_01` files as a BUILDING — and gets
-        /// planted as an 8 m cottage — unless small props are matched first.</summary>
+        // First match wins. Specific natural features precede generic props/buildings.
         private static readonly (Kind kind, string[] words)[] Rules =
         {
-            (Kind.Path,     new[] { "path", "road", "cobble" }),
+            (Kind.Path,     new[] { "ground", "mud", "path", "road", "cobble" }),
             (Kind.Pine,     new[] { "pine", "fir", "spruce", "conifer" }),
             (Kind.Tree,     new[] { "tree", "oak", "birch", "willow", "maple", "poplar" }),
             (Kind.Bush,     new[] { "bush", "shrub", "hedge", "fern" }),
@@ -51,109 +63,98 @@ namespace RadiantPool.EditorTools
             (Kind.Mushroom, new[] { "mushroom", "shroom", "fungus" }),
             (Kind.Cliff,    new[] { "cliff", "mountain", "hill", "boulder", "formation" }),
             (Kind.Rock,     new[] { "rock", "stone", "pebble" }),
-            (Kind.Log,      new[] { "log", "stump", "branch", "trunk" }),   // never "wood"
-            (Kind.Ruin,     new[] { "ruin", "wreck", "broken", "pillar", "column", "grave" }),
+            (Kind.Log,      new[] { "log", "stump", "branch", "trunk", "wood_02" }),
+            (Kind.Ruin,     new[] { "wall", "ruin", "wreck", "broken", "pillar", "column", "grave" }),
             (Kind.Tent,     new[] { "tent", "canvas", "awning" }),
-            // Small stuff BEFORE buildings, or bird_house becomes a cottage.
             (Kind.Prop,     new[] { "barrel", "crate", "box", "basket", "sack", "bucket",
-                                    "jug", "vase", "bowl", "bench", "chair", "table",
-                                    "ladder", "broom", "rake", "wagon", "cart", "well",
-                                    "banner", "sign", "trough", "bathtub", "hanger",
-                                    "package", "shield", "bird", "lamp", "lantern",
-                                    "torch", "anvil", "chest", "stones" }),
+                                    "jug", "bottle", "pot", "book", "vase", "bowl", "bench",
+                                    "chair", "table", "ladder", "broom", "rake", "wagon", "cart",
+                                    "well", "banner", "sign", "trough", "bathtub", "hanger",
+                                    "package", "shield", "bird", "lamp", "lantern", "light",
+                                    "candle", "torch", "anvil", "chest", "stones", "walldecor" }),
             (Kind.Fence,    new[] { "fence", "railing", "picket" }),
             (Kind.House,    new[] { "building", "house", "hut", "cottage", "shed", "barn",
                                     "mill", "tower", "church", "cabin", "tavern", "shop" }),
         };
 
-        private static string _root;
-        private static Dictionary<Kind, List<GameObject>> _buckets;
+        private static Dictionary<Source, string> _roots;
+        private static Dictionary<Source, Dictionary<Kind, List<GameObject>>> _buckets;
 
-        /// <summary>The pack is present and has usable prefabs.</summary>
-        public static bool Available
-        {
-            get
-            {
-                Scan();
-                return _root != null && _buckets.Values.Any(v => v.Count > 0);
-            }
-        }
+        public static bool Available { get { Scan(); return _roots.Count > 0; } }
+        public static string RootPath { get { Scan(); return string.Join(";", _roots.Values); } }
 
-        public static string RootPath { get { Scan(); return _root; } }
+        public static bool Has(Source source) { Scan(); return _roots.ContainsKey(source); }
 
         public static int Count(Kind kind)
         {
             Scan();
-            return _root == null ? 0 : _buckets[kind].Count;
+            return _buckets.Values.Sum(b => b[kind].Count);
         }
 
-        /// <summary>Re-scan on the next call (after an import).</summary>
-        public static void Invalidate() { _root = null; _buckets = null; }
+        public static int Count(Source source, Kind kind)
+        {
+            Scan();
+            return _buckets.TryGetValue(source, out var b) ? b[kind].Count : 0;
+        }
+
+        public static void Invalidate() { _roots = null; _buckets = null; }
 
         private static void Scan()
         {
             if (_buckets != null) return;
-            _buckets = new Dictionary<Kind, List<GameObject>>();
-            foreach (Kind k in System.Enum.GetValues(typeof(Kind)))
-                _buckets[k] = new List<GameObject>();
+            _roots = new Dictionary<Source, string>();
+            _buckets = new Dictionary<Source, Dictionary<Kind, List<GameObject>>>();
 
-            _root = FindRoot();
-            if (_root == null) return;
-
-            // Prefabs BEAT the raw FBX of the same model: the pack ships both, and the
-            // prefab is the one carrying the material assignments and LOD groups (taking
-            // the FBX would place the same tree twice, one of them unskinned).
-            var prefabs = AssetDatabase.FindAssets("t:Prefab", new[] { _root })
-                .Select(AssetDatabase.GUIDToAssetPath).ToList();
-            var prefabNames = new HashSet<string>(
-                prefabs.Select(System.IO.Path.GetFileNameWithoutExtension));
-
-            var paths = prefabs
-                .Concat(AssetDatabase.FindAssets("t:Model", new[] { _root })
-                    .Select(AssetDatabase.GUIDToAssetPath)
-                    .Where(p => !prefabNames.Contains(
-                        System.IO.Path.GetFileNameWithoutExtension(p))))
-                .Distinct()
-                .OrderBy(p => p)                      // deterministic: same world every run
-                .ToList();
-
-            foreach (string path in paths)
+            foreach (var spec in Specs)
             {
-                var go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-                if (go == null) continue;
-                if (go.GetComponentsInChildren<Renderer>(true).Length == 0) continue;
-                if (Classify(System.IO.Path.GetFileNameWithoutExtension(path), out var kind))
-                    _buckets[kind].Add(go);
-            }
+                string root = FindRoot(spec);
+                if (root == null) continue;
+                _roots[spec.Source] = root;
+                var buckets = new Dictionary<Kind, List<GameObject>>();
+                foreach (Kind kind in System.Enum.GetValues(typeof(Kind)))
+                    buckets[kind] = new List<GameObject>();
+                _buckets[spec.Source] = buckets;
 
-            Debug.Log($"[PolyPack] {_root}: " + string.Join(", ",
-                _buckets.Where(b => b.Value.Count > 0)
-                        .Select(b => $"{b.Key} x{b.Value.Count}")));
+                var prefabs = AssetDatabase.FindAssets("t:Prefab", new[] { root })
+                    .Select(AssetDatabase.GUIDToAssetPath).ToList();
+                var prefabNames = new HashSet<string>(
+                    prefabs.Select(System.IO.Path.GetFileNameWithoutExtension));
+                var paths = prefabs.Concat(AssetDatabase.FindAssets("t:Model", new[] { root })
+                        .Select(AssetDatabase.GUIDToAssetPath)
+                        .Where(p => !prefabNames.Contains(System.IO.Path.GetFileNameWithoutExtension(p))))
+                    .Distinct().OrderBy(p => p).ToList();
+
+                foreach (string path in paths)
+                {
+                    var go = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                    if (go == null || go.GetComponentsInChildren<Renderer>(true).Length == 0) continue;
+                    if (Classify(System.IO.Path.GetFileNameWithoutExtension(path), out var kind))
+                        buckets[kind].Add(go);
+                }
+
+                Debug.Log($"[EnvironmentArt] {spec.Source} at {root}: " + string.Join(", ",
+                    buckets.Where(b => b.Value.Count > 0).Select(b => $"{b.Key} x{b.Value.Count}")));
+            }
         }
 
-        private static string FindRoot()
+        private static string FindRoot(PackSpec spec)
         {
-            foreach (string dir in AssetDatabase.GetSubFolders("Assets")
-                .SelectMany(Descend).Distinct())
-            {
-                string name = dir.Replace('\\', '/');
-                foreach (string hint in RootHints)
-                    if (name.IndexOf(hint, System.StringComparison.OrdinalIgnoreCase) >= 0)
-                        return name;
-            }
+            foreach (string exact in spec.ExactRoots)
+                if (AssetDatabase.IsValidFolder(exact)) return exact;
+            foreach (string dir in AssetDatabase.GetSubFolders("Assets").SelectMany(Descend).Distinct())
+                foreach (string hint in spec.Hints)
+                    if (dir.IndexOf(hint, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                        return dir.Replace('\\', '/');
             return null;
         }
 
-        /// <summary>Every folder under root, two levels deep — enough to find the pack
-        /// whether it imported to Assets/RPG Poly Pack or Assets/Art/AssetStore/….</summary>
         private static IEnumerable<string> Descend(string folder)
         {
             yield return folder;
             foreach (string child in AssetDatabase.GetSubFolders(folder))
             {
                 yield return child;
-                foreach (string grand in AssetDatabase.GetSubFolders(child))
-                    yield return grand;
+                foreach (string grand in AssetDatabase.GetSubFolders(child)) yield return grand;
             }
         }
 
@@ -161,84 +162,84 @@ namespace RadiantPool.EditorTools
         {
             kind = Kind.Prop;
             string n = fileName.ToLowerInvariant();
-            foreach (string s in Skip)
-                if (n.Contains(s)) return false;
-            foreach (var (k, words) in Rules)
-                foreach (string w in words)
-                    if (n.Contains(w)) { kind = k; return true; }
-            return false;   // unrecognised: don't scatter mystery meshes around the map
+            foreach (string s in Skip) if (n.Contains(s)) return false;
+            foreach (var rule in Rules)
+                foreach (string word in rule.words)
+                    if (n.Contains(word)) { kind = rule.kind; return true; }
+            return false;
         }
 
-        // ---------- URP conversion ----------
-
-        /// <summary>Asset Store packs ship built-in-pipeline (Standard) materials, which
-        /// render MAGENTA under URP. Convert them in place: same textures and colours, URP
-        /// Lit shader. Runs once per bootstrap; already-URP materials are left alone.</summary>
         public static void SetupMaterials()
         {
             Scan();
-            if (_root == null) return;
-
             var urp = Shader.Find("Universal Render Pipeline/Lit");
-            if (urp == null) { Debug.LogWarning("[PolyPack] URP Lit shader not found."); return; }
-
+            if (urp == null) { Debug.LogWarning("[EnvironmentArt] URP Lit shader not found."); return; }
             int converted = 0;
-            foreach (string guid in AssetDatabase.FindAssets("t:Material", new[] { _root }))
+            foreach (string root in _roots.Values)
+            foreach (string guid in AssetDatabase.FindAssets("t:Material", new[] { root }))
             {
-                string path = AssetDatabase.GUIDToAssetPath(guid);
-                var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
-                if (mat == null || mat.shader == null) continue;
-                if (mat.shader.name.StartsWith("Universal Render Pipeline")) continue;
-
-                // Carry the look across before swapping the shader (the properties are
-                // named differently, and the values are lost once the shader changes).
+                var mat = AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(guid));
+                if (mat == null || mat.shader == null || mat.shader.name.StartsWith("Universal Render Pipeline"))
+                    continue;
                 Texture main = mat.HasProperty("_MainTex") ? mat.GetTexture("_MainTex") : null;
                 Color color = mat.HasProperty("_Color") ? mat.GetColor("_Color") : Color.white;
-
                 mat.shader = urp;
                 if (main != null) mat.SetTexture("_BaseMap", main);
                 mat.SetColor("_BaseColor", color);
-                mat.SetFloat("_Smoothness", 0.08f);   // matte, like the rest of the world
+                mat.SetFloat("_Smoothness", 0.08f);
                 EditorUtility.SetDirty(mat);
                 converted++;
             }
-
             if (converted > 0)
             {
                 AssetDatabase.SaveAssets();
-                Debug.Log($"[PolyPack] Converted {converted} materials to URP.");
+                Debug.Log($"[EnvironmentArt] Converted {converted} materials to URP.");
             }
         }
 
-        // ---------- placement ----------
-
-        /// <summary>Deterministic pick from a bucket (index wraps), so the same bootstrap
-        /// seed always builds the same world.</summary>
-        public static GameObject Pick(Kind kind, int index)
+        private static List<(Source source, GameObject prefab)> Choices(Kind kind)
         {
             Scan();
-            var list = _root == null ? null : _buckets[kind];
-            if (list == null || list.Count == 0) return null;
-            return list[Mathf.Abs(index) % list.Count];
+            var choices = new List<(Source, GameObject)>();
+            foreach (var source in Specs.Select(s => s.Source))
+                if (_buckets.TryGetValue(source, out var b))
+                    choices.AddRange(b[kind].Select(p => (source, p)));
+            return choices;
         }
 
-        /// <summary>Index of the first prefab in a bucket whose name contains `nameLike`,
-        /// or `fallback` when the pack has nothing matching. Lets the bootstrap ask for the
-        /// RIGHT member of a bucket ("the dirt path, not the boardwalk planks") without
-        /// hard-coding a prefab name that another pack won't have.</summary>
-        public static int IndexOf(Kind kind, string nameLike, int fallback = 0)
+        public static GameObject Pick(Kind kind, int index)
+        {
+            var choices = Choices(kind);
+            return choices.Count == 0 ? null : choices[Mathf.Abs(index) % choices.Count].prefab;
+        }
+
+        public static GameObject Pick(Source source, Kind kind, int index)
         {
             Scan();
-            var list = _root == null ? null : _buckets[kind];
-            if (list == null || list.Count == 0) return fallback;
+            if (!_buckets.TryGetValue(source, out var b) || b[kind].Count == 0) return null;
+            return b[kind][Mathf.Abs(index) % b[kind].Count];
+        }
+
+        public static int IndexOf(Kind kind, string nameLike, int fallback = 0)
+        {
+            var choices = Choices(kind);
+            for (int i = 0; i < choices.Count; i++)
+                if (choices[i].prefab.name.IndexOf(nameLike, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    return i;
+            return fallback;
+        }
+
+        public static int IndexOf(Source source, Kind kind, string nameLike, int fallback = 0)
+        {
+            Scan();
+            if (!_buckets.TryGetValue(source, out var buckets)) return fallback;
+            var list = buckets[kind];
             for (int i = 0; i < list.Count; i++)
                 if (list[i].name.IndexOf(nameLike, System.StringComparison.OrdinalIgnoreCase) >= 0)
                     return i;
             return fallback;
         }
 
-        /// <summary>World size of a bucket member at its NATURAL scale — so layout code can
-        /// step tiles by how long they actually are instead of guessing.</summary>
         public static Vector3 NaturalSize(Kind kind, int index)
         {
             var prefab = Pick(kind, index);
@@ -249,33 +250,40 @@ namespace RadiantPool.EditorTools
             return size;
         }
 
-        /// <summary>Places one pack prefab, scaled so its bounds match targetSize metres
-        /// (height or footprint) and seated on the ground at pos — same contract as
-        /// KenneyArt.Place, so bootstrap layout code reads identically for either pack.
-        /// Returns null when the bucket is empty, and every caller must cope with that.</summary>
         public static GameObject Place(Kind kind, int index, Vector3 pos, float yRot = 0f,
             float targetSize = 0f, bool byHeight = true)
         {
-            var prefab = Pick(kind, index);
-            if (prefab == null) return null;
+            var choices = Choices(kind);
+            if (choices.Count == 0) return null;
+            var choice = choices[Mathf.Abs(index) % choices.Count];
+            return PlacePrefab(choice.source, kind, choice.prefab, pos, yRot, targetSize, byHeight);
+        }
 
+        public static GameObject Place(Source source, Kind kind, int index, Vector3 pos,
+            float yRot = 0f, float targetSize = 0f, bool byHeight = true)
+        {
+            var prefab = Pick(source, kind, index);
+            return prefab == null ? null : PlacePrefab(source, kind, prefab, pos, yRot, targetSize, byHeight);
+        }
+
+        private static GameObject PlacePrefab(Source source, Kind kind, GameObject prefab,
+            Vector3 pos, float yRot, float targetSize, bool byHeight)
+        {
             var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
             if (go == null) return null;
-            go.name = $"Poly_{kind}_{prefab.name}";
+            go.name = $"Env_{source}_{kind}_{prefab.name}";
             go.transform.rotation = Quaternion.Euler(0f, yRot, 0f);
-
             if (targetSize > 0f)
             {
                 var b = Bounds(go);
                 float current = byHeight ? b.size.y : Mathf.Max(b.size.x, b.size.z);
-                if (current > 0.0001f)
-                    go.transform.localScale = Vector3.one * (targetSize / current);
+                if (current > 0.0001f) go.transform.localScale = Vector3.one * (targetSize / current);
             }
-
-            // Seat the mesh base on the requested point (pack pivots are not consistent).
             var bounds = Bounds(go);
-            var baseCenter = new Vector3(bounds.center.x, bounds.min.y, bounds.center.z);
-            go.transform.position += pos - baseCenter;
+            go.transform.position += pos - new Vector3(bounds.center.x, bounds.min.y, bounds.center.z);
+            var tag = go.AddComponent<EnvironmentArtTag>();
+            tag.SourcePack = source.ToString();
+            tag.Role = kind.ToString();
             return go;
         }
 
@@ -283,9 +291,9 @@ namespace RadiantPool.EditorTools
         {
             var renderers = go.GetComponentsInChildren<Renderer>();
             if (renderers.Length == 0) return new Bounds(go.transform.position, Vector3.one);
-            var b = renderers[0].bounds;
-            foreach (var r in renderers.Skip(1)) b.Encapsulate(r.bounds);
-            return b;
+            var bounds = renderers[0].bounds;
+            foreach (var renderer in renderers.Skip(1)) bounds.Encapsulate(renderer.bounds);
+            return bounds;
         }
     }
 }

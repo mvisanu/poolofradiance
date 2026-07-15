@@ -598,13 +598,14 @@ namespace RadiantPool.EditorTools
             groundMat.mainTextureScale = new Vector2(48f, 48f);
             ground.GetComponent<Renderer>().sharedMaterial = groundMat;
 
-            void Box(string name, Vector3 pos, Vector3 scale, Material mat)
+            GameObject Box(string name, Vector3 pos, Vector3 scale, Material mat)
             {
                 var b = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 b.name = name;
                 b.transform.position = pos;
                 b.transform.localScale = scale;
                 b.GetComponent<Renderer>().sharedMaterial = mat;
+                return b;
             }
 
             var wall = Mat("M_Wall", new Color(0.32f, 0.31f, 0.32f));
@@ -1215,20 +1216,31 @@ namespace RadiantPool.EditorTools
                 }
             }
 
-            PolyPackArt.Kind SiteArt(CampaignSiteTheme theme)
+            bool DungeonSite(CampaignSiteTheme theme)
             {
                 switch (theme)
                 {
-                    case CampaignSiteTheme.Wilds: return PolyPackArt.Kind.Tree;
-                    case CampaignSiteTheme.Marsh: return PolyPackArt.Kind.Bush;
-                    case CampaignSiteTheme.Camp: return PolyPackArt.Kind.Tent;
-                    case CampaignSiteTheme.Anchorage: return PolyPackArt.Kind.Prop;
-                    case CampaignSiteTheme.Enclave:
-                    case CampaignSiteTheme.Manor:
-                    case CampaignSiteTheme.Quarter: return PolyPackArt.Kind.House;
-                    case CampaignSiteTheme.Caves: return PolyPackArt.Kind.Rock;
-                    default: return PolyPackArt.Kind.Ruin;
+                    case CampaignSiteTheme.Keep:
+                    case CampaignSiteTheme.Ruins:
+                    case CampaignSiteTheme.Crypt:
+                    case CampaignSiteTheme.Archive:
+                    case CampaignSiteTheme.Caves:
+                    case CampaignSiteTheme.Observatory:
+                    case CampaignSiteTheme.Redoubt:
+                    case CampaignSiteTheme.Necropolis:
+                    case CampaignSiteTheme.Gate:
+                    case CampaignSiteTheme.Citadel:
+                    case CampaignSiteTheme.Maze:
+                    case CampaignSiteTheme.Spire: return true;
+                    default: return false;
                 }
+            }
+
+            bool SettlementSite(CampaignSiteTheme theme)
+            {
+                return theme == CampaignSiteTheme.Camp || theme == CampaignSiteTheme.Anchorage
+                    || theme == CampaignSiteTheme.Enclave || theme == CampaignSiteTheme.Manor
+                    || theme == CampaignSiteTheme.Quarter;
             }
 
             string SitePalette(CampaignSiteTheme theme)
@@ -1303,6 +1315,28 @@ namespace RadiantPool.EditorTools
                 }
             }
 
+            GameObject SiteVisual(PolyPackArt.Source source, PolyPackArt.Kind kind, int index,
+                CampaignSitePlan site, Vector3 pos, float rotation, float size, bool byHeight)
+            {
+                var visual = PolyPackArt.Place(source, kind, index, pos, rotation, size, byHeight);
+                if (visual == null) return null;
+                foreach (var collider in visual.GetComponentsInChildren<Collider>(true))
+                    Object.DestroyImmediate(collider);
+                var tag = visual.GetComponent<EnvironmentArtTag>();
+                if (tag != null) tag.ZoneId = site.ZoneId;
+                return visual;
+            }
+
+            void SitePointLight(CampaignSitePlan site, int index, Vector3 pos, Color color)
+            {
+                var light = new GameObject($"SiteLantern_{site.ZoneId}_{index}").AddComponent<Light>();
+                light.transform.position = pos + Vector3.up * 2.2f;
+                light.type = LightType.Point;
+                light.color = color;
+                light.intensity = 1.25f;
+                light.range = 8f;
+            }
+
             void RemoteSite(CampaignSitePlan site, int zoneIndex, int siteIndex)
             {
                 var baseColor = SiteColor(site.Theme);
@@ -1316,26 +1350,32 @@ namespace RadiantPool.EditorTools
                 glowSite.EnableKeyword("_EMISSION");
                 glowSite.SetColor("_EmissionColor", accent * 1.7f);
 
-                Box($"SiteGround_{site.ZoneId}", site.Center + Vector3.down * 0.18f,
+                // Gameplay remains a simple, reliable collider slab. Its renderer is hidden
+                // beneath a hand-painted plane so combat navigation never depends on prop mesh.
+                var floorCollider = Box($"SiteGround_{site.ZoneId}", site.Center + Vector3.down * 0.18f,
                     new Vector3(44f, 0.35f, 44f), groundSite);
-                Box($"SiteEdgeN_{site.ZoneId}", site.Center + new Vector3(0f, 0.55f, 22f),
-                    new Vector3(44f, 1.1f, 0.8f), edgeSite);
-                Box($"SiteEdgeS_{site.ZoneId}", site.Center + new Vector3(0f, 0.55f, -22f),
-                    new Vector3(44f, 1.1f, 0.8f), edgeSite);
-                Box($"SiteEdgeE_{site.ZoneId}", site.Center + new Vector3(22f, 0.55f, 0f),
-                    new Vector3(0.8f, 1.1f, 44f), edgeSite);
-                Box($"SiteEdgeW_{site.ZoneId}", site.Center + new Vector3(-22f, 0.55f, 0f),
-                    new Vector3(0.8f, 1.1f, 44f), edgeSite);
+                floorCollider.GetComponent<Renderer>().enabled = false;
+                var paintedGround = GameObject.CreatePrimitive(PrimitiveType.Plane);
+                paintedGround.name = $"Environment_HandpaintedGrass_{site.ZoneId}";
+                paintedGround.transform.position = site.Center + Vector3.down * 0.005f;
+                paintedGround.transform.localScale = new Vector3(4.4f, 1f, 4.4f);
+                Object.DestroyImmediate(paintedGround.GetComponent<Collider>());
+                var paintedMaterial = HandpaintedGroundArt.ForTheme(site.Theme, baseColor);
+                paintedGround.GetComponent<Renderer>().sharedMaterial = paintedMaterial ?? groundSite;
+                var groundTag = paintedGround.AddComponent<EnvironmentArtTag>();
+                groundTag.SourcePack = paintedMaterial != null ? "HandpaintedGrass" : "Fallback";
+                groundTag.Role = "Ground";
+                groundTag.ZoneId = site.ZoneId;
 
-                // Four bright architectural beats make each destination read as a
-                // deliberate MMO-style arena even when optional art packs are absent.
-                foreach (var corner in new[]
+                // Invisible boundary colliders retain the old safe cell dimensions. Low-poly
+                // walls, rocks, trees and fences now carry the visible silhouette.
+                foreach (var edge in new[]
                 {
-                    new Vector3(-17f, 1.5f, -17f), new Vector3(17f, 1.5f, -17f),
-                    new Vector3(-17f, 1.5f, 17f), new Vector3(17f, 1.5f, 17f)
-                })
-                    Box($"SitePillar_{site.ZoneId}_{corner.x}_{corner.z}", site.Center + corner,
-                        new Vector3(1.2f, 3f, 1.2f), glowSite);
+                    Box($"SiteEdgeN_{site.ZoneId}", site.Center + new Vector3(0f, 0.55f, 22f), new Vector3(44f, 1.1f, 0.8f), edgeSite),
+                    Box($"SiteEdgeS_{site.ZoneId}", site.Center + new Vector3(0f, 0.55f, -22f), new Vector3(44f, 1.1f, 0.8f), edgeSite),
+                    Box($"SiteEdgeE_{site.ZoneId}", site.Center + new Vector3(22f, 0.55f, 0f), new Vector3(0.8f, 1.1f, 44f), edgeSite),
+                    Box($"SiteEdgeW_{site.ZoneId}", site.Center + new Vector3(-22f, 0.55f, 0f), new Vector3(0.8f, 1.1f, 44f), edgeSite)
+                }) edge.GetComponent<Renderer>().enabled = false;
 
                 var titleGo = new GameObject($"SiteLabel_{site.ZoneId}");
                 titleGo.transform.position = site.Center + new Vector3(0f, 4.2f, 19f);
@@ -1347,15 +1387,91 @@ namespace RadiantPool.EditorTools
                 title.color = accent;
                 titleGo.AddComponent<Billboard>();
 
-                var artKind = SiteArt(site.Theme);
-                for (int i = 0; i < 6; i++)
+                var random = new System.Random(siteIndex * 7919 + 173);
+
+                // Simple Nature participates at every destination: broken silhouettes and
+                // uneven clusters prevent the cells from reading as repeated square arenas.
+                for (int i = 0; i < 14; i++)
                 {
-                    float angle = i * Mathf.PI * 2f / 6f;
-                    var pos = site.Center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * 18f;
-                    if (PolyPackArt.Place(artKind, siteIndex * 11 + i, pos,
-                            i * 57f, site.Theme == CampaignSiteTheme.Wilds ? 4.8f : 3.4f,
-                            byHeight: site.Theme == CampaignSiteTheme.Wilds) == null)
+                    float angle = (i / 14f) * Mathf.PI * 2f + (float)(random.NextDouble() - 0.5) * 0.24f;
+                    float radius = 18f + (float)random.NextDouble() * 2.5f;
+                    var pos = site.Center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius;
+                    PolyPackArt.Kind kind;
+                    if (site.Theme == CampaignSiteTheme.Wilds) kind = i % 4 == 0 ? PolyPackArt.Kind.Bush : PolyPackArt.Kind.Tree;
+                    else if (site.Theme == CampaignSiteTheme.Marsh) kind = i % 3 == 0 ? PolyPackArt.Kind.Tree : PolyPackArt.Kind.Bush;
+                    else kind = i % 5 == 0 ? PolyPackArt.Kind.Log : i % 2 == 0 ? PolyPackArt.Kind.Rock : PolyPackArt.Kind.Bush;
+                    float size = kind == PolyPackArt.Kind.Tree ? 4.5f + (float)random.NextDouble() * 1.8f
+                        : kind == PolyPackArt.Kind.Bush ? 1.5f + (float)random.NextDouble() * 1.1f
+                        : 1.4f + (float)random.NextDouble() * 1.5f;
+                    if (SiteVisual(PolyPackArt.Source.SimpleNature, kind, siteIndex * 31 + i,
+                            site, pos, (float)random.NextDouble() * 360f, size,
+                            kind == PolyPackArt.Kind.Tree || kind == PolyPackArt.Kind.Bush) == null)
                         FallbackSiteArt(site, i, pos);
+                }
+
+                if (DungeonSite(site.Theme))
+                {
+                    // Broken wall arc, columns and clutter from Low Poly Dungeons Lite.
+                    // Gaps are intentional sight-lines into the arena, not a continuous box.
+                    for (int i = 0; i < 10; i++)
+                    {
+                        float angle = (i / 10f) * Mathf.PI * 2f + 0.18f;
+                        float radius = i % 3 == 0 ? 18.2f : 20.4f;
+                        var pos = site.Center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius;
+                        SiteVisual(PolyPackArt.Source.Dungeon, PolyPackArt.Kind.Ruin,
+                            siteIndex * 19 + i, site, pos, -angle * Mathf.Rad2Deg + 90f,
+                            i % 3 == 0 ? 4.5f : 6.2f, false);
+                    }
+                    int lightIndex = PolyPackArt.IndexOf(PolyPackArt.Source.Dungeon,
+                        PolyPackArt.Kind.Prop, "Light_08");
+                    for (int i = 0; i < 4; i++)
+                    {
+                        float angle = i * Mathf.PI * 0.5f + 0.7f;
+                        var pos = site.Center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * 16.8f;
+                        SiteVisual(PolyPackArt.Source.Dungeon, PolyPackArt.Kind.Prop,
+                            i == 0 ? lightIndex : siteIndex * 13 + i, site, pos,
+                            i * 83f, i == 0 ? 2.2f : 1.45f, true);
+                        if (i % 2 == 0) SitePointLight(site, i, pos, accent);
+                    }
+                }
+
+                if (SettlementSite(site.Theme))
+                {
+                    // RPG Poly Pack supplies the larger silhouettes; props/fences vary with
+                    // the seed so enclaves and camps no longer repeat the same six objects.
+                    for (int i = 0; i < 4; i++)
+                    {
+                        float angle = i * Mathf.PI * 0.5f + 0.75f;
+                        var pos = site.Center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * 19f;
+                        var kind = site.Theme == CampaignSiteTheme.Camp && i % 2 == 0
+                            ? PolyPackArt.Kind.Tent : PolyPackArt.Kind.House;
+                        if (SiteVisual(PolyPackArt.Source.RpgPoly, kind, siteIndex * 7 + i,
+                                site, pos, -angle * Mathf.Rad2Deg + 180f,
+                                kind == PolyPackArt.Kind.House ? 7.5f : 4.4f, false) == null)
+                            SiteVisual(PolyPackArt.Source.RpgPoly, PolyPackArt.Kind.Prop,
+                                siteIndex * 7 + i, site, pos, i * 71f, 2f, true);
+                    }
+                    for (int i = 0; i < 8; i++)
+                    {
+                        float angle = i * Mathf.PI * 0.25f;
+                        var pos = site.Center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * 16.5f;
+                        SiteVisual(PolyPackArt.Source.RpgPoly,
+                            i % 3 == 0 ? PolyPackArt.Kind.Fence : PolyPackArt.Kind.Prop,
+                            siteIndex * 23 + i, site, pos, i * 47f,
+                            i % 3 == 0 ? 4.2f : 1.6f, i % 3 != 0);
+                    }
+                }
+                else
+                {
+                    // Even hostile wilderness and ruins get a few abandoned RPG-pack props,
+                    // making the locations feel inhabited and using every imported poly pack.
+                    for (int i = 0; i < 3; i++)
+                    {
+                        float angle = i * Mathf.PI * 2f / 3f + 0.4f;
+                        var pos = site.Center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * 15.8f;
+                        SiteVisual(PolyPackArt.Source.RpgPoly, PolyPackArt.Kind.Prop,
+                            siteIndex * 17 + i, site, pos, i * 113f, 1.5f, true);
+                    }
                 }
 
                 var offsets = new[]
@@ -1372,6 +1488,19 @@ namespace RadiantPool.EditorTools
                     seal.transform.localScale = new Vector3(3.4f, 0.04f, 3.4f);
                     Object.DestroyImmediate(seal.GetComponent<Collider>());
                     seal.GetComponent<Renderer>().sharedMaterial = glowSite;
+                    seal.GetComponent<Renderer>().enabled = false;
+                    // A broken circle of real stones reads as an ominous encounter place
+                    // without the old giant neon primitive stamped across the terrain.
+                    for (int stone = 0; stone < 5; stone++)
+                    {
+                        float angle = stone * Mathf.PI * 2f / 5f + i * 0.37f;
+                        var encounterCenter = site.Center + new Vector3(offsets[i].x, 0f, offsets[i].z);
+                        var stonePos = encounterCenter + new Vector3(
+                            Mathf.Cos(angle) * 2.8f, 0f, Mathf.Sin(angle) * 2.8f);
+                        SiteVisual(PolyPackArt.Source.SimpleNature, PolyPackArt.Kind.Rock,
+                            siteIndex * 41 + i * 5 + stone, site, stonePos,
+                            stone * 73f, 0.48f + stone * 0.035f, true);
+                    }
                     Encounter($"enc_{site.ZoneId}_{fight.Suffix}", site.ZoneId,
                         fight.DisplayName, site.Center + offsets[i], new Vector3(7f, 3f, 7f),
                         true, fight.MonsterIds);
@@ -1387,7 +1516,14 @@ namespace RadiantPool.EditorTools
                     objective.transform.position = site.Center + new Vector3(0f, 0.7f, 17f);
                     objective.transform.localScale = new Vector3(0.8f, 0.7f, 0.8f);
                     objective.GetComponent<Renderer>().sharedMaterial = glowSite;
+                    objective.GetComponent<Renderer>().enabled = false;
                     objective.AddComponent<CampaignObjectiveInteract>().ZoneIndex = zoneIndex;
+                    int objectiveLantern = PolyPackArt.IndexOf(PolyPackArt.Source.Dungeon,
+                        PolyPackArt.Kind.Prop, "Light_08");
+                    var objectivePos = site.Center + new Vector3(0f, 0f, 17f);
+                    SiteVisual(PolyPackArt.Source.Dungeon, PolyPackArt.Kind.Prop,
+                        objectiveLantern, site, objectivePos, siteIndex * 29f, 2.4f, true);
+                    SitePointLight(site, 20, objectivePos, accent);
                 }
                 var siteLight = new GameObject($"SiteLight_{site.ZoneId}").AddComponent<Light>();
                 siteLight.transform.position = site.Center + new Vector3(0f, 7f, 0f);
