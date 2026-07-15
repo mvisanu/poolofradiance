@@ -1349,6 +1349,8 @@ namespace RadiantPool.Game
             int feedbackBefore = CombatFx.Instance != null
                 ? CombatFx.Instance.AttackFeedbackEvents : -1;
             int sfxBefore = GameAudio.Instance != null ? GameAudio.Instance.SfxEventsPlayed : -1;
+            int licensedBefore = GameAudio.Instance != null
+                ? GameAudio.Instance.LicensedSfxEventsPlayed : -1;
             Debug.Log($"[AttackTest] one click on {enemy.Name} at {feet} ft " +
                       $"(move {combat.MoveLeft} ft, action {combat.ActionLeft})");
             CombatClientUI.Instance.ClickCell(enemy.Cell);
@@ -1370,8 +1372,33 @@ namespace RadiantPool.Game
                                   && CombatFx.Instance.AttackFeedbackEvents > feedbackBefore;
             bool soundFeedback = GameAudio.Instance != null
                                  && GameAudio.Instance.SfxEventsPlayed > sfxBefore;
+            bool licensedWeapon = GameAudio.Instance != null
+                                  && GameAudio.Instance.LicensedSfxEventsPlayed > licensedBefore
+                                  && GameAudio.Instance.LastLicensedCue.StartsWith("weapon_");
+            bool battleMusic = GameAudio.Instance != null
+                               && GameAudio.Instance.AssetMusicReady
+                               && GameAudio.Instance.CombatTrackChanges > 0
+                               && GameAudio.Instance.ActiveCombatTrackName.Length > 0;
+
+            // Exercise the same spell-audio entry point used by RpcSpellAudio. Waiting
+            // through the impact proves both the cast and impact recordings loaded.
+            int spellBefore = GameAudio.Instance != null
+                ? GameAudio.Instance.LicensedSfxEventsPlayed : -1;
+            GameAudio.PlaySpell("fire_bolt", false);
+            yield return new WaitForSeconds(0.25f);
+            bool licensedSpell = GameAudio.Instance != null
+                                 && GameAudio.Instance.LicensedSfxEventsPlayed >= spellBefore + 2
+                                 && GameAudio.Instance.LastLicensedCue == "spell_fire_impact";
+            bool assetAudio = GameAudio.Instance != null && GameAudio.Instance.AssetAudioReady;
+            Debug.Log($"[CombatAudioTest] {(assetAudio && licensedWeapon && battleMusic ? "PASS" : "FAIL")} - " +
+                      $"Action RPG battle track '{GameAudio.Instance?.ActiveCombatTrackName ?? "none"}', " +
+                      $"licensed weapon SFX {(licensedWeapon ? "played" : "MISSING")}, " +
+                      $"Caves and Dungeons {GameAudio.Instance?.CavesTrackCount ?? 0}/5 zones");
+            Debug.Log($"[SpellAudioTest] {(licensedSpell ? "PASS" : "FAIL")} - " +
+                      $"fire cast + impact, last cue '{GameAudio.Instance?.LastLicensedCue ?? "none"}'");
             bool pass = blockedApproach && weaponsVisible && combatLit
-                        && struck && visualFeedback && soundFeedback
+                        && struck && visualFeedback && soundFeedback && assetAudio
+                        && licensedWeapon && licensedSpell && battleMusic
                         && (feet <= 5 || walked);   // in reach already? then no walk owed
             Debug.Log($"[AttackTest] {(pass ? "PASS" : "FAIL")} - one click at {feet} ft: " +
                       $"walked {(walked ? "into reach" : "NOWHERE")} " +

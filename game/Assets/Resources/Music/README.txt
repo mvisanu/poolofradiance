@@ -1,15 +1,24 @@
-Music overrides — drop audio clips (.ogg/.wav/.mp3) in this folder to replace the
-procedural loops. File names (without extension):
+Licensed music overrides live here locally and are ignored by Git. Run:
 
-  explore              hub / overworld exploration loop
-  combat               combat loop
-  zone_old_docks       plays while inside The Old Docks
-  zone_drowned_market  plays while inside The Drowned Market
-  zone_glasslit_temple plays while inside The Glasslit Temple
+  python scripts/install-audio-assets.py
 
-To use an Asset Store pack (e.g. "Caves and Dungeons", asset id 292342):
-open the project in the Unity editor, sign in, download the pack via
-Window > Package Manager > My Assets, import it, then copy/rename the tracks
-you like into this folder with the names above. No code changes needed.
+after downloading the three required packages once through Unity Package Manager >
+My Assets. The installer selects and renames the tracks below while preserving their
+Unity importer metadata.
 
-Missing files are fine — the procedural AudioSynth loops remain the fallback.
+Caves and Dungeons:
+  explore                 hub / wilderness exploration
+  zone_old_docks          The Old Docks
+  zone_drowned_market     The Drowned Market
+  zone_sunken_warcamp     The Sunken Warcamp
+  zone_glasslit_temple    The Glasslit Temple
+  zone_ashen_ward         The Ashen Ward
+
+Action RPG Battle Music (randomized per encounter without immediate repeats):
+  combat_01               Horns Of War
+  combat_02               The Ambush
+  combat_03               Enemy Approaches
+  combat_04               Swords At Midnight
+
+Missing licensed files are safe: GameAudio falls back to the procedural AudioSynth
+music and SFX so a clean public clone remains playable.

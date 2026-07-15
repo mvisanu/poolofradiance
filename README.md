@@ -45,6 +45,10 @@ UI fonts: **MedievalSharp** (wmk69), **Source Serif 4** (Adobe), and **Inter**
 (Rasmus Andersson), all under the
 [SIL Open Font License 1.1](https://openfontlicense.org)
 (`game/Assets/Resources/Fonts`, licenses included).
+Local builds also use **Caves and Dungeons** (Sonus Novum), **Action RPG Battle
+Music** (Chimera Forge Productions), and selected **AnyMMORPG** combat SFX under
+the Unity Asset Store EULA. Those licensed source clips are installed from the owner's
+Unity cache by `scripts/install-audio-assets.py` and are intentionally not in this repo.
 
 ## License / attribution
 This work includes material taken from the System Reference Document 5.1 ("SRD 5.1") by

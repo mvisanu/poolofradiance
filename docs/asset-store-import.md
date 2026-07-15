@@ -12,14 +12,24 @@ One-time flow, per pack:
    **Download** → **Import**.
 4. Copy/rename the files as listed below (the imported pack itself can live
    anywhere under `Assets/`; only the names in `Resources/` matter).
-5. Commit, then run the normal build (`scripts/build-all.ps1`).
+5. Run the normal build (`scripts/build-all.ps1`). Never commit Asset Store source files.
+
+For the audio packs already downloaded on this workstation, the selective installer is
+the fastest path. It preserves Unity's importer metadata and writes only the clips used by
+the game into gitignored `Resources` folders:
+
+```powershell
+python scripts/install-audio-assets.py
+```
 
 ## Where each pack goes
 
 | Pack | Wire-up |
 |---|---|
 | [FREE RPG Fantasy Spell Icons](https://assetstore.unity.com/packages/2d/gui/icons/free-rpg-fantasy-spell-icons-200511) | Overwrite the same-named PNGs in `Assets/Resources/SpellIcons/` (`fire_bolt.png`, `magic_missile.png`, `burning_hands.png`, `sleep.png`, `sacred_flame.png`, `guiding_bolt.png`, `cure_wounds.png`, `healing_word.png`, `bless.png`, `attack.png`, `dodge.png`, `cast.png`, `end_turn.png`). Current icons are CC-BY game-icons.net placeholders. |
-| [Caves and Dungeons music](https://assetstore.unity.com/packages/audio/music/caves-and-dungeons-292342) | Copy tracks into `Assets/Resources/Music/` named `explore`, `combat`, `zone_old_docks`, `zone_drowned_market`, `zone_sunken_warcamp`, `zone_glasslit_temple`, `zone_wilds` (any subset; see the README.txt there). |
+| [Caves and Dungeons music](https://assetstore.unity.com/packages/audio/music/caves-and-dungeons-292342) | `install-audio-assets.py` selects an exploration loop plus distinct Old Docks, Drowned Market, Sunken Warcamp, Glasslit Temple, and Ashen Ward loops. |
+| Action RPG Battle Music | `install-audio-assets.py` installs four looped encounter tracks. `GameAudio` chooses a new track per fight without immediately repeating the last one. |
+| AnyMMORPG | The installer selects its weapon swings, sword/blunt impacts, misses, critical metal hits, bow releases, and fire/arcane/radiant/healing/control/shield spell recordings. These replace procedural combat cues only; no AnyMMORPG code or prefabs are imported. |
 | [Orc Warrior](https://assetstore.unity.com/packages/3d/characters/orc-warrior-orc-character-200207) | Save a prefab of the character as `Assets/Resources/Characters/Orc.prefab`. Used by the Orc Raiders and the Karg Splitjaw boss fight (green-tinted KayKit Barbarian until then). If it has its own Animator, leave it on the prefab; otherwise combat still poses/positions it. |
 | [Spiders](https://assetstore.unity.com/packages/package/236418) | Prefab as `Assets/Resources/Characters/Spider.prefab` — used by Giant Spiders in the wilds. |
 | [Bears](https://assetstore.unity.com/packages/package/228910) | Prefab as `Assets/Resources/Characters/Bear.prefab` — used by Brown Bears in the wilds. |
@@ -60,3 +70,6 @@ Notes:
   They are gitignored. Each machine imports them itself — which costs nothing, because
   every pack here is a drop-in: import + re-bootstrap and the game picks it up, and with
   no pack installed the world falls back to the CC0 Kenney kits and still builds.
+- Audio WAVs and their `.meta` files under `Resources/Music` and `Resources/Sfx` are
+  intentionally gitignored. They are included in local Unity builds but are never
+  redistributed as raw files through the public repository.

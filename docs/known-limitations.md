@@ -20,5 +20,9 @@ Multiplayer
 - Late joiners during an active combat spectate until the next encounter.
 
 Presentation
-- Gray-box art, IMGUI interface, no audio yet (3f art pass pending asset-pack purchase).
+- Licensed music/SFX are installed per workstation from the owner's Unity Asset Store
+  cache and cannot be redistributed in the public repository. A clean clone uses the
+  procedural AudioSynth fallback until `scripts/install-audio-assets.py` is run.
+- Combat sound is currently a polished 2D mix; positional attenuation, obstruction, and
+  reverb zones are future spatial-audio work.
 - No keybind remapping (fixed WASD/E/J/F5/Esc).

@@ -538,7 +538,7 @@ namespace RadiantPool.Game
                   (r.TargetDied ? $" {target.Name} is slain!" :
                    r.TargetDowned ? $" {target.Name} goes down!" : "");
             ServerLog(line);
-            RpcAttackFx(attacker.Id, target.Id, r.Hit, r.Critical, r.DamageDealt);
+            RpcAttackFx(attacker.Id, target.Id, attackName, r.Hit, r.Critical, r.DamageDealt);
             if (r.TargetDied || r.TargetDowned) RpcSfx("down");
         }
 
@@ -556,12 +556,13 @@ namespace RadiantPool.Game
         }
 
         [ObserversRpc]
-        private void RpcAttackFx(string attackerId, string targetId, bool hit, bool crit, int damage)
+        private void RpcAttackFx(string attackerId, string targetId, string attackName,
+            bool hit, bool crit, int damage)
         {
             var attacker = ClientUnits.FirstOrDefault(u => u.Id == attackerId);
             var target = ClientUnits.FirstOrDefault(u => u.Id == targetId);
             var fx = CombatFx.Instance;
-            GameAudio.Play(!hit ? "miss" : crit ? "crit" : "hit");
+            GameAudio.PlayWeaponAttack(attackName, hit, crit);
             if (fx != null && target != null && target.Visual != null)
                 fx.AttackFeedback(target.Visual.position, hit, crit);
             if (fx == null || target?.Visual == null) return;
@@ -600,7 +601,6 @@ namespace RadiantPool.Game
             var caster = ClientUnits.FirstOrDefault(u => u.Id == casterId);
             var target = ClientUnits.FirstOrDefault(u => u.Id == targetId);
             var fx = CombatFx.Instance;
-            GameAudio.Play(isHeal ? "heal" : "spell");
             if (fx == null || target?.Visual == null) return;
             Color[] palette =
             {
@@ -627,6 +627,10 @@ namespace RadiantPool.Game
                 fx.Popup(target.Visual.position, amount.ToString(), color);
             }
         }
+
+        [ObserversRpc]
+        private void RpcSpellAudio(string spellId, bool isHeal) =>
+            GameAudio.PlaySpell(spellId, isHeal);
 
         [Server]
         private void SyncHp(string unitId)
@@ -942,6 +946,7 @@ namespace RadiantPool.Game
                 director.ServerConsumePotion();
                 ServerLog($"{unit.Creature.Name} drinks a Potion of Healing " +
                           $"and restores {healed} HP.");
+                RpcSpellAudio("potion_healing", true);
                 RpcSpellFx(unit.Id, unit.Id, healed, true, 3);   // green heal numbers
                 RpcSfx("chime");
             }
@@ -979,6 +984,9 @@ namespace RadiantPool.Game
         private void NarrateSpell(CharacterSheet caster, SpellDefinition spell,
             List<SpellEvent> events)
         {
+            // One cast cue per spell, independent of hit/miss and target count. Area
+            // spells used to stack a generic sound once for every affected creature.
+            RpcSpellAudio(spell.Id, events.Any(e => e is SpellHealEvent));
             foreach (var ev in events)
             {
                 string targetName = _server.TryGetValue(GetTargetId(ev), out var t)

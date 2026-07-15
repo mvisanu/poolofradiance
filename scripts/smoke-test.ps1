@@ -6,6 +6,14 @@ $repo = Split-Path $PSScriptRoot -Parent
 $exe = Join-Path $repo "game\Builds\Win64\RadiantPool.exe"
 if (-not (Test-Path $exe)) { throw "Build missing: $exe" }
 
+# A playtest left open on 7770 makes the smoke host correctly choose 7771 while the
+# special localhost automation path still targets 7770. Close only this game's old
+# player before allocating the loopback test port; the refreshed player is launched
+# again after the verification workflow.
+Get-Process RadiantPool -ErrorAction SilentlyContinue |
+    Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 1
+
 $logDir = Join-Path $env:TEMP "radiantpool-smoke"
 New-Item -ItemType Directory -Force $logDir | Out-Null
 $hostLog = Join-Path $logDir "host.log"
@@ -23,11 +31,13 @@ Write-Host "Starting host instance..."
 # gallery: every rules-library creature must resolve to supported visible renderers, valid
 # bounds above ground, and no capsule fallback.
 $hostProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Anna","-autohost","-selltest","-leveltest","-weapontest","-atmospheretest","-creaturetest","-questguidancetest","-savedir",$saveDir,"-logFile",$hostLog -PassThru
-Start-Sleep -Seconds 12
+# Join before the host's delayed self-tests begin mutating scene state. Waiting until all
+# gallery/quest checks had run made a late client reconcile against a changed scene.
+Start-Sleep -Seconds 4
 
 Write-Host "Starting client instance..."
 $clientProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Ben","-autojoin","localhost","-savedir",$saveDir,"-logFile",$clientLog -PassThru
-Start-Sleep -Seconds 18
+Start-Sleep -Seconds 26
 
 Stop-Process -Id $clientProc.Id -Force -ErrorAction SilentlyContinue
 Stop-Process -Id $hostProc.Id -Force -ErrorAction SilentlyContinue
@@ -42,7 +52,7 @@ $recruitSave = Join-Path $logDir "recruitsave"
 Remove-Item -Recurse -Force $recruitSave -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $recruitSave | Out-Null
 $recruitProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Dara","-autohost","-recruittest","-savedir",$recruitSave,"-logFile",$recruitLog -PassThru
-Start-Sleep -Seconds 14
+Start-Sleep -Seconds 30
 Stop-Process -Id $recruitProc.Id -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 $recruitText = Get-Content $recruitLog -Raw
@@ -53,7 +63,7 @@ Write-Host "Starting persistent companion restore instance (-recruitrestoretest)
 $recruitRestoreLog = Join-Path $logDir "recruit-restore.log"
 Remove-Item $recruitRestoreLog -ErrorAction SilentlyContinue
 $recruitRestoreProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Dara","-autohost","-recruitrestoretest","-savedir",$recruitSave,"-logFile",$recruitRestoreLog -PassThru
-Start-Sleep -Seconds 13
+Start-Sleep -Seconds 20
 Stop-Process -Id $recruitRestoreProc.Id -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 $recruitRestoreText = Get-Content $recruitRestoreLog -Raw
@@ -75,7 +85,7 @@ $legacy = [ordered]@{
 [System.IO.File]::WriteAllText((Join-Path $migrationSave "campaign.json"), $legacy,
     (New-Object System.Text.UTF8Encoding($false)))
 $migrationProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Eira","-autohost","-nextquesttest","-savedir",$migrationSave,"-logFile",$migrationLog -PassThru
-Start-Sleep -Seconds 12
+Start-Sleep -Seconds 20
 Stop-Process -Id $migrationProc.Id -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 $migrationText = Get-Content $migrationLog -Raw
@@ -150,6 +160,9 @@ $checks = @(
     @{ Name = "one click on a distant enemy closes in and attacks"; Ok = $fightText -match "\[AttackTest\] PASS" },
     @{ Name = "no failed attack assertion";        Ok = $fightText -notmatch "\[AttackTest\] FAIL" },
     @{ Name = "combat attack produces graphics and sound feedback"; Ok = $fightText -match "presentation FX/SFX" },
+    @{ Name = "licensed exploration and battle music are active"; Ok = $fightText -match "\[CombatAudioTest\] PASS.+Action RPG battle track.+Caves and Dungeons 5/5 zones" },
+    @{ Name = "realistic weapon sounds are used"; Ok = $fightText -match "\[CombatAudioTest\] PASS.+licensed weapon SFX played" },
+    @{ Name = "spell cast and impact sounds are used"; Ok = $fightText -match "\[SpellAudioTest\] PASS.+fire cast \+ impact" },
     @{ Name = "combat light covers every living unit"; Ok = $fightText -match "\[CombatLightTest\] PASS" },
     @{ Name = "no NullReference in combat log";    Ok = $fightText -notmatch "NullReferenceException" }
 )

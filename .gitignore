@@ -25,6 +25,17 @@ game/Assets/AssetStoreTools*
 game/Assets/RPGPP_LT/
 game/Assets/RPGPP_LT.meta
 
+# Locally extracted Asset Store audio. The public repo keeps code/fallbacks only; licensed
+# source clips stay on the purchaser's machine and are packed into their local player build.
+game/Assets/Resources/Music/*.wav
+game/Assets/Resources/Music/*.wav.meta
+game/Assets/Resources/Music/*.mp3
+game/Assets/Resources/Music/*.mp3.meta
+game/Assets/Resources/Music/*.ogg
+game/Assets/Resources/Music/*.ogg.meta
+game/Assets/Resources/Sfx/
+game/Assets/Resources/Sfx.meta
+
 # OS / editor
 .vs/
 .idea/

@@ -197,13 +197,20 @@ mouse and the self-test drive the very same code.
 - `theme/` — Stitch design mockups, **gitignored**: they contain WotC placeholder
   names. Copy visuals only, never text.
 - Asset Store packs can't be fetched headlessly (editor sign-in required). Drop-in
-  slots instead: `Resources/SpellIcons/<id>.png`, `Resources/Music/{explore,combat,
-  zone_<zoneId>}`, `Resources/Characters/<Name>.prefab` (pipe-separated fallbacks in
+  slots instead: `Resources/SpellIcons/<id>.png`, `Resources/Music/{explore,combat_01..04,
+  zone_<zoneId>}`, `Resources/Sfx/<cue>_<variant>.wav`, `Resources/Characters/<Name>.prefab` (pipe-separated fallbacks in
   `CombatManager.MonsterModels`). Import steps: `docs/asset-store-import.md`.
   **The download is the only manual step**: once the editor has downloaded a pack it is
   cached as a `.unitypackage` under `%APPDATA%\Unity\Asset Store-5.x\`, and
   `scripts/import-assetstore.ps1` imports it in batchmode (`-importPackage`), converts it
   to URP and re-bootstraps — no editor clicking to import.
+  **Audio is selectively extracted, never wholesale-imported**: after Unity has cached
+  Caves and Dungeons, Action RPG Battle Music, and AnyMMORPG, run
+  `python scripts/install-audio-assets.py`. It installs six exploration/zone loops, four
+  per-encounter battle loops, and realistic weapon/spell variants into gitignored
+  Resources paths. `GameAudio.AssetAudioReady` and the `-attacktest` smoke assertions
+  prove the licensed music, weapon cue, and fire cast/impact are present in the built player;
+  missing clips fall back to `AudioSynth`. Never commit the extracted WAVs or metas.
 - `PolyPackArt.cs` — **environment art from the Asset Store RPG Poly Pack**, wired
   DISCOVERY-first, not by prefab name: it finds the pack wherever it imported, sorts every
   prefab into buckets by the words in its name (`Tree/Pine/Rock/Cliff/Bush/Grass/Flower/
