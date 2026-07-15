@@ -1,18 +1,1 @@
-{
-  "schemaVersion": 1,
-  "id": "q_clear_ashen_ward",
-  "name": "Beyond the Lightwell",
-  "chainOrder": 5,
-  "campaignRole": "post_victory_containment",
-  "giver": "npc_council_veresk",
-  "type": "clear_zone",
-  "zone": "ashen_ward",
-  "locked": true,
-  "objectives": [
-    { "id": "o1", "text": "Pass the Lightwell gate and seal the three breaches in the Ashen Ward", "counter": "encounters_cleared", "target": 3 },
-    { "id": "o2", "text": "Return to Council Hall with word that the Hollow Flame is sealed", "counter": "turned_in", "target": 1 }
-  ],
-  "turnIn": { "location": "hub_council_hall", "npc": "npc_council_veresk", "instruction": "Follow the gold marker southwest to Council Hall." },
-  "rewards": { "xpEach": 1200, "gold": 750, "storyBeat": "sb_hollow_flame_sealed" },
-  "unlocks": []
-}
+{"schemaVersion":1,"id":"q_clear_ashen_ward","name":"Beyond the Lightwell","chainOrder":5,"campaignRole":"post_victory_containment","giver":"npc_council_veresk","type":"clear_zone","zone":"ashen_ward","locked":true,"objectives":[{"id":"o1","text":"Pass the Lightwell gate and seal the three breaches in the Ashen Ward","counter":"encounters_cleared","target":3},{"id":"o2","text":"Return to Council Hall with word that the Hollow Flame is sealed","counter":"turned_in","target":1}],"turnIn":{"location":"hub_council_hall","npc":"npc_council_veresk","instruction":"Follow the gold marker southwest to Council Hall."},"rewards":{"xpEach":1200,"gold":750,"storyBeat":"sb_hollow_flame_sealed","lootTable":"lt_quest_tier4"},"unlocks":[]}

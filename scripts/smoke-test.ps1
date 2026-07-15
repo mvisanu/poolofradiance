@@ -130,7 +130,7 @@ $checks = @(
     @{ Name = "completed four-zone save unlocks the next quest"; Ok = $migrationText -match "\[CampaignMigration\] PASS.+Beyond the Lightwell" },
     @{ Name = "new quest has a live Ashen Ward waypoint"; Ok = $migrationText -match "\[NextQuestWaypointTest\] PASS.+target 'The Ashen Ward'" },
     @{ Name = "save migration has no runtime exception"; Ok = $migrationText -notmatch "Exception|\[CampaignMigration\] FAIL" },
-    @{ Name = "campaign waystone reaches every authored site and returns to Council Hall"; Ok = $travelText -match "\[TravelTest\] PASS - 27/27 sites reached; 27/27 encounter sets authored; 27/27 objectives anchored; site objective resolved; 27/27 hub returns" },
+    @{ Name = "campaign reaches every site and pays side/main quest rewards"; Ok = $travelText -match "\[TravelTest\] PASS - 27/27 sites reached; 27/27 encounter sets authored; 27/27 objectives anchored; site objective resolved; side/main rewards paid; 27/27 hub returns" },
     @{ Name = "campaign travel has no runtime exception"; Ok = $travelText -notmatch "Exception|\[TravelTest\] FAIL" },
     @{ Name = "one click on a distant enemy closes in and attacks"; Ok = $fightText -match "\[AttackTest\] PASS" },
     @{ Name = "no failed attack assertion";        Ok = $fightText -notmatch "\[AttackTest\] FAIL" },

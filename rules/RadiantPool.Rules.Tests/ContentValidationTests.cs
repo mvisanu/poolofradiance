@@ -65,6 +65,7 @@ namespace RadiantPool.Rules.Tests
                 Assert.Equal(def.ArmorClass, root.GetProperty("ac").GetInt32());
                 Assert.Equal(def.HpDice, root.GetProperty("hpDice").GetString());
                 Assert.Equal(def.Xp, root.GetProperty("xp").GetInt32());
+                Assert.Equal(def.LootTable, root.GetProperty("lootTable").GetString());
             }
         }
 
@@ -124,18 +125,30 @@ namespace RadiantPool.Rules.Tests
             var tableIds = new HashSet<string>();
             foreach (var t in lootDoc.RootElement.GetProperty("tables").EnumerateArray())
             {
-                tableIds.Add(t.GetProperty("id").GetString()!);
-                DiceExpression.Parse(t.GetProperty("gold").GetString()!);
+                string tableId = t.GetProperty("id").GetString()!;
+                tableIds.Add(tableId);
+                var gold = DiceExpression.Parse(t.GetProperty("gold").GetString()!);
+                Assert.True(LootLibrary.All.ContainsKey(tableId),
+                    $"JSON table '{tableId}' missing from LootLibrary");
+                var code = LootLibrary.Get(tableId);
+                Assert.Equal(code.Gold.ToString(), gold.ToString());
+                Assert.Equal(code.Rolls, t.GetProperty("rolls").GetInt32());
                 int weight = 0;
+                var jsonEntries = new List<(int Weight, string? ItemId)>();
                 foreach (var e in t.GetProperty("entries").EnumerateArray())
                 {
                     weight += e.GetProperty("weight").GetInt32();
                     var item = e.GetProperty("item");
+                    jsonEntries.Add((e.GetProperty("weight").GetInt32(),
+                        item.ValueKind == JsonValueKind.Null ? null : item.GetString()));
                     if (item.ValueKind != JsonValueKind.Null)
                         Assert.Contains(item.GetString()!, itemIds);
                 }
                 Assert.True(weight > 0);
+                Assert.Equal(code.Entries.Select(e => (e.Weight, e.ItemId)), jsonEntries);
             }
+
+            Assert.Equal(LootLibrary.All.Keys.ToHashSet(), tableIds);
 
             foreach (var def in MonsterLibrary.All.Values)
                 Assert.Contains(def.LootTable, tableIds);

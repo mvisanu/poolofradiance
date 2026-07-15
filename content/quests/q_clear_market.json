@@ -1,18 +1,1 @@
-{
-  "schemaVersion": 1,
-  "id": "q_clear_market",
-  "name": "Silence the Drowned Market",
-  "chainOrder": 2,
-  "campaignRole": "haunted_civic_reclamation",
-  "giver": "npc_council_veresk",
-  "type": "clear_zone",
-  "zone": "drowned_market",
-  "locked": true,
-  "objectives": [
-    { "id": "o1", "text": "Lay the dead of the Drowned Market to rest", "counter": "encounters_cleared", "target": 4 },
-    { "id": "o2", "text": "Turn in the commission at Council Hall", "counter": "turned_in", "target": 1 }
-  ],
-  "turnIn": { "location": "hub_council_hall", "npc": "npc_council_veresk", "instruction": "Return south to Council Hall and follow the gold marker." },
-  "rewards": { "xpEach": 900, "gold": 250, "storyBeat": "sb_market_cleared" },
-  "unlocks": ["q_clear_warcamp"]
-}
+{"schemaVersion":1,"id":"q_clear_market","name":"Silence the Drowned Market","chainOrder":2,"campaignRole":"haunted_civic_reclamation","giver":"npc_council_veresk","type":"clear_zone","zone":"drowned_market","locked":true,"objectives":[{"id":"o1","text":"Lay the dead of the Drowned Market to rest","counter":"encounters_cleared","target":4},{"id":"o2","text":"Turn in the commission at Council Hall","counter":"turned_in","target":1}],"turnIn":{"location":"hub_council_hall","npc":"npc_council_veresk","instruction":"Return south to Council Hall and follow the gold marker."},"rewards":{"xpEach":900,"gold":250,"storyBeat":"sb_market_cleared","lootTable":"lt_quest_tier2"},"unlocks":["q_clear_warcamp"]}

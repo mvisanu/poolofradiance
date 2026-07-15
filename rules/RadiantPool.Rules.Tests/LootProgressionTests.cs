@@ -29,6 +29,40 @@ namespace RadiantPool.Rules.Tests
         }
 
         [Fact]
+        public void CreatureDropsCannotLeakLocationTieredEndgameGear()
+        {
+            var reserved = new[]
+            {
+                "lt_warcamp", "lt_sunken_vault", "lt_quest_tier1", "lt_quest_tier2",
+                "lt_quest_tier3", "lt_quest_tier4"
+            };
+            foreach (var monster in MonsterLibrary.All.Values)
+                Assert.DoesNotContain(monster.LootTable, reserved);
+
+            Assert.DoesNotContain("half_plate", Items("lt_raider"));
+            Assert.DoesNotContain("splint", Items("lt_warden"));
+        }
+
+        [Fact]
+        public void QuestLootImprovesByAdvertisedLevelTier()
+        {
+            var tier1 = Items("lt_quest_tier1");
+            var tier2 = Items("lt_quest_tier2");
+            var tier3 = Items("lt_quest_tier3");
+            var tier4 = Items("lt_quest_tier4");
+
+            Assert.DoesNotContain("rapier", tier1);
+            Assert.DoesNotContain("half_plate", tier1);
+            Assert.Contains("rapier", tier2);
+            Assert.Contains("studded_leather", tier2);
+            Assert.DoesNotContain("splint", tier2);
+            Assert.Contains("greatsword", tier3);
+            Assert.Contains("half_plate", tier3);
+            Assert.Contains("splint", tier4);
+            Assert.Equal(2, LootLibrary.Get("lt_quest_tier4").Rolls);
+        }
+
+        [Fact]
         public void EveryClassCanFindAnUpgradeItIsAllowedToUse()
         {
             var all = LootLibrary.All.Values

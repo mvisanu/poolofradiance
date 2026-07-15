@@ -94,7 +94,7 @@ namespace RadiantPool.Rules
                     Id = "hollow_warden", Name = "Warden Sorrel, Hollow-Flame Host",
                     ArmorClass = 18, HpDice = "6d8+12", Speed = 30,
                     Abilities = new AbilityScores(16, 11, 14, 11, 11, 15),
-                    Xp = 700, LootTable = "lt_sunken_vault", SrdRef = "Knight (SRD 5.1 p.400)",
+                    Xp = 700, LootTable = "lt_warden", SrdRef = "Knight (SRD 5.1 p.400)",
                     Attacks =
                     {
                         new AttackDefinition("Flame-Wreathed Blade", 5, "2d6+3", DamageType.Slashing, 5),
@@ -106,7 +106,7 @@ namespace RadiantPool.Rules
                     Id = "orc", Name = "Orc Raider",
                     ArmorClass = 13, HpDice = "2d8+6", Speed = 30,
                     Abilities = new AbilityScores(16, 12, 16, 7, 11, 10),
-                    Xp = 100, LootTable = "lt_warcamp", SrdRef = "Orc (SRD 5.1)",
+                    Xp = 100, LootTable = "lt_raider", SrdRef = "Orc (SRD 5.1)",
                     Attacks =
                     {
                         new AttackDefinition("Greataxe", 5, "1d12+3", DamageType.Slashing, 5),
@@ -118,7 +118,7 @@ namespace RadiantPool.Rules
                     Id = "orc_warchief", Name = "Karg Splitjaw, Warchief",
                     ArmorClass = 16, HpDice = "6d8+18", Speed = 30,
                     Abilities = new AbilityScores(18, 12, 16, 8, 11, 12),
-                    Xp = 450, LootTable = "lt_warcamp", SrdRef = "Orc (SRD 5.1), elite variant",
+                    Xp = 450, LootTable = "lt_raider", SrdRef = "Orc (SRD 5.1), elite variant",
                     Attacks =
                     {
                         new AttackDefinition("Great Cleaver", 6, "2d10+4", DamageType.Slashing, 5),

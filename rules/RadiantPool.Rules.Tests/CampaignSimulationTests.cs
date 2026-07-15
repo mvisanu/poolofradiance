@@ -206,6 +206,18 @@ namespace RadiantPool.Rules.Tests
                         fighter.ReviveFull(); cleric.ReviveFull();
                         fighter.RestoreAllSlots(); cleric.RestoreAllSlots();
                     }
+                    // Runtime victory revives a fallen winner at 1 HP before exploration
+                    // resumes; mirror that rule so the simulation measures the real game.
+                    if (fighter.IsDead)
+                    {
+                        fighter.ReviveFull();
+                        fighter.TakeDamage(fighter.MaxHp - 1, DamageType.Bludgeoning);
+                    }
+                    if (cleric.IsDead)
+                    {
+                        cleric.ReviveFull();
+                        cleric.TakeDamage(cleric.MaxHp - 1, DamageType.Bludgeoning);
+                    }
                     int encounterXp = units.Sum(u => MonsterLibrary.Get(u).Xp);
                     Award(fighter, encounterXp);
                     Award(cleric, encounterXp);

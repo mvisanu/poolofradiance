@@ -62,9 +62,15 @@ mouse and the self-test drive the very same code.
   choice in a 1–5 campaign. `ProgressionTests` pins it. XP enters a character through
   **`GameDirector.ServerGrantXp` and nowhere else** (quests AND kills; combat used to call
   `Sheet.GainXp` directly and never level anyone). Companions auto-spend their points on
-  `Progression.PrimaryAbility`. **Loot gets better as the campaign deepens** (`LootLibrary`,
-  mirrored in `content/loot`): rapier/studded leather mid-campaign, greatsword/splint in the
-  vault, greataxe/half plate in the warcamp — `LootProgressionTests` pins that gradient.
+  `Progression.PrimaryAbility`. **Campaign rewards live in `CampaignRewards.cs` and nowhere
+  else**: all 27 level bands, quest XP/gold, turn-in loot tiers, and the two embedded
+  side-quest bonuses are consumed directly by Unity and mirrored into zone/quest/catalog
+  JSON. `CampaignBalanceTests` pins every mirror, every multi-map stage total, and the
+  two-player encounter-XP ceilings. **Loot gets better as the campaign deepens**
+  (`LootLibrary`, mirrored in `content/loot`): ordinary monster tables stay conservative,
+  while location-tiered quest parcels introduce rapier/studded leather at tier 2,
+  greatsword/half plate at tier 3, and splint at tier 4. Never attach vault/warcamp/endgame
+  tables directly to a reusable monster species; `LootProgressionTests` enforces that gate.
   **Party roles live in `PartyComposition.cs`**: the sellswords Veresk musters are picked
   by ROLE, never by class order — a healer first, then damage dealers of two *different*
   classes, counting whoever is already being played (so nobody is handed a second cleric

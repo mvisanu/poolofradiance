@@ -1505,7 +1505,7 @@ namespace RadiantPool.EditorTools
                         "WEST of the hub. Break all three, deliver the Emberleaf " +
                         "Apothecary's sealed draught at the marked dock contact, then " +
                         "follow the gold marker back to Council Hall.",
-                    RequiredEncounters = 3, XpEach = 300, Gold = 100,
+                    RequiredEncounters = 3,
                     StartsAvailable = true,
                     SiteAction = "Deliver the apothecary's sealed draught to the dock contact."
                 },
@@ -1515,7 +1515,7 @@ namespace RadiantPool.EditorTools
                     QuestName = "Silence the Drowned Market / The Brass Auction",
                     Description = "The drowned dead haunt the flooded market NORTH of the " +
                         "hub. Lay all four hauntings to rest, then return SOUTH to Council Hall.",
-                    RequiredEncounters = 4, XpEach = 900, Gold = 250,
+                    RequiredEncounters = 4,
                     PrerequisiteZoneIds = new[] { "old_docks" },
                     SiteAction = "Witness the Brass Auction and identify its winning faction.",
                     ChoiceA = "Expose the ash cartel", ChoiceB = "Follow the masked buyer"
@@ -1527,7 +1527,7 @@ namespace RadiantPool.EditorTools
                     Description = "Karg Splitjaw's orc warband holds the sunken quarter " +
                         "SOUTH of the walls. Break both picket bands, then storm the " +
                         "war-tent and slay the Warchief before returning to Council Hall.",
-                    RequiredEncounters = 3, XpEach = 1200, Gold = 400,
+                    RequiredEncounters = 3,
                     PrerequisiteZoneIds = new[] { "drowned_market" }
                 },
                 new GameDirector.ZoneConfig
@@ -1537,7 +1537,7 @@ namespace RadiantPool.EditorTools
                     Description = "The Kindled cult holds the Glasslit Temple EAST of the " +
                         "hub. Break their five circles, face what wears the Warden, then " +
                         "return WEST to Council Hall.",
-                    RequiredEncounters = 5, XpEach = 3400, Gold = 600,
+                    RequiredEncounters = 5,
                     PrerequisiteZoneIds = new[] { "sunken_warcamp" }
                 },
                 new GameDirector.ZoneConfig
@@ -1548,12 +1548,14 @@ namespace RadiantPool.EditorTools
                         "NORTHEAST of the Lightwell. Follow the gold waypoint through the " +
                         "newly opened gate, seal all three breaches, then return SOUTHWEST " +
                         "to Council Hall.",
-                    RequiredEncounters = 3, XpEach = 1200, Gold = 750,
+                    RequiredEncounters = 3,
                     PrerequisiteZoneIds = new[] { "glasslit_temple" }
                 }
             };
             foreach (var site in CampaignExpansionContent.Sites)
                 zoneConfigs.Add(site.ToZoneConfig());
+            foreach (var config in zoneConfigs)
+                config.ApplyCampaignReward();
             director.Zones = zoneConfigs.ToArray();
             director.CompanionPrefab = playerPrefab;
             systemsGo.AddComponent<CombatClientUI>();

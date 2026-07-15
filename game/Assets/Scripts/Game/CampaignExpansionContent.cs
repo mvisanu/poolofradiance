@@ -1,3 +1,4 @@
+using RadiantPool.Rules;
 using UnityEngine;
 
 namespace RadiantPool.Game
@@ -41,16 +42,17 @@ namespace RadiantPool.Game
         public CampaignEncounterPlan[] Encounters { get; }
 
         public CampaignSitePlan(string zoneId, string displayName, string questName,
-            string description, int xpEach, int gold, string[] prerequisites,
+            string description, string[] prerequisites,
             bool startsAvailable, bool finalQuest, Vector3 center, CampaignSiteTheme theme,
             params CampaignEncounterPlan[] encounters)
         {
+            var reward = CampaignRewardLibrary.Get(zoneId);
             ZoneId = zoneId;
             DisplayName = displayName;
             QuestName = questName;
             Description = description;
-            XpEach = xpEach;
-            Gold = gold;
+            XpEach = reward.QuestXp;
+            Gold = reward.Gold;
             PrerequisiteZoneIds = prerequisites;
             StartsAvailable = startsAvailable;
             FinalQuest = finalQuest;
@@ -70,15 +72,13 @@ namespace RadiantPool.Game
                 QuestName = QuestName,
                 Description = Description,
                 RequiredEncounters = Encounters.Length,
-                XpEach = XpEach,
-                Gold = Gold,
                 PrerequisiteZoneIds = PrerequisiteZoneIds,
                 StartsAvailable = StartsAvailable,
                 FinalQuest = FinalQuest,
                 SiteAction = action,
                 ChoiceA = choiceA,
                 ChoiceB = choiceB
-            };
+            }.ApplyCampaignReward();
         }
     }
 
@@ -140,15 +140,15 @@ namespace RadiantPool.Game
             new CampaignSitePlan("drowned_bastion", "The Drowned Bastion",
                 "The Watchers Below",
                 Travel("the Drowned Bastion", "Quiet the three haunted watches and secure the sealed keep."),
-                500, 180, System.Array.Empty<string>(), true, false,
+                System.Array.Empty<string>(), true, false,
                 new Vector3(-150f, 0f, -150f), CampaignSiteTheme.Keep,
                 E("watch", "the drowned watch", "risen_drowned", "bonewalker", "bonewalker"),
                 E("hall", "the echoing hall", "risen_drowned", "risen_drowned", "bonewalker"),
-                E("vault", "the sealed vault", "hollow_warden", "bonewalker")),
+                E("vault", "the sealed vault", "risen_drowned", "bonewalker", "bonewalker")),
 
             new CampaignSitePlan("cinderwell_yard", "Cinderwell Yard", "The Gray Knives",
                 Travel("Cinderwell Yard", "Break the raider cordon and find the descent they guard."),
-                350, 150, System.Array.Empty<string>(), true, false,
+                System.Array.Empty<string>(), true, false,
                 new Vector3(-100f, 0f, -150f), CampaignSiteTheme.Ruins,
                 E("cordon", "the broken cordon", "goblin", "goblin", "marsh_skulker"),
                 E("well", "the cinder well", "marsh_skulker", "marsh_skulker", "goblin"),
@@ -157,7 +157,7 @@ namespace RadiantPool.Game
             new CampaignSitePlan("cinderwell_undercroft", "Cinderwell Undercroft",
                 "The Gray Knives: Below",
                 Travel("the Cinderwell Undercroft", "Clear the crypt road and end the raider lair below."),
-                450, 180, new[] { "cinderwell_yard" }, false, false,
+                new[] { "cinderwell_yard" }, false, false,
                 new Vector3(-50f, 0f, -150f), CampaignSiteTheme.Crypt,
                 E("crypt", "the pillaged crypt", "bonewalker", "bonewalker", "goblin"),
                 E("passage", "the knife passage", "goblin", "goblin", "orc"),
@@ -166,16 +166,16 @@ namespace RadiantPool.Game
             new CampaignSitePlan("ember_archive", "The Ember Archive",
                 "Records of the First Flame",
                 Travel("the Ember Archive", "Recover the civic records by defeating the three forces that hold its stacks."),
-                650, 220, new[] { "old_docks" }, false, false,
+                new[] { "old_docks" }, false, false,
                 new Vector3(0f, 0f, -150f), CampaignSiteTheme.Archive,
                 E("stacks", "the shattered stacks", "bonewalker", "bonewalker", "kindled_zealot"),
                 E("scriptorium", "the ash scriptorium", "kindled_zealot", "kindled_zealot", "bonewalker"),
-                E("records", "the sealed records hall", "hollow_warden", "kindled_zealot")),
+                E("records", "the sealed records hall", "risen_drowned", "bonewalker", "kindled_zealot")),
 
             new CampaignSitePlan("loomhouse_enclave", "The Loomhouse Enclave",
                 "The Lost Council Seal",
                 Travel("the Loomhouse Enclave", "Open the occupied compound and recover the Council seal from its inner court."),
-                700, 250, new[] { "drowned_bastion" }, false, false,
+                new[] { "drowned_bastion" }, false, false,
                 new Vector3(50f, 0f, -150f), CampaignSiteTheme.Enclave,
                 E("gate", "the loom gate", "marsh_skulker", "marsh_skulker", "orc"),
                 E("workshop", "the captive workshop", "orc", "orc", "marsh_skulker"),
@@ -184,7 +184,7 @@ namespace RadiantPool.Game
             new CampaignSitePlan("blackbriar_manor", "Blackbriar Manor",
                 "Knives in Blackbriar",
                 Travel("Blackbriar Manor", "Defeat its patrols, secret guard, and the knife captain in the great room."),
-                700, 260, new[] { "drowned_bastion" }, false, false,
+                new[] { "drowned_bastion" }, false, false,
                 new Vector3(100f, 0f, -150f), CampaignSiteTheme.Manor,
                 E("garden", "the briar garden", "marsh_skulker", "marsh_skulker", "goblin"),
                 E("passage", "the hidden passage", "goblin", "orc", "orc"),
@@ -192,7 +192,7 @@ namespace RadiantPool.Game
 
             new CampaignSitePlan("gilded_quarter", "The Gilded Quarter", "Gold Under Ash",
                 Travel("the Gilded Quarter", "Reclaim the three treasure streets and drive out their occupiers."),
-                750, 320, new[] { "blackbriar_manor" }, false, false,
+                new[] { "blackbriar_manor" }, false, false,
                 new Vector3(150f, 0f, -150f), CampaignSiteTheme.Quarter,
                 E("promenade", "the ash promenade", "orc", "orc", "marsh_skulker"),
                 E("treasury", "the broken treasury", "orc", "orc", "orc"),
@@ -201,7 +201,7 @@ namespace RadiantPool.Game
             new CampaignSitePlan("emberwild_expanse", "The Emberwild Expanse",
                 "The Bound Ember",
                 Travel("the Emberwild Expanse", "Follow the three marked trails to recover the lost ember vessel."),
-                400, 150, new[] { "old_docks" }, false, false,
+                new[] { "old_docks" }, false, false,
                 new Vector3(-150f, 0f, -95f), CampaignSiteTheme.Wilds,
                 E("trail", "the scorched trail", "giant_spider", "giant_spider"),
                 E("crossing", "the wild crossing", "brown_bear", "goblin", "goblin"),
@@ -209,7 +209,7 @@ namespace RadiantPool.Game
 
             new CampaignSitePlan("wild_lairs", "The Wilder Dens", "Marks on the Wild",
                 Travel("the Wilder Dens", "Hunt the marked beasts in all three lairs."),
-                650, 280, new[] { "sunken_warcamp" }, false, false,
+                new[] { "sunken_warcamp" }, false, false,
                 new Vector3(-100f, 0f, -95f), CampaignSiteTheme.Wilds,
                 E("web", "the webbed den", "giant_spider", "giant_spider", "giant_spider"),
                 E("briar", "the bear's briar", "brown_bear", "brown_bear"),
@@ -218,7 +218,7 @@ namespace RadiantPool.Game
             new CampaignSitePlan("reedwind_encampment", "Reedwind Encampment",
                 "The Reedwind Accord",
                 Travel("Reedwind Encampment", "Defend its outer fires and break the counter-raid threatening the accord."),
-                800, 300, new[] { "ember_archive" }, false, false,
+                new[] { "ember_archive" }, false, false,
                 new Vector3(-50f, 0f, -95f), CampaignSiteTheme.Camp,
                 E("fires", "the outer fires", "goblin", "goblin", "orc"),
                 E("ford", "the reed ford", "orc", "orc", "goblin"),
@@ -226,7 +226,7 @@ namespace RadiantPool.Game
 
             new CampaignSitePlan("goblin_delves", "The Gloam Delves", "The Gloam Pact",
                 Travel("the Gloam Delves", "Fight through the cave waves and confront the chieftain at the pact stone."),
-                850, 320, new[] { "drowned_market" }, false, false,
+                new[] { "drowned_market" }, false, false,
                 new Vector3(0f, 0f, -95f), CampaignSiteTheme.Caves,
                 E("mouth", "the delve mouth", "goblin", "goblin", "goblin"),
                 E("pens", "the prisoner pens", "goblin", "goblin", "orc"),
@@ -235,7 +235,7 @@ namespace RadiantPool.Game
             new CampaignSitePlan("drowned_observatory_approach", "Drowned Observatory Approach",
                 "Poison in the Cinderflow: Approach",
                 Travel("the Drowned Observatory Approach", "Secure the island landing and open the route into the underworks."),
-                400, 150, new[] { "ember_archive" }, false, false,
+                new[] { "ember_archive" }, false, false,
                 new Vector3(50f, 0f, -95f), CampaignSiteTheme.Observatory,
                 E("landing", "the drowned landing", "risen_drowned", "risen_drowned", "bonewalker"),
                 E("laboratory", "the outer laboratory", "kindled_zealot", "bonewalker", "bonewalker"),
@@ -244,7 +244,7 @@ namespace RadiantPool.Game
             new CampaignSitePlan("drowned_observatory_underworks", "Drowned Observatory Underworks",
                 "Poison in the Cinderflow: Underworks",
                 Travel("the Observatory Underworks", "Shut down the water controls and clear the experiment cells."),
-                400, 150, new[] { "drowned_observatory_approach" }, false, false,
+                new[] { "drowned_observatory_approach" }, false, false,
                 new Vector3(100f, 0f, -95f), CampaignSiteTheme.Observatory,
                 E("controls", "the blackwater controls", "risen_drowned", "bonewalker", "bonewalker"),
                 E("cells", "the experiment cells", "risen_drowned", "risen_drowned", "kindled_zealot"),
@@ -253,7 +253,7 @@ namespace RadiantPool.Game
             new CampaignSitePlan("drowned_observatory_crown", "Drowned Observatory Crown",
                 "Poison in the Cinderflow: Crown",
                 Travel("the Observatory Crown", "Destroy the pollution source and defeat its master at the summit."),
-                1200, 500, new[] { "drowned_observatory_underworks" }, false, false,
+                new[] { "drowned_observatory_underworks" }, false, false,
                 new Vector3(150f, 0f, -95f), CampaignSiteTheme.Observatory,
                 E("gallery", "the crown gallery", "kindled_zealot", "kindled_zealot", "bonewalker"),
                 E("source", "the poisoned source", "risen_drowned", "hollow_warden", "bonewalker"),
@@ -262,7 +262,7 @@ namespace RadiantPool.Game
             new CampaignSitePlan("mirewatch_citadel", "Mirewatch Citadel",
                 "The Mirewatch Choice",
                 Travel("Mirewatch Citadel", "Reach the hostages and break the three forces blocking a marsh accord."),
-                1000, 420, new[] { "glasslit_temple" }, false, false,
+                new[] { "glasslit_temple" }, false, false,
                 new Vector3(-150f, 0f, 95f), CampaignSiteTheme.Marsh,
                 E("causeway", "the mire causeway", "marsh_skulker", "marsh_skulker", "giant_spider"),
                 E("hostages", "the hostage court", "orc", "marsh_skulker", "marsh_skulker"),
@@ -271,7 +271,7 @@ namespace RadiantPool.Game
             new CampaignSitePlan("tidebreaker_anchorage", "Tidebreaker Anchorage",
                 "The Tidebreaker Ransom",
                 Travel("Tidebreaker Anchorage", "Storm the shipyard, find the captive heir, and break the ransom guard."),
-                1000, 450, new[] { "drowned_bastion" }, false, false,
+                new[] { "drowned_bastion" }, false, false,
                 new Vector3(-100f, 0f, 95f), CampaignSiteTheme.Anchorage,
                 E("shipyard", "the chained shipyard", "marsh_skulker", "marsh_skulker", "orc"),
                 E("stockade", "the ransom stockade", "orc", "orc", "marsh_skulker"),
@@ -280,7 +280,7 @@ namespace RadiantPool.Game
             new CampaignSitePlan("iron_concord_redoubt", "Iron Concord Redoubt",
                 "Envoy to the Iron Concord",
                 Travel("the Iron Concord Redoubt", "Survive the double-cross and recover the commandant's evidence."),
-                1100, 500, new[] { "loomhouse_enclave" }, false, false,
+                new[] { "loomhouse_enclave" }, false, false,
                 new Vector3(-50f, 0f, 95f), CampaignSiteTheme.Redoubt,
                 E("embassy", "the broken embassy", "orc", "orc", "kindled_zealot"),
                 E("barracks", "the iron barracks", "orc", "orc", "orc"),
@@ -289,7 +289,7 @@ namespace RadiantPool.Game
             new CampaignSitePlan("lanternfall_necropolis", "Lanternfall Necropolis",
                 "The Lanternfall Contract",
                 Travel("Lanternfall Necropolis", "Fulfil the scaling contract by clearing its three sealed burial grounds."),
-                1000, 450, new[] { "ember_archive", "drowned_market", "blackbriar_manor", "glasslit_temple" },
+                new[] { "ember_archive", "drowned_market", "blackbriar_manor", "glasslit_temple" },
                 false, false, new Vector3(0f, 0f, 95f), CampaignSiteTheme.Necropolis,
                 E("field", "the lantern field", "bonewalker", "bonewalker", "risen_drowned"),
                 E("crypt", "the sealed crypt", "bonewalker", "bonewalker", "bonewalker", "risen_drowned"),
@@ -297,7 +297,7 @@ namespace RadiantPool.Game
 
             new CampaignSitePlan("cinder_gate", "Cinder Gate", "Take the Cinder Gate",
                 Travel("Cinder Gate", "Capture both towers and defeat the force holding the gatehouse."),
-                1300, 650, new[] { "iron_concord_redoubt" }, false, false,
+                new[] { "iron_concord_redoubt" }, false, false,
                 new Vector3(50f, 0f, 95f), CampaignSiteTheme.Gate,
                 E("west", "the west tower", "orc", "orc", "kindled_zealot"),
                 E("east", "the east tower", "orc", "orc", "kindled_zealot"),
@@ -306,7 +306,7 @@ namespace RadiantPool.Game
             new CampaignSitePlan("crownless_citadel", "The Crownless Citadel",
                 "The Ember Crown: Citadel",
                 Travel("the Crownless Citadel", "Breach the alarm court and clear the elite barracks beyond it."),
-                700, 400, new[] { "cinder_gate" }, false, false,
+                new[] { "cinder_gate" }, false, false,
                 new Vector3(100f, 0f, 95f), CampaignSiteTheme.Citadel,
                 E("alarm", "the alarm court", "orc", "orc", "orc", "kindled_zealot"),
                 E("barracks", "the giant barracks", "brown_bear", "orc", "orc"),
@@ -314,7 +314,7 @@ namespace RadiantPool.Game
 
             new CampaignSitePlan("thornmaze", "The Thornmaze", "The Ember Crown: Thornmaze",
                 Travel("the Thornmaze", "Find the true route and defeat the elite guard at its secret gate."),
-                800, 400, new[] { "crownless_citadel" }, false, false,
+                new[] { "crownless_citadel" }, false, false,
                 new Vector3(150f, 0f, 95f), CampaignSiteTheme.Maze,
                 E("false", "the false route", "giant_spider", "giant_spider", "orc"),
                 E("patrol", "the thorn patrol", "orc", "orc", "kindled_zealot"),
@@ -323,7 +323,7 @@ namespace RadiantPool.Game
             new CampaignSitePlan("ember_crown_spire", "Ember Crown Spire",
                 "The Ember Crown: Final Ascent",
                 Travel("Ember Crown Spire", "Take the secret stair, defeat the last guard, and end the campaign at the crown chamber."),
-                2000, 1200, new[] { "thornmaze" }, false, true,
+                new[] { "thornmaze" }, false, true,
                 new Vector3(150f, 0f, 150f), CampaignSiteTheme.Spire,
                 E("stair", "the secret stair", "kindled_zealot", "kindled_zealot", "orc"),
                 E("guard", "the ember guard", "orc_warchief", "kindled_zealot", "kindled_zealot"),

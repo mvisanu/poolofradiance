@@ -87,6 +87,14 @@ namespace RadiantPool.Rules
                 new LootTable("lt_kindled", "3d6", 1, new (int, string?)[]
                     { (52, null), (25, "mace"), (15, "potion_healing"), (5, "scale_mail"),
                       (3, "studded_leather") }),
+                // Species drops stay conservative. High-grade gear is paid by the
+                // location-tiered quest tables below, not by reusing a late monster early.
+                new LootTable("lt_raider", "3d6", 1, new (int, string?)[]
+                    { (55, null), (16, "longsword"), (10, "scale_mail"),
+                      (9, "warhammer"), (10, "potion_healing") }),
+                new LootTable("lt_warden", "4d6", 1, new (int, string?)[]
+                    { (50, null), (15, "longsword"), (10, "chain_mail"),
+                      (10, "warhammer"), (15, "potion_healing") }),
                 new LootTable("lt_warehouse_cache", "6d6", 2, new (int, string?)[]
                     { (25, "potion_healing"), (22, "scale_mail"), (20, "longsword"),
                       (13, "light_crossbow"), (12, "rapier"), (8, "studded_leather") }),
@@ -101,6 +109,20 @@ namespace RadiantPool.Rules
                 new LootTable("lt_warcamp", "8d6", 2, new (int, string?)[]
                     { (26, "potion_healing"), (20, "longsword"), (16, "scale_mail"),
                       (14, "chain_mail"), (12, "greataxe"), (7, "warhammer"), (5, "half_plate") }),
+                // Turn-ins already pay their listed gold; these zero-gold tables are the
+                // equipment parcel. Tiers 1-4 follow CampaignRewardLibrary level bands.
+                new LootTable("lt_quest_tier1", "0", 1, new (int, string?)[]
+                    { (40, "potion_healing"), (20, "shortbow"), (15, "leather_armor"),
+                      (15, "mace"), (10, "shield") }),
+                new LootTable("lt_quest_tier2", "0", 1, new (int, string?)[]
+                    { (20, "potion_healing"), (18, "rapier"), (17, "studded_leather"),
+                      (17, "warhammer"), (15, "scale_mail"), (13, "longsword") }),
+                new LootTable("lt_quest_tier3", "0", 1, new (int, string?)[]
+                    { (20, "potion_healing"), (20, "greatsword"), (18, "longbow"),
+                      (17, "greataxe"), (15, "half_plate"), (10, "studded_leather") }),
+                new LootTable("lt_quest_tier4", "0", 2, new (int, string?)[]
+                    { (15, "potion_healing"), (18, "greatsword"), (17, "longbow"),
+                      (17, "greataxe"), (18, "half_plate"), (15, "splint") }),
             };
             return tables.ToDictionary(t => t.Id);
         }

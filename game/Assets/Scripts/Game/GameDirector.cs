@@ -28,6 +28,8 @@ namespace RadiantPool.Game
             public int RequiredEncounters = 3;
             public int XpEach = 300;
             public int Gold = 100;
+            /// <summary>Location-tiered equipment parcel paid once at turn-in.</summary>
+            public string RewardLootTable = "";
             /// <summary>Location ids that must be turned in before this commission can
             /// activate. Empty is valid only for an explicitly available opening quest.</summary>
             public string[] PrerequisiteZoneIds = System.Array.Empty<string>();
@@ -38,6 +40,23 @@ namespace RadiantPool.Game
             public string SiteAction = "";
             public string ChoiceA = "";
             public string ChoiceB = "";
+            /// <summary>Only separate side quests layered onto this location use these.
+            /// The normal on-site objective remains part of the main turn-in reward.</summary>
+            public int SiteActionXp;
+            public int SiteActionGold;
+            public string SiteActionLootTable = "";
+
+            public ZoneConfig ApplyCampaignReward()
+            {
+                var reward = CampaignRewardLibrary.Get(ZoneId);
+                XpEach = reward.QuestXp;
+                Gold = reward.Gold;
+                RewardLootTable = reward.LootTable;
+                SiteActionXp = reward.ActionXp;
+                SiteActionGold = reward.ActionGold;
+                SiteActionLootTable = reward.ActionLootTable;
+                return this;
+            }
         }
 
         [Header("Zone chain (from content JSON, wired by bootstrap)")]
@@ -484,11 +503,14 @@ namespace RadiantPool.Game
                 ZoneStates[zone] = (int)QuestState.Completed;
                 PartyGold.Value += cfg.Gold;
                 AwardXpToAll(cfg.XpEach);
+                string rewardLoot = ServerAwardRewardLoot(cfg.RewardLootTable);
+                string rewardSummary = $"+{cfg.XpEach:N0} XP each, +{cfg.Gold:N0} gold" +
+                    (string.IsNullOrEmpty(rewardLoot) ? ". " : $", reward: {rewardLoot}. ");
                 var activated = ServerActivateEligibleZones();
                 if (activated.Count > 0)
                 {
                     string quests = string.Join(", ", activated.Select(i => Zones[i].QuestName));
-                    RpcNotice($"Quest complete! +{cfg.XpEach} XP each, +{cfg.Gold} gold. " +
+                    RpcNotice("Quest complete! " + rewardSummary +
                               (activated.Count == 1 ? $"New quest: {quests}." : $"New quests: {quests}."));
                     foreach (int opened in activated)
                         ServerRecheckZone(opened);   // may already be cleared from wandering
@@ -499,11 +521,11 @@ namespace RadiantPool.Game
                         .Select(i => Zones[i].ZoneId)))
                 {
                     CampaignComplete.Value = true;
-                    RpcNotice($"Quest complete! +{cfg.XpEach} XP each, +{cfg.Gold} gold. " +
+                    RpcNotice("Quest complete! " + rewardSummary +
                               "The Hollow Flame is sealed. Aldenmere stands free!");
                 }
                 else
-                    RpcNotice($"Quest complete! +{cfg.XpEach} XP each, +{cfg.Gold} gold. " +
+                    RpcNotice("Quest complete! " + rewardSummary +
                               "Other Council commissions remain open.");
                 ServerSaveCampaign();
             }
@@ -578,9 +600,18 @@ namespace RadiantPool.Game
                 if (hasChoice && choice != 0 && choice != 1) return;
                 string result = hasChoice ? (choice == 0 ? cfg.ChoiceA : cfg.ChoiceB) : "completed";
                 CompletedSiteActions.Add(cfg.ZoneId + "|" + result);
-                RpcNotice(hasChoice
+                if (cfg.SiteActionGold > 0) PartyGold.Value += cfg.SiteActionGold;
+                if (cfg.SiteActionXp > 0) AwardXpToAll(cfg.SiteActionXp);
+                string actionLoot = ServerAwardRewardLoot(cfg.SiteActionLootTable);
+                string actionReward = cfg.SiteActionXp > 0 || cfg.SiteActionGold > 0
+                    || !string.IsNullOrEmpty(actionLoot)
+                    ? $" Side quest reward: +{cfg.SiteActionXp:N0} XP each, " +
+                      $"+{cfg.SiteActionGold:N0} gold" +
+                      (string.IsNullOrEmpty(actionLoot) ? "." : $", {actionLoot}.")
+                    : "";
+                RpcNotice((hasChoice
                     ? $"Decision recorded: {result}."
-                    : $"Objective complete: {cfg.SiteAction}");
+                    : $"Objective complete: {cfg.SiteAction}") + actionReward);
                 ServerRecheckZone(zone);
                 ServerSaveCampaign();
             }
@@ -597,8 +628,35 @@ namespace RadiantPool.Game
             PartyGold.Value += gold;
             foreach (var id in items) Stash.Add(id);
             if (gold > 0 || items.Count > 0)
-                RpcNotice($"Loot: {gold} gold" +
+                RpcNotice($"Loot: {gold:N0} gold" +
                     (items.Count > 0 ? $", {string.Join(", ", items)}" : "") + ".");
+        }
+
+        /// <summary>Rolls a location-tiered quest parcel once, on the server. Table errors
+        /// are logged and contained so malformed content can never escape an RPC and kick
+        /// the player who turned in the quest.</summary>
+        [Server]
+        private string ServerAwardRewardLoot(string tableId)
+        {
+            if (string.IsNullOrEmpty(tableId)) return "";
+            try
+            {
+                var rng = new SeededRng(System.Environment.TickCount ^ PartyGold.Value
+                    ^ CompletedSiteActions.Count ^ Stash.Count);
+                var roll = LootLibrary.Get(tableId).Roll(rng);
+                PartyGold.Value += roll.Gold;
+                foreach (string item in roll.ItemIds) Stash.Add(item);
+                return string.Join(", ", roll.ItemIds.Select(id =>
+                {
+                    var item = GameItem.Get(id);
+                    return item == null ? id.Replace('_', ' ') : item.Name;
+                }));
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[QuestReward] {tableId} failed safely: {e.Message}");
+                return "";
+            }
         }
 
         [ServerRpc(RequireOwnership = false)]
@@ -619,7 +677,7 @@ namespace RadiantPool.Game
             int price = SmithStock.FirstOrDefault(s => s.id == itemId).price;
             if (price <= 0) { RpcNotice("The smith doesn't stock that."); return; }
             if (PartyGold.Value < price)
-            { RpcNotice($"Not enough gold ({price}g needed)."); return; }
+            { RpcNotice($"Not enough gold ({price:N0}g needed)."); return; }
             PartyGold.Value -= price;
             Stash.Add(itemId);
             var item = GameItem.Get(itemId);
@@ -671,7 +729,7 @@ namespace RadiantPool.Game
 
             Stash.RemoveAt(idx);
             PartyGold.Value += gold;
-            RpcNotice($"Sold {label} to {trader} for {gold} gold.");
+            RpcNotice($"Sold {label} to {trader} for {gold:N0} gold.");
         }
 
         /// <summary>Unattended shop check (`RadiantPool.exe -autohost -selltest`, asserted by
@@ -1049,11 +1107,15 @@ namespace RadiantPool.Game
 
             int actionZone = System.Array.FindIndex(Zones, z => !string.IsNullOrEmpty(z.SiteAction));
             bool actionResolved = false;
+            bool rewardPaid = false;
             if (actionZone >= 0)
             {
                 var objective = actions.FirstOrDefault(a => a.ZoneIndex == actionZone);
                 if (objective != null)
                 {
+                    int goldBefore = PartyGold.Value;
+                    int xpBefore = holder.Sheet.Xp;
+                    int stashBefore = Stash.Count;
                     ZoneStates[actionZone] = (int)QuestState.Active;
                     ZoneClearedCounts[actionZone] = Zones[actionZone].RequiredEncounters;
                     Warp(holder.transform, objective.transform.position + Vector3.right * 1.5f);
@@ -1061,6 +1123,18 @@ namespace RadiantPool.Game
                     yield return new WaitForSeconds(0.2f);
                     actionResolved = IsSiteActionComplete(actionZone)
                                      && GetZoneState(actionZone) == QuestState.ObjectivesMet;
+                    if (actionResolved)
+                    {
+                        CmdDialogueChoice($"turnin_{actionZone}", holder.Owner);
+                        yield return new WaitForSeconds(0.2f);
+                        var cfg = Zones[actionZone];
+                        int expectedItems = LootLibrary.Get(cfg.SiteActionLootTable).Rolls
+                                          + LootLibrary.Get(cfg.RewardLootTable).Rolls;
+                        rewardPaid = PartyGold.Value == goldBefore + cfg.SiteActionGold + cfg.Gold
+                                     && holder.Sheet.Xp == xpBefore + cfg.SiteActionXp + cfg.XpEach
+                                     && Stash.Count == stashBefore + expectedItems
+                                     && GetZoneState(actionZone) == QuestState.Completed;
+                    }
                 }
             }
 
@@ -1074,12 +1148,14 @@ namespace RadiantPool.Game
             bool pass = reached == Zones.Length && authored == Zones.Length
                         && objectiveAnchors == Zones.Length
                         && actionResolved
+                        && rewardPaid
                         && returned == Zones.Length;
             Debug.Log($"[TravelTest] {(pass ? "PASS" : "FAIL")} - " +
                       $"{reached}/{Zones.Length} sites reached; " +
                       $"{authored}/{Zones.Length} encounter sets authored; " +
                       $"{objectiveAnchors}/{Zones.Length} objectives anchored; " +
                       $"site objective {(actionResolved ? "resolved" : "failed")}; " +
+                      $"side/main rewards {(rewardPaid ? "paid" : "failed")}; " +
                       $"{returned}/{Zones.Length} hub returns");
         }
 
@@ -1436,6 +1512,15 @@ namespace RadiantPool.Game
                               ? "." : $": {result}.")
                         : $"<b>Site objective:</b> {cfg.SiteAction}");
                 }
+                detail += $"\n<b>Turn-in reward:</b> {cfg.XpEach:N0} XP each, " +
+                          $"{cfg.Gold:N0} gold" +
+                          (string.IsNullOrEmpty(cfg.RewardLootTable)
+                              ? "." : ", plus level-matched equipment.");
+                if (cfg.SiteActionXp > 0 || cfg.SiteActionGold > 0)
+                    detail += $"\n<b>Side objective reward:</b> {cfg.SiteActionXp:N0} XP each, " +
+                              $"{cfg.SiteActionGold:N0} gold" +
+                              (string.IsNullOrEmpty(cfg.SiteActionLootTable)
+                                  ? "." : ", plus level-matched equipment.");
                 DrawQuest(cfg.QuestName, GetZoneState(i), detail,
                     (float)done / cfg.RequiredEncounters, i);
             }
@@ -1448,7 +1533,7 @@ namespace RadiantPool.Game
             GUILayout.Space(6);
             int potions = Stash.Count(s => s == "potion_healing");
             int salvage = Stash.Count - potions;
-            GUILayout.Label($"<color=#f2ca50><b>{PartyGold.Value}</b> gold</color>" +
+            GUILayout.Label($"<color=#f2ca50><b>{PartyGold.Value:N0}</b> gold</color>" +
                 $"   <color=#d0c5af>Potions: <b>{potions}</b>   Salvage: <b>{salvage}</b></color>",
                 Theme.Body);
             bool inCombat = CombatManager.Instance != null && CombatManager.Instance.InCombat.Value;

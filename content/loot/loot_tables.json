@@ -9,6 +9,10 @@
       "entries": [ { "weight": 58, "item": null }, { "weight": 20, "item": "shortsword" }, { "weight": 15, "item": "shortbow" }, { "weight": 2, "item": "warhammer" }, { "weight": 5, "item": "potion_healing" } ] },
     { "id": "lt_kindled", "gold": "3d6", "rolls": 1,
       "entries": [ { "weight": 52, "item": null }, { "weight": 25, "item": "mace" }, { "weight": 15, "item": "potion_healing" }, { "weight": 5, "item": "scale_mail" }, { "weight": 3, "item": "studded_leather" } ] },
+    { "id": "lt_raider", "gold": "3d6", "rolls": 1,
+      "entries": [ { "weight": 55, "item": null }, { "weight": 16, "item": "longsword" }, { "weight": 10, "item": "scale_mail" }, { "weight": 9, "item": "warhammer" }, { "weight": 10, "item": "potion_healing" } ] },
+    { "id": "lt_warden", "gold": "4d6", "rolls": 1,
+      "entries": [ { "weight": 50, "item": null }, { "weight": 15, "item": "longsword" }, { "weight": 10, "item": "chain_mail" }, { "weight": 10, "item": "warhammer" }, { "weight": 15, "item": "potion_healing" } ] },
     { "id": "lt_warehouse_cache", "gold": "6d6", "rolls": 2,
       "entries": [ { "weight": 25, "item": "potion_healing" }, { "weight": 22, "item": "scale_mail" }, { "weight": 20, "item": "longsword" }, { "weight": 13, "item": "light_crossbow" }, { "weight": 12, "item": "rapier" }, { "weight": 8, "item": "studded_leather" } ] },
     { "id": "lt_sunken_vault", "gold": "10d6", "rolls": 2,
@@ -18,6 +22,14 @@
     { "id": "lt_goblin", "gold": "2d6", "rolls": 1,
       "entries": [ { "weight": 63, "item": null }, { "weight": 20, "item": "shortbow" }, { "weight": 10, "item": "leather_armor" }, { "weight": 2, "item": "studded_leather" }, { "weight": 5, "item": "potion_healing" } ] },
     { "id": "lt_warcamp", "gold": "8d6", "rolls": 2,
-      "entries": [ { "weight": 26, "item": "potion_healing" }, { "weight": 20, "item": "longsword" }, { "weight": 16, "item": "scale_mail" }, { "weight": 14, "item": "chain_mail" }, { "weight": 12, "item": "greataxe" }, { "weight": 7, "item": "warhammer" }, { "weight": 5, "item": "half_plate" } ] }
+      "entries": [ { "weight": 26, "item": "potion_healing" }, { "weight": 20, "item": "longsword" }, { "weight": 16, "item": "scale_mail" }, { "weight": 14, "item": "chain_mail" }, { "weight": 12, "item": "greataxe" }, { "weight": 7, "item": "warhammer" }, { "weight": 5, "item": "half_plate" } ] },
+    { "id": "lt_quest_tier1", "gold": "0", "rolls": 1,
+      "entries": [ { "weight": 40, "item": "potion_healing" }, { "weight": 20, "item": "shortbow" }, { "weight": 15, "item": "leather_armor" }, { "weight": 15, "item": "mace" }, { "weight": 10, "item": "shield" } ] },
+    { "id": "lt_quest_tier2", "gold": "0", "rolls": 1,
+      "entries": [ { "weight": 20, "item": "potion_healing" }, { "weight": 18, "item": "rapier" }, { "weight": 17, "item": "studded_leather" }, { "weight": 17, "item": "warhammer" }, { "weight": 15, "item": "scale_mail" }, { "weight": 13, "item": "longsword" } ] },
+    { "id": "lt_quest_tier3", "gold": "0", "rolls": 1,
+      "entries": [ { "weight": 20, "item": "potion_healing" }, { "weight": 20, "item": "greatsword" }, { "weight": 18, "item": "longbow" }, { "weight": 17, "item": "greataxe" }, { "weight": 15, "item": "half_plate" }, { "weight": 10, "item": "studded_leather" } ] },
+    { "id": "lt_quest_tier4", "gold": "0", "rolls": 2,
+      "entries": [ { "weight": 15, "item": "potion_healing" }, { "weight": 18, "item": "greatsword" }, { "weight": 17, "item": "longbow" }, { "weight": 17, "item": "greataxe" }, { "weight": 18, "item": "half_plate" }, { "weight": 15, "item": "splint" } ] }
   ]
 }

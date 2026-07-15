@@ -1,17 +1,1 @@
-{
-  "schemaVersion": 1,
-  "id": "q_clear_docks",
-  "name": "Retake the Old Docks",
-  "chainOrder": 1,
-  "campaignRole": "urban_reclamation",
-  "giver": "npc_council_veresk",
-  "type": "clear_zone",
-  "zone": "old_docks",
-  "objectives": [
-    { "id": "o1", "text": "Defeat the squatters holding the Old Docks", "counter": "encounters_cleared", "target": 3 },
-    { "id": "o2", "text": "Turn in the commission at Council Hall", "counter": "turned_in", "target": 1 }
-  ],
-  "turnIn": { "location": "hub_council_hall", "npc": "npc_council_veresk", "instruction": "Follow the gold marker to Council Hall." },
-  "rewards": { "xpEach": 300, "gold": 100, "storyBeat": "sb_docks_cleared" },
-  "unlocks": ["q_clear_market"]
-}
+{"schemaVersion":1,"id":"q_clear_docks","name":"Retake the Old Docks","chainOrder":1,"campaignRole":"urban_reclamation","giver":"npc_council_veresk","type":"clear_zone","zone":"old_docks","objectives":[{"id":"o1","text":"Defeat the squatters holding the Old Docks","counter":"encounters_cleared","target":3},{"id":"o2","text":"Turn in the commission at Council Hall","counter":"turned_in","target":1}],"turnIn":{"location":"hub_council_hall","npc":"npc_council_veresk","instruction":"Follow the gold marker to Council Hall."},"rewards":{"xpEach":300,"gold":100,"storyBeat":"sb_docks_cleared","lootTable":"lt_quest_tier1"},"unlocks":["q_clear_market"]}
