@@ -37,7 +37,8 @@ a distant enemy → walk → blow + monster HUD), `-combatflowtest` (direct worl
 slotted magic → victory modal → defeat modal → retry), `-warpsmith` (park at the smithy so a shop panel can be
 LOOKED at); **visual QA** `-worldmapcapture <png>` opens the maximized campaign atlas through
 `MiniMap.ShowCampaignAtlasForTest`, captures it without desktop input, and restores the
-temporary quest states; `-uiskincapture <png>` renders the title/character-creation screen,
+temporary quest states; it also asserts three simultaneous active commissions produce
+exactly one `[WorldMapObjectiveTest]` X. `-uiskincapture <png>` renders the title/character-creation screen,
 asserts all 19 RPG & MMO UI 7 skin roles are present, captures it without input, then quits;
 `-savedir <dir>` keeps a test run off the real campaign.
 Player log (first place to look when the user reports bugs):
@@ -182,10 +183,13 @@ mouse and the self-test drive the very same code.
   The **maximized view is a world atlas, never a magnified tactical camera**. Six authored
   continent-like parent regions (Cinderwell Coast, Aldenmere, Emberwild, Drowned Observatory,
   Mirewatch Reach, Ember Crown) contain all 27 playable destinations plus Council Hall.
-  Destination pins show open/active/done/locked state, dashed roads and sea lanes are derived
-  from `ZoneConfig.PrerequisiteZoneIds`, and a separate teal marker identifies the party's
-  current destination. Coastlines, ocean grid, compass, pins, and controls are procedural
-  textures/original code-native art — no imported bitmap or unsupported font glyphs.
+  Destination pins show open/done/locked state; **exactly one gold X** marks the next tracked
+  destination from `QuestTracker.TargetMapZoneId`, even when several commissions are active.
+  The normal map consumes the same selection, and a turn-in moves the X to Council Hall.
+  Dashed roads and sea lanes are derived from `ZoneConfig.PrerequisiteZoneIds`, and a separate
+  teal marker identifies the party's current destination. Coastlines, ocean grid, compass,
+  pins, and controls are procedural textures/original code-native art — no imported bitmap
+  or unsupported font glyphs.
   `ValidateAtlas` logs `[WorldMap] PASS` only when the six regions contain every configured
   zone exactly once; `smoke-test.ps1` gates on 27/27 coverage and no structural failure.
   `-worldmapcapture <png>` is the input-free visual QA path and must not overwrite the

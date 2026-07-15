@@ -19,6 +19,11 @@ namespace RadiantPool.Game
         public bool IsTurnInTarget { get; private set; }
         public Vector3 TargetPosition { get; private set; }
         public string TargetLabel { get; private set; } = "";
+        /// <summary>Stable atlas destination for the one live waypoint. The compact map,
+        /// expanded campaign atlas, beacon, and steering arrow all consume this same
+        /// selection, so additional open commissions never create extra quest X marks.</summary>
+        public string TargetMapZoneId { get; private set; } = "";
+        public const string CouncilHallMapZoneId = "council_hall";
 
         private GameObject _beacon;
         private float _nextScan;
@@ -104,6 +109,7 @@ namespace RadiantPool.Game
         {
             HasTarget = false;
             IsTurnInTarget = false;
+            TargetMapZoneId = "";
             var director = GameDirector.Instance;
             var player = LocalPlayer();
             bool inCombat = CombatManager.Instance != null && CombatManager.Instance.InCombat.Value;
@@ -137,6 +143,7 @@ namespace RadiantPool.Game
                     TargetLabel = IsTurnInTarget
                         ? $"{director.Zones[turnInZone].QuestName} at Council Hall"
                         : "Council Hall - Councilor Veresk";
+                    TargetMapZoneId = CouncilHallMapZoneId;
                     HasTarget = true;
                 }
                 return;
@@ -166,6 +173,7 @@ namespace RadiantPool.Game
                         {
                             TargetPosition = action.transform.position;
                             TargetLabel = $"{cfg.DisplayName} - {cfg.SiteAction}";
+                            TargetMapZoneId = cfg.ZoneId;
                             HasTarget = true;
                         }
                     }
@@ -181,6 +189,7 @@ namespace RadiantPool.Game
                 {
                     TargetPosition = district;
                     TargetLabel = director.Zones[activeZone].DisplayName;
+                    TargetMapZoneId = director.Zones[activeZone].ZoneId;
                     HasTarget = true;
                     return;
                 }
@@ -197,6 +206,8 @@ namespace RadiantPool.Game
             // same words the quest does.
             string quarter = activeZone >= 0 ? director.Zones[activeZone].DisplayName : null;
             TargetLabel = quarter != null ? $"{quarter} — {next.DisplayName}" : next.DisplayName;
+            TargetMapZoneId = activeZone >= 0
+                ? director.Zones[activeZone].ZoneId : next.ZoneId;
             HasTarget = true;
         }
 

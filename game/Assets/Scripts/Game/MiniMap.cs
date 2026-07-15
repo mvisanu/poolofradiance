@@ -13,8 +13,9 @@ namespace RadiantPool.Game
     /// button (or releasing after a pan idles out) snaps back. World objects get distinct
     /// shape+color markers (never color alone): enemies red triangle, quest gold X, NPCs
     /// green diamond, shops filled squares, locked gates hollow square, party teal
-    /// circles. The quest X is edge-clamped with its distance, so it is always on screen
-    /// even when the objective is far outside the view. Maximized shows a legend. Scroll
+    /// circles. Exactly one quest X follows QuestTracker's live destination in normal and
+    /// maximized views; it is edge-clamped with its distance on the normal map, so it is
+    /// always on screen even when the objective is far outside the view. Maximized shows a legend. Scroll
     /// over the map zooms it (the orbit camera yields while hovered).</summary>
     public class MiniMap : MonoBehaviour
     {
@@ -262,6 +263,22 @@ namespace RadiantPool.Game
         {
             Recenter();
             _sizeMode = 2; // capture must not overwrite the player's remembered preference
+        }
+
+        /// <summary>Screenshot/smoke-test evidence for the expanded-map invariant: the
+        /// atlas may have many open commissions, but only the one live waypoint gets an X.</summary>
+        public string AtlasObjectiveZoneIdForTest => QuestTracker.Instance != null
+            && QuestTracker.Instance.HasTarget ? QuestTracker.Instance.TargetMapZoneId : "";
+
+        public int AtlasObjectiveXCountForTest
+        {
+            get
+            {
+                string objective = AtlasObjectiveZoneIdForTest;
+                return string.IsNullOrEmpty(objective) ? 0 : AtlasRegions
+                    .SelectMany(region => region.Places)
+                    .Count(place => place.ZoneId == objective);
+            }
         }
 
         private static void SetSize(int mode)
@@ -565,6 +582,7 @@ namespace RadiantPool.Game
 
             AtlasPlace hovered = null;
             string hoveredRegion = "";
+            string objectiveZoneId = AtlasObjectiveZoneIdForTest;
             foreach (var region in AtlasRegions)
                 foreach (var place in region.Places)
                 {
@@ -574,14 +592,14 @@ namespace RadiantPool.Game
                         : System.Array.FindIndex(director.Zones, z => z.ZoneId == place.ZoneId);
                     QuestState state = zoneIndex >= 0
                         ? director.GetZoneState(zoneIndex) : QuestState.Active;
-                    bool active = zoneIndex >= 0 && state == QuestState.Active;
-                    Texture2D pin = active ? _questX : state == QuestState.Completed
+                    bool objective = place.ZoneId == objectiveZoneId;
+                    Texture2D pin = objective ? _questX : state == QuestState.Completed
                         ? _atlasDone : state == QuestState.Locked ? _atlasLocked : _atlasOpen;
-                    float size = active ? 18f + Mathf.Sin(Time.time * 4f) * 2f
+                    float size = objective ? 18f + Mathf.Sin(Time.time * 4f) * 2f
                         : hubPin ? 14f : 11f;
                     GUI.DrawTexture(new Rect(point.x - size / 2f, point.y - size / 2f, size, size), pin);
 
-                    Color text = active ? Theme.Gold : state == QuestState.Locked
+                    Color text = objective ? Theme.Gold : state == QuestState.Locked
                         ? Theme.OnSurfaceMuted : Theme.OnSurface;
                     var label = new Rect(point.x - 52f + place.LabelOffset.x,
                         point.y + place.LabelOffset.y, 104f, 14f);
@@ -643,7 +661,7 @@ namespace RadiantPool.Game
             var legend = new Rect(view.x + 8f, view.yMax - 29f, 242f, 21f);
             DrawSolid(legend, new Color(.055f, .045f, .035f, .82f));
             DrawAtlasLegendItem(legend.x + 7f, legend.y + 5f, _atlasOpen, "OPEN");
-            DrawAtlasLegendItem(legend.x + 65f, legend.y + 5f, _questX, "ACTIVE");
+            DrawAtlasLegendItem(legend.x + 65f, legend.y + 5f, _questX, "NEXT");
             DrawAtlasLegendItem(legend.x + 135f, legend.y + 5f, _atlasDone, "DONE");
             DrawAtlasLegendItem(legend.x + 194f, legend.y + 5f, _atlasLocked, "LOCKED");
         }

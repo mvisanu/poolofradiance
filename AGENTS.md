@@ -183,6 +183,9 @@ mouse and the self-test drive the very same code.
   locked gate = hollow square, party = teal circles); legend when maximized. All icons are
   **generated textures, not font glyphs** — the body font has no box/tick/arrow glyphs and
   a missing glyph renders as tofu (this is why the old `-`/`+` buttons were unreadable).
+  **There is exactly one quest X in every map size**: both views consume the one
+  `QuestTracker` target, and the atlas resolves it through `TargetMapZoneId`, so other open
+  commissions remain ordinary round pins. Turn-ins move that one X to Council Hall.
 - `InventoryUI.cs` (I) — party tabs choose the player or any active companion; the selected
   member receives equipment from the shared stash, and a companion can be released without
   deleting their saved sheet or gear. Left column = the character sheet: **the six ABILITY SCORES first**

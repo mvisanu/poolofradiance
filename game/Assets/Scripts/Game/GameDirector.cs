@@ -2058,6 +2058,15 @@ namespace RadiantPool.Game
 
             map.ShowCampaignAtlasForTest();
             yield return new WaitForSeconds(2f);
+            int activeCommissions = ZoneStates.Count(state =>
+                (QuestState)state == QuestState.Active);
+            int questXs = map.AtlasObjectiveXCountForTest;
+            string objective = map.AtlasObjectiveZoneIdForTest;
+            bool singleX = activeCommissions == 3 && questXs == 1
+                           && !string.IsNullOrEmpty(objective);
+            Debug.Log($"[WorldMapObjectiveTest] {(singleX ? "PASS" : "FAIL")} - " +
+                      $"{questXs} X marks '{objective}' while " +
+                      $"{activeCommissions} commissions are active");
             string directory = System.IO.Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(directory)) System.IO.Directory.CreateDirectory(directory);
             ScreenCapture.CaptureScreenshot(path);
