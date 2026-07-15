@@ -1390,8 +1390,11 @@ namespace RadiantPool.EditorTools
 
                 var random = new System.Random(siteIndex * 7919 + 173);
 
-                // Simple Nature participates at every destination: broken silhouettes and
-                // uneven clusters prevent the cells from reading as repeated square arenas.
+                // PBR Graveyard + Nature Set 2.0 supplies the dominant perimeter at every
+                // destination. If the locally licensed pack is absent, Simple Nature keeps
+                // the same deterministic composition and the world still builds.
+                var surroundSource = PolyPackArt.Has(PolyPackArt.Source.GraveyardNature)
+                    ? PolyPackArt.Source.GraveyardNature : PolyPackArt.Source.SimpleNature;
                 for (int i = 0; i < 14; i++)
                 {
                     float angle = (i / 14f) * Mathf.PI * 2f + (float)(random.NextDouble() - 0.5) * 0.24f;
@@ -1402,12 +1405,31 @@ namespace RadiantPool.EditorTools
                     else if (site.Theme == CampaignSiteTheme.Marsh) kind = i % 3 == 0 ? PolyPackArt.Kind.Tree : PolyPackArt.Kind.Bush;
                     else kind = i % 5 == 0 ? PolyPackArt.Kind.Log : i % 2 == 0 ? PolyPackArt.Kind.Rock : PolyPackArt.Kind.Bush;
                     float size = kind == PolyPackArt.Kind.Tree ? 4.5f + (float)random.NextDouble() * 1.8f
-                        : kind == PolyPackArt.Kind.Bush ? 1.5f + (float)random.NextDouble() * 1.1f
-                        : 1.4f + (float)random.NextDouble() * 1.5f;
-                    if (SiteVisual(PolyPackArt.Source.SimpleNature, kind, siteIndex * 31 + i,
+                        : kind == PolyPackArt.Kind.Bush ? 0.65f + (float)random.NextDouble() * 0.65f
+                        : 0.9f + (float)random.NextDouble() * 1.1f;
+                    if (SiteVisual(surroundSource, kind, siteIndex * 31 + i,
                             site, pos, (float)random.NextDouble() * 360f, size,
                             kind == PolyPackArt.Kind.Tree || kind == PolyPackArt.Kind.Bush) == null)
                         FallbackSiteArt(site, i, pos);
+                }
+
+                // Necropolis/crypt destinations get a readable inner cemetery rather than
+                // generic ruins: authored headstones and crosses, collider-free so combat
+                // navigation remains governed only by the invisible arena boundaries.
+                if ((site.Theme == CampaignSiteTheme.Necropolis
+                     || site.Theme == CampaignSiteTheme.Crypt)
+                    && PolyPackArt.Has(PolyPackArt.Source.GraveyardNature))
+                {
+                    for (int i = 0; i < 12; i++)
+                    {
+                        float angle = i * Mathf.PI * 2f / 12f + 0.22f;
+                        float radius = i % 2 == 0 ? 14.8f : 17.2f;
+                        var pos = site.Center + new Vector3(
+                            Mathf.Cos(angle) * radius, 0f, Mathf.Sin(angle) * radius);
+                        SiteVisual(PolyPackArt.Source.GraveyardNature, PolyPackArt.Kind.Grave,
+                            siteIndex * 43 + i, site, pos, -angle * Mathf.Rad2Deg + 90f,
+                            2.2f + (i % 3) * 0.25f, false);
+                    }
                 }
 
                 if (DungeonSite(site.Theme))
@@ -1498,7 +1520,7 @@ namespace RadiantPool.EditorTools
                         var encounterCenter = site.Center + new Vector3(offsets[i].x, 0f, offsets[i].z);
                         var stonePos = encounterCenter + new Vector3(
                             Mathf.Cos(angle) * 2.8f, 0f, Mathf.Sin(angle) * 2.8f);
-                        SiteVisual(PolyPackArt.Source.SimpleNature, PolyPackArt.Kind.Rock,
+                        SiteVisual(surroundSource, PolyPackArt.Kind.Rock,
                             siteIndex * 41 + i * 5 + stone, site, stonePos,
                             stone * 73f, 0.48f + stone * 0.035f, true);
                     }

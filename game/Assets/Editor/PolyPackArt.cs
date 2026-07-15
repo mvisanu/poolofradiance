@@ -11,12 +11,12 @@ namespace RadiantPool.EditorTools
     /// valid world because every placement call can fall back to the CC0 kits.</summary>
     public static class PolyPackArt
     {
-        public enum Source { RpgPoly, SimpleNature, Dungeon }
+        public enum Source { RpgPoly, SimpleNature, GraveyardNature, Dungeon }
 
         public enum Kind
         {
             Tree, Pine, Bush, Rock, Cliff, Grass, Flower, Mushroom, Log,
-            House, Ruin, Fence, Prop, Tent, Path
+            House, Ruin, Grave, Fence, Prop, Tent, Path
         }
 
         private sealed class PackSpec
@@ -42,6 +42,12 @@ namespace RadiantPool.EditorTools
             },
             new PackSpec
             {
+                Source = Source.GraveyardNature,
+                ExactRoots = new[] { "Assets/NatureManufacture Assets/PBR Graveyard" },
+                Hints = new[] { "PBR Graveyard", "Graveyard and Nature Set" }
+            },
+            new PackSpec
+            {
                 Source = Source.Dungeon,
                 ExactRoots = new[] { "Assets/LowPolyDungeonsLite" },
                 Hints = new[] { "LowPolyDungeonsLite", "Low Poly Dungeons Lite" }
@@ -57,13 +63,15 @@ namespace RadiantPool.EditorTools
             (Kind.Path,     new[] { "ground", "mud", "path", "road", "cobble" }),
             (Kind.Pine,     new[] { "pine", "fir", "spruce", "conifer" }),
             (Kind.Tree,     new[] { "tree", "oak", "birch", "willow", "maple", "poplar" }),
-            (Kind.Bush,     new[] { "bush", "shrub", "hedge", "fern" }),
+            (Kind.Bush,     new[] { "bush", "shrub", "hedge", "fern", "ivy", "rose" }),
             (Kind.Flower,   new[] { "flower", "clover", "lily", "tulip" }),
             (Kind.Grass,    new[] { "grass", "plant", "reed", "wheat" }),
             (Kind.Mushroom, new[] { "mushroom", "shroom", "fungus" }),
             (Kind.Cliff,    new[] { "cliff", "mountain", "hill", "boulder", "formation" }),
+            (Kind.Grave,    new[] { "grave", "coffin", "sarcophagus", "tomb", "stone_cross",
+                                    "death_statue", "catafalque" }),
             (Kind.Rock,     new[] { "rock", "stone", "pebble" }),
-            (Kind.Log,      new[] { "log", "stump", "branch", "trunk", "wood_02" }),
+            (Kind.Log,      new[] { "log", "stump", "branch", "trunk", "root", "wood_02" }),
             (Kind.Ruin,     new[] { "wall", "ruin", "wreck", "broken", "pillar", "column", "grave" }),
             (Kind.Tent,     new[] { "tent", "canvas", "awning" }),
             (Kind.Prop,     new[] { "barrel", "crate", "box", "basket", "sack", "bucket",
@@ -119,10 +127,17 @@ namespace RadiantPool.EditorTools
                     .Select(AssetDatabase.GUIDToAssetPath).ToList();
                 var prefabNames = new HashSet<string>(
                     prefabs.Select(System.IO.Path.GetFileNameWithoutExtension));
-                var paths = prefabs.Concat(AssetDatabase.FindAssets("t:Model", new[] { root })
-                        .Select(AssetDatabase.GUIDToAssetPath)
-                        .Where(p => !prefabNames.Contains(System.IO.Path.GetFileNameWithoutExtension(p))))
-                    .Distinct().OrderBy(p => p).ToList();
+                // NatureManufacture's FBX files expose many internal submeshes (church
+                // corners, raw portal pieces, cross meshes) that are not standalone props.
+                // Use its authored prefabs so pivots, material assignments, and hierarchy
+                // remain intact. The older low-poly packs still need model discovery because
+                // several of them ship useful FBX objects without prefab wrappers.
+                var paths = spec.Source == Source.GraveyardNature
+                    ? prefabs.Distinct().OrderBy(p => p).ToList()
+                    : prefabs.Concat(AssetDatabase.FindAssets("t:Model", new[] { root })
+                            .Select(AssetDatabase.GUIDToAssetPath)
+                            .Where(p => !prefabNames.Contains(System.IO.Path.GetFileNameWithoutExtension(p))))
+                        .Distinct().OrderBy(p => p).ToList();
 
                 foreach (string path in paths)
                 {
@@ -175,18 +190,58 @@ namespace RadiantPool.EditorTools
             var urp = Shader.Find("Universal Render Pipeline/Lit");
             if (urp == null) { Debug.LogWarning("[EnvironmentArt] URP Lit shader not found."); return; }
             int converted = 0;
-            foreach (string root in _roots.Values)
-            foreach (string guid in AssetDatabase.FindAssets("t:Material", new[] { root }))
+            foreach (var sourceRoot in _roots)
+            foreach (string guid in AssetDatabase.FindAssets("t:Material", new[] { sourceRoot.Value }))
             {
-                var mat = AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(guid));
-                if (mat == null || mat.shader == null || mat.shader.name.StartsWith("Universal Render Pipeline"))
+                string assetPath = AssetDatabase.GUIDToAssetPath(guid);
+                var mat = AssetDatabase.LoadAssetAtPath<Material>(assetPath);
+                if (mat == null || (mat.shader != null
+                    && mat.shader.name.StartsWith("Universal Render Pipeline")))
                     continue;
-                Texture main = mat.HasProperty("_MainTex") ? mat.GetTexture("_MainTex") : null;
-                Color color = mat.HasProperty("_Color") ? mat.GetColor("_Color") : Color.white;
+                // Asset Store packs often reference a proprietary shader that is outside
+                // the selected prefab dependency closure. Unity then exposes the material
+                // through its error shader, whose HasProperty calls all return false even
+                // though the original texture GUIDs remain serialized. Read those saved
+                // slots directly before switching shaders so the PBR maps are never lost.
+                Texture main = SavedTexture(mat, "_MainTex");
+                Color color = SavedColor(mat, "_Color", Color.white);
+                Texture normal = SavedTexture(mat, "_BumpMap");
+                Texture metallic = SavedTexture(mat, "_MetallicGlossMap");
+                if (metallic == null)
+                    metallic = SavedTexture(mat, "_AmbientOcclusionGSmoothnessA");
+                Texture occlusion = SavedTexture(mat, "_OcclusionMap");
+                if (occlusion == null)
+                    occlusion = SavedTexture(mat, "_AmbientOcclusionGSmoothnessA");
+                float sourceSmoothness = SavedFloat(mat, "_Glossiness", 0.2f);
                 mat.shader = urp;
                 if (main != null) mat.SetTexture("_BaseMap", main);
                 mat.SetColor("_BaseColor", color);
-                mat.SetFloat("_Smoothness", 0.08f);
+                if (normal != null)
+                {
+                    mat.SetTexture("_BumpMap", normal);
+                    mat.EnableKeyword("_NORMALMAP");
+                }
+                if (metallic != null)
+                {
+                    mat.SetTexture("_MetallicGlossMap", metallic);
+                    mat.EnableKeyword("_METALLICSPECGLOSSMAP");
+                }
+                if (occlusion != null) mat.SetTexture("_OcclusionMap", occlusion);
+                mat.SetFloat("_Smoothness", sourceRoot.Key == Source.GraveyardNature
+                    ? Mathf.Clamp(sourceSmoothness, 0.08f, 0.65f) : 0.08f);
+
+                string lower = assetPath.ToLowerInvariant();
+                bool cutout = sourceRoot.Key == Source.GraveyardNature
+                              && (lower.Contains("leaf") || lower.Contains("grass")
+                                  || lower.Contains("ivy") || lower.Contains("fern")
+                                  || lower.Contains("tree") || lower.Contains("rose"));
+                if (cutout)
+                {
+                    mat.SetFloat("_AlphaClip", 1f);
+                    mat.SetFloat("_Cutoff", 0.35f);
+                    mat.SetFloat("_Cull", 0f);
+                    mat.EnableKeyword("_ALPHATEST_ON");
+                }
                 EditorUtility.SetDirty(mat);
                 converted++;
             }
@@ -195,6 +250,49 @@ namespace RadiantPool.EditorTools
                 AssetDatabase.SaveAssets();
                 Debug.Log($"[EnvironmentArt] Converted {converted} materials to URP.");
             }
+        }
+
+        private static Texture SavedTexture(Material mat, string property)
+        {
+            var saved = new SerializedObject(mat)
+                .FindProperty("m_SavedProperties.m_TexEnvs");
+            if (saved == null) return null;
+            for (int i = 0; i < saved.arraySize; i++)
+            {
+                var entry = saved.GetArrayElementAtIndex(i);
+                if (entry.FindPropertyRelative("first").stringValue != property) continue;
+                return entry.FindPropertyRelative("second")
+                    .FindPropertyRelative("m_Texture").objectReferenceValue as Texture;
+            }
+            return null;
+        }
+
+        private static Color SavedColor(Material mat, string property, Color fallback)
+        {
+            var saved = new SerializedObject(mat)
+                .FindProperty("m_SavedProperties.m_Colors");
+            if (saved == null) return fallback;
+            for (int i = 0; i < saved.arraySize; i++)
+            {
+                var entry = saved.GetArrayElementAtIndex(i);
+                if (entry.FindPropertyRelative("first").stringValue == property)
+                    return entry.FindPropertyRelative("second").colorValue;
+            }
+            return fallback;
+        }
+
+        private static float SavedFloat(Material mat, string property, float fallback)
+        {
+            var saved = new SerializedObject(mat)
+                .FindProperty("m_SavedProperties.m_Floats");
+            if (saved == null) return fallback;
+            for (int i = 0; i < saved.arraySize; i++)
+            {
+                var entry = saved.GetArrayElementAtIndex(i);
+                if (entry.FindPropertyRelative("first").stringValue == property)
+                    return entry.FindPropertyRelative("second").floatValue;
+            }
+            return fallback;
         }
 
         private static List<(Source source, GameObject prefab)> Choices(Kind kind)

@@ -1571,9 +1571,45 @@ namespace RadiantPool.Game
                       $"{hudEnemies.Length}, distinct generated target shapes {distinctShapes}, " +
                       $"renderer click {(rendererClick ? "TARGETED" : "MISSED")}, " +
                       $"last on-screen overlays {CombatClientUI.Instance.LastMonsterOverlayCount}");
-            Debug.Log($"[AttackTest] one click on {enemy.Name} at {feet} ft " +
+            // Root combat has no permanent instruction/info window. Open Attack exactly as
+            // the restored hotbar slot does, give IMGUI a frame to lay out the picker, and
+            // prove both the picker and hotbar stay inside the logical canvas.
+            var combatUi = CombatClientUI.Instance;
+            yield return null;
+            bool instructionGone = combatUi.ActionPanelRectForTest.width <= 0f;
+            combatUi.PickAttack();
+            float uiDeadline = Time.time + 2f;
+            while (combatUi.ActionPanelRectForTest.width <= 0f && Time.time < uiDeadline)
+                yield return null;
+            Rect picker = combatUi.ActionPanelRectForTest;
+            Rect bar = HotBar.BarRect;
+            bool pickerResponsive = combatUi.AttackPickerOpenForTest
+                && picker.width > 0f && picker.height > 0f
+                && picker.xMin >= -0.5f && picker.xMax <= Ui.W + 0.5f
+                && picker.yMin >= -0.5f && picker.yMax <= bar.yMin + 0.5f;
+            bool hotbarResponsive = bar.width > 0f && bar.height > 0f
+                && bar.xMin >= -0.5f && bar.xMax <= Ui.W + 0.5f
+                && bar.yMin >= -0.5f && bar.yMax <= Ui.H + 0.5f;
+            bool combatUiReady = instructionGone && pickerResponsive && hotbarResponsive;
+            Debug.Log($"[CombatUiTest] {(combatUiReady ? "PASS" : "FAIL")} - " +
+                      $"Attack picker {picker.width:0}x{picker.height:0} inside " +
+                      $"{Ui.W:0}x{Ui.H:0}; hotbar {bar.width:0}x{bar.height:0}; " +
+                      $"permanent instruction window {(instructionGone ? "removed" : "VISIBLE")}");
+
+            var args = System.Environment.GetCommandLineArgs();
+            int uiCaptureIndex = System.Array.IndexOf(args, "-combatuicapture");
+            if (uiCaptureIndex >= 0 && uiCaptureIndex + 1 < args.Length)
+            {
+                string uiCapture = args[uiCaptureIndex + 1];
+                string directory = System.IO.Path.GetDirectoryName(uiCapture);
+                if (!string.IsNullOrEmpty(directory)) System.IO.Directory.CreateDirectory(directory);
+                ScreenCapture.CaptureScreenshot(uiCapture);
+                yield return new WaitForSeconds(1f);
+                Debug.Log($"[CombatUiCapture] wrote responsive Attack picker to {uiCapture}");
+            }
+            Debug.Log($"[AttackTest] Attack button targets {enemy.Name} at {feet} ft " +
                       $"(move {combat.MoveLeft} ft, action {combat.ActionLeft})");
-            CombatClientUI.Instance.ClickCell(enemy.Cell);
+            combatUi.PickTarget(enemy.Id);
 
             float until = Time.time + 15f;
             while (combat.ActionLeft && combat.IsMyTurn && combat.InCombat.Value
@@ -1621,6 +1657,7 @@ namespace RadiantPool.Game
             Debug.Log($"[SpellAudioTest] {(licensedSpell ? "PASS" : "FAIL")} - " +
                       $"fire cast + impact, last cue '{GameAudio.Instance?.LastLicensedCue ?? "none"}'");
             bool pass = blockedApproach && weaponsVisible && combatLit && monsterHud
+                        && combatUiReady
                         && struck && visualFeedback && soundFeedback && assetAudio
                         && licensedWeapon && licensedSpell && battleMusic
                         && (feet <= 5 || walked);   // in reach already? then no walk owed
@@ -1691,6 +1728,7 @@ namespace RadiantPool.Game
             var environmentArt = FindObjectsByType<EnvironmentArtTag>(FindObjectsSortMode.None);
             int rpgPolyArt = environmentArt.Count(a => a.SourcePack == "RpgPoly");
             int natureArt = environmentArt.Count(a => a.SourcePack == "SimpleNature");
+            int graveyardArt = environmentArt.Count(a => a.SourcePack == "GraveyardNature");
             int dungeonArt = environmentArt.Count(a => a.SourcePack == "Dungeon");
             int paintedGround = environmentArt.Count(a => a.SourcePack == "HandpaintedGrass");
             for (int i = 0; i < Zones.Length; i++)
@@ -1763,6 +1801,7 @@ namespace RadiantPool.Game
                         && actionResolved
                         && rewardPaid
                         && rpgPolyArt > 0 && natureArt > 0 && dungeonArt > 0
+                        && graveyardArt >= CampaignExpansionContent.Sites.Length * 14
                         && paintedGround == CampaignExpansionContent.Sites.Length
                         && returned == Zones.Length;
             Debug.Log($"[TravelTest] {(pass ? "PASS" : "FAIL")} - " +
@@ -1772,7 +1811,8 @@ namespace RadiantPool.Game
                       $"site objective {(actionResolved ? "resolved" : "failed")}; " +
                       $"side/main rewards {(rewardPaid ? "paid" : "failed")}; " +
                       $"environment art RPG x{rpgPolyArt}, nature x{natureArt}, " +
-                      $"dungeon x{dungeonArt}, painted ground x{paintedGround}; " +
+                      $"graveyard/nature2 x{graveyardArt}, dungeon x{dungeonArt}, " +
+                      $"painted ground x{paintedGround}; " +
                       $"{returned}/{Zones.Length} hub returns");
         }
 

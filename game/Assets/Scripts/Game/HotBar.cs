@@ -60,7 +60,7 @@ namespace RadiantPool.Game
             string[] spells = inCombat ? CombatClientUI.KnownSpells(cls)
                 : System.Array.Empty<string>();
 
-            int combatSlots = inCombat ? 2 + spells.Length : 0;   // dodge, end + named spells
+            int combatSlots = inCombat ? 3 + spells.Length : 0;   // attack, dodge, end + spells
             const int utilSlots = 5;                    // potion, bag, journal, session, cog
             int slots = combatSlots + utilSlots;
 
@@ -70,17 +70,40 @@ namespace RadiantPool.Game
             string gold = director.PartyGold.Value.ToString("N0");   // 1,234 — not "1234"
             float goldW = Mathf.Min(96f, Mathf.Max(64f, 26f + gold.Length * 9f));
 
-            // Fit the bar to the window: shrink the slots before ever overflowing the edge.
+            // Fit the bar to the window. If even comfortable minimum-size slots would not
+            // fit, combat actions become a first row and utilities a second row.
             float gap = inCombat ? 14f : 0f;
             float chrome = gap + 28f + goldW + HideW + 6f;
             float avail = Ui.W - 24f;
-            _slot = Mathf.Clamp((avail - chrome) / slots - 4f, MinSlot, MaxSlot);
+            float oneRowFit = (avail - chrome) / slots - 4f;
+            bool wrapCombat = inCombat && oneRowFit < MinSlot;
+            if (wrapCombat)
+            {
+                float combatFit = (avail - 28f) / combatSlots - 4f;
+                float utilityFit = (avail - (28f + goldW + HideW + 6f)) / utilSlots - 4f;
+                _slot = Mathf.Clamp(Mathf.Min(combatFit, utilityFit), 26f, MaxSlot);
+            }
+            else
+                _slot = Mathf.Clamp(oneRowFit, 26f, MaxSlot);
 
-            float w = slots * (_slot + 4f) + chrome;
-            var rect = new Rect(Ui.W / 2f - w / 2f, Ui.H - _slot - 38f, w, _slot + 16f);
+            float combatWidth = combatSlots * (_slot + 4f) + 28f;
+            float utilityWidth = utilSlots * (_slot + 4f) + 28f + goldW + HideW + 6f;
+            float w = wrapCombat ? Mathf.Min(avail, Mathf.Max(combatWidth, utilityWidth))
+                : Mathf.Min(avail, slots * (_slot + 4f) + chrome);
+            float barHeight = wrapCombat ? _slot * 2f + 24f : _slot + 16f;
+            var rect = new Rect(Ui.W / 2f - w / 2f, Ui.H - barHeight - 22f, w, barHeight);
             BarRect = DrawHealth(holder, rect);
 
             GUILayout.BeginArea(rect, Theme.PanelStyle);
+            GUILayout.BeginVertical();
+            if (wrapCombat)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.FlexibleSpace();
+                DrawCombatActions(combat, myTurn, spells);
+                GUILayout.FlexibleSpace();
+                GUILayout.EndHorizontal();
+            }
             GUILayout.BeginHorizontal();
 
             GUILayout.Label(new GUIContent($"<color=#f2ca50><b>{gold}</b>g</color>",
@@ -92,25 +115,9 @@ namespace RadiantPool.Game
                 },
                 GUILayout.Width(goldW), GUILayout.Height(_slot));
 
-            if (inCombat)
+            if (inCombat && !wrapCombat)
             {
-                GUI.enabled = myTurn && combat.ActionLeft;
-                if (Btn("dodge", "Dodge")) combat.CmdDodge();
-
-                foreach (var id in spells)
-                {
-                    var spell = SpellLibrary.Get(id);
-                    bool usable = myTurn && (spell.Level == 0
-                        ? combat.ActionLeft
-                        : (spell.IsBonusAction ? combat.BonusLeft : combat.ActionLeft)
-                          && combat.MySlots[Mathf.Clamp(spell.Level - 1, 0, 2)] > 0);
-                    GUI.enabled = usable;
-                    if (Btn(id, spell.Name)) CombatClientUI.Instance?.PickSpell(id);
-                }
-
-                GUI.enabled = myTurn;
-                if (Btn("end_turn", "End Turn (Space)")) combat.CmdEndTurn();
-                GUI.enabled = true;
+                DrawCombatActions(combat, myTurn, spells);
                 GUILayout.Space(gap);
             }
 
@@ -165,6 +172,7 @@ namespace RadiantPool.Game
             if (stow) Ui.BarCollapsed = true;
 
             GUILayout.EndHorizontal();
+            GUILayout.EndVertical();
             GUILayout.EndArea();
 
             if (potions > 0)
@@ -182,6 +190,36 @@ namespace RadiantPool.Game
                 GUI.Label(new Rect(BarRect.x, BarRect.y - 20f, BarRect.width, 18f),
                     GUI.tooltip, tipStyle);
             }
+        }
+
+        private void DrawCombatActions(CombatManager combat, bool myTurn, string[] spells)
+        {
+            GUI.enabled = myTurn && combat.ActionLeft;
+            if (Btn("attack", "Attack (A)"))
+            {
+                var ui = CombatClientUI.Instance;
+                if (ui != null) ui.PickAttack();
+            }
+            if (Btn("dodge", "Dodge")) combat.CmdDodge();
+
+            foreach (var id in spells)
+            {
+                var spell = SpellLibrary.Get(id);
+                bool usable = myTurn && (spell.Level == 0
+                    ? combat.ActionLeft
+                    : (spell.IsBonusAction ? combat.BonusLeft : combat.ActionLeft)
+                      && combat.MySlots[Mathf.Clamp(spell.Level - 1, 0, 2)] > 0);
+                GUI.enabled = usable;
+                if (Btn(id, spell.Name))
+                {
+                    var ui = CombatClientUI.Instance;
+                    if (ui != null) ui.PickSpell(id);
+                }
+            }
+
+            GUI.enabled = myTurn;
+            if (Btn("end_turn", "End Turn (Space)")) combat.CmdEndTurn();
+            GUI.enabled = true;
         }
 
         private bool Btn(string icon, string tooltip) =>

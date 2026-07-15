@@ -11,7 +11,7 @@ namespace RadiantPool.Game
     {
         public static CombatClientUI Instance { get; private set; }
 
-        private enum Mode { Root, PickSpellTarget }
+        private enum Mode { Root, PickAttackTarget, PickSpellTarget }
         private Mode _mode = Mode.Root;
         private string _pendingSpell = "";
         private Vector2 _logScroll;
@@ -29,7 +29,14 @@ namespace RadiantPool.Game
         private void Awake() => Instance = this;
         private void OnDestroy() { if (Instance == this) Instance = null; }
 
-        /// <summary>HotBar hook: an individual spell opens its valid target picker.</summary>
+        /// <summary>HotBar hooks: Attack and individual spells open target pickers.</summary>
+        public void PickAttack()
+        {
+            _autoTarget = "";
+            _pendingSpell = "";
+            _mode = Mode.PickAttackTarget;
+        }
+
         public void PickSpell(string spellId)
         {
             _autoTarget = "";
@@ -43,6 +50,13 @@ namespace RadiantPool.Game
         {
             var combat = CombatManager.Instance;
             if (combat == null || !combat.CanAcceptPlayerInput) return;
+            if (_mode == Mode.PickAttackTarget)
+            {
+                var target = combat.ClientUnits.FirstOrDefault(u => u.Id == targetId);
+                _mode = Mode.Root;
+                if (target != null) ClickCell(target.Cell);
+                return;
+            }
             if (_mode == Mode.PickSpellTarget && _pendingSpell.Length > 0)
                 combat.CmdCast(_pendingSpell, targetId);
             else
@@ -158,9 +172,11 @@ namespace RadiantPool.Game
             bool acting = combat != null && combat.CanAcceptPlayerInput && _mode == Mode.Root
                           && mine is { Down: false, Dead: false };
 
-            if (combat != null && combat.CanAcceptPlayerInput && !Ui.Typing && !Ui.PanelOpen
-                && Input.GetKeyDown(KeyCode.Backspace))
-                _mode = Mode.Root;
+            if (combat != null && combat.CanAcceptPlayerInput && !Ui.Typing && !Ui.PanelOpen)
+            {
+                if (Input.GetKeyDown(KeyCode.A)) PickAttack();
+                if (Input.GetKeyDown(KeyCode.Backspace)) _mode = Mode.Root;
+            }
 
             // A walk ordered by an earlier click may have arrived: swing. This is deliberately
             // OUTSIDE the camera check below — the blow has to land in a headless run too
@@ -443,7 +459,7 @@ namespace RadiantPool.Game
             if (MyCardRect.Contains(m)) return true;
             if (HotBar.BarRect.Contains(m)) return true;
             if (MiniMap.MapRect.Contains(m)) return true;
-            if (combat.IsMyTurn && _actionsRect.Contains(m)) return true;         // status strip
+            if (combat.IsMyTurn && _mode != Mode.Root && _actionsRect.Contains(m)) return true;
             return false;
         }
 
@@ -565,8 +581,12 @@ namespace RadiantPool.Game
             DrawInitiative(combat);
             DrawLog(combat);
             DrawMyCard(combat);
-            if (combat.IsMyTurn) DrawActions(combat);
-            else _mode = Mode.Root;
+            if (combat.IsMyTurn && _mode != Mode.Root) DrawActions(combat);
+            else
+            {
+                _actionsRect = default;
+                if (!combat.IsMyTurn) _mode = Mode.Root;
+            }
         }
 
         // ---------- HUD geometry (one definition per panel; IsMouseOverHud reuses these) ----------
@@ -751,45 +771,62 @@ namespace RadiantPool.Game
         }
 
         private Rect _actionsRect;
+        private Vector2 _actionsScroll;
 
-        /// <summary>Slim status strip docked directly above the hotbar — the center of
-        /// the screen stays clear so the movement grid is always clickable. Expands
-        /// only while a target picker is open.</summary>
+        /// <summary>Read-only UI state for the unattended combat test. Keeping the test on
+        /// the visible target-picker path prevents the Attack slot from silently regressing
+        /// into a button that looks present but never submits an attack.</summary>
+        public bool AttackPickerOpenForTest => _mode == Mode.PickAttackTarget;
+        public Rect ActionPanelRectForTest => _actionsRect;
+
+        /// <summary>Temporary target picker docked above the hotbar. The old permanent
+        /// instruction/status strip is gone; height derives from target count so rows
+        /// cannot spill beyond the panel.</summary>
         private void DrawActions(CombatManager combat)
         {
-            float h = _mode == Mode.Root ? 58f : 112f;
-            float w = Mathf.Min(740f, Ui.W - 24f);
-            // Sits on the hotbar, wherever the hotbar ended up — it moves with the window.
-            float barTop = HotBar.BarRect.height > 0f ? HotBar.BarRect.y : Ui.H - 82f;
-            _actionsRect = new Rect(Ui.W / 2f - w / 2f, barTop - h - 6f, w, h);
-            GUILayout.BeginArea(_actionsRect, Theme.PanelStyle);
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Your Turn", Theme.Header, GUILayout.Width(88));
-            // The hint line is the thing that gets cut off first on a narrow window, so it
-            // sheds detail rather than overflowing: essentials always, the rest if it fits.
-            bool roomy = Ui.W > 900f;
-            string info = combat.ActionResolving
-                ? $"<color=#f2ca50>Resolving {combat.State} - input locked</color>"
-                : combat.LastRejection.Length > 0
-                    ? $"<color=#f2ca50>{combat.LastRejection}</color>"
-                : $"<color=#d0c5af>move <b>{combat.MoveLeft} ft</b> · click square = walk · " +
-                  "click enemy = close in and attack · Space = end turn"
-                  + (roomy ? " · WASD/middle-drag = pan, F = recenter" : "")
-                  + $" · action {Theme.Ready(combat.ActionLeft)}"
-                  + $" · bonus {Theme.Ready(combat.BonusLeft)}</color>";
-            GUILayout.Label(info, Theme.Body);
-            GUILayout.EndHorizontal();
-
-            if (_mode == Mode.PickSpellTarget)
+            CombatTargetType targetType;
+            bool allowDowned;
+            string title;
+            if (_mode == Mode.PickAttackTarget)
+            {
+                targetType = CombatTargetType.Hostile;
+                allowDowned = false;
+                title = "Choose Attack Target";
+            }
+            else
             {
                 var spell = SpellLibrary.Get(_pendingSpell);
-                DrawTargets(combat, spell.TargetType, spell.AllowDownedTarget, PickTarget);
+                targetType = spell.TargetType;
+                allowDowned = spell.AllowDownedTarget;
+                title = $"Choose {spell.Name} Target";
             }
+
+            var mine = combat.MyUnit;
+            int targets = combat.ClientUnits.Count(u =>
+                ClientTargetAllowed(mine, u, targetType, allowDowned));
+            float w = Mathf.Min(620f, Ui.W - 24f);
+            int columns = w >= 520f ? 4 : w >= 380f ? 3 : 2;
+            int rows = Mathf.Max(1, Mathf.CeilToInt((targets + 1) / (float)columns));
+            // UI7's framed panel consumes more vertical padding than the old flat skin.
+            // Budget the chrome explicitly so a 30-unit target button is never reduced to
+            // a clipped sliver; the scroll view still caps unusually large encounters.
+            float wantedHeight = 82f + rows * 44f;
+            float barTop = HotBar.BarRect.height > 0f ? HotBar.BarRect.y : Ui.H - 82f;
+            float height = Mathf.Min(wantedHeight, Mathf.Max(88f, barTop - 24f));
+            float y = Mathf.Max(12f, barTop - height - 6f);
+            _actionsRect = new Rect(Ui.W / 2f - w / 2f, y, w, height);
+            GUILayout.BeginArea(_actionsRect, Theme.PanelStyle);
+            GUILayout.Label(title, Theme.Caps);
+            _actionsScroll = GUILayout.BeginScrollView(_actionsScroll, false, false);
+            float buttonWidth = Mathf.Max(90f,
+                (w - 64f - (columns - 1) * 4f) / columns);
+            DrawTargets(combat, targetType, allowDowned, columns, buttonWidth, PickTarget);
+            GUILayout.EndScrollView();
             GUILayout.EndArea();
         }
 
         private void DrawTargets(CombatManager combat, CombatTargetType targetType,
-            bool allowDowned,
+            bool allowDowned, int columns, float buttonWidth,
             System.Action<string> onPick)
         {
             var mine = combat.MyUnit;
@@ -798,15 +835,31 @@ namespace RadiantPool.Game
             foreach (var u in combat.ClientUnits.Where(u =>
                 ClientTargetAllowed(mine, u, targetType, allowDowned)))
             {
-                if (col == 3) { GUILayout.EndHorizontal(); GUILayout.BeginHorizontal(); col = 0; }
-                col++;
-                if (GUILayout.Button($"{u.Name} ({u.Hp}/{u.MaxHp})"))
+                if (col == columns)
+                {
+                    GUILayout.EndHorizontal();
+                    GUILayout.BeginHorizontal();
+                    col = 0;
+                }
+                if (GUILayout.Button(new GUIContent($"{u.Name}\n{u.Hp}/{u.MaxHp} HP", u.Name),
+                        GUILayout.Width(buttonWidth), GUILayout.Height(38f)))
                 {
                     CombatFx.Instance?.ShowTargetMarker(u.Visual);
                     onPick(u.Id);
                 }
+                col++;
             }
-            if (GUILayout.Button("Back  [Backspace]")) _mode = Mode.Root;
+            if (col == columns)
+            {
+                GUILayout.EndHorizontal();
+                GUILayout.BeginHorizontal();
+                col = 0;
+            }
+            if (GUILayout.Button(new GUIContent("Back", "Backspace"),
+                    GUILayout.Width(buttonWidth), GUILayout.Height(38f)))
+                _mode = Mode.Root;
+            col++;
+            while (col++ < columns) GUILayout.Space(buttonWidth);
             GUILayout.EndHorizontal();
         }
 
