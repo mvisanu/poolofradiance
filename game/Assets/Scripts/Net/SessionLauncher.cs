@@ -60,6 +60,12 @@ namespace RadiantPool.Game
             {
                 if (args[i] == "-name" && i + 1 < args.Length)
                     _displayName = args[i + 1];
+                else if (args[i] == "-class" && i + 1 < args.Length)
+                {
+                    int classIndex = Array.FindIndex(ClassNames, n =>
+                        n.Equals(args[i + 1], StringComparison.OrdinalIgnoreCase));
+                    if (classIndex >= 0) CharacterBuild.Local = CharacterBuild.Default(classIndex);
+                }
             }
             for (int i = 0; i < args.Length; i++)
             {
@@ -190,7 +196,10 @@ namespace RadiantPool.Game
             return name.Length > 20 ? name.Substring(0, 20) : name;
         }
 
-        private static readonly string[] ClassNames = { "Fighter", "Cleric", "Wizard", "Rogue" };
+        // Must match CharacterClass's numeric order exactly: character creation sends the
+        // selected index to the server. Cleric/Wizard used to be reversed here, so choosing
+        // one visibly created the other class's rules and spells.
+        private static readonly string[] ClassNames = { "Fighter", "Wizard", "Cleric", "Rogue" };
         private static readonly string[] RaceNames = { "Human", "Dwarf", "Elf", "Halfling" };
 
         /// <summary>Only the title screen draws here now. Once a session is running, the

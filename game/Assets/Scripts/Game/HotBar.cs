@@ -55,7 +55,7 @@ namespace RadiantPool.Game
 
             var combat = CombatManager.Instance;
             bool inCombat = combat != null && combat.InCombat.Value;
-            bool myTurn = inCombat && combat.IsMyTurn;
+            bool myTurn = inCombat && combat.CanAcceptPlayerInput;
             var cls = (CharacterClass)Mathf.Max(0, holder.ClassIndex.Value);
             string[] spells = inCombat ? CombatClientUI.KnownSpells(cls)
                 : System.Array.Empty<string>();
@@ -104,7 +104,7 @@ namespace RadiantPool.Game
                     bool usable = myTurn && (spell.Level == 0
                         ? combat.ActionLeft
                         : (spell.IsBonusAction ? combat.BonusLeft : combat.ActionLeft)
-                          && combat.MySlots.Sum() > 0);
+                          && combat.MySlots[Mathf.Clamp(spell.Level - 1, 0, 2)] > 0);
                     GUI.enabled = usable;
                     if (Btn(id, spell.Name)) CombatClientUI.Instance?.PickSpell(id);
                 }

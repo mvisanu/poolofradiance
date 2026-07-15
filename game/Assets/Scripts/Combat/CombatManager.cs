@@ -34,6 +34,7 @@ namespace RadiantPool.Game
             public int OwnerId = -1;         // players only
             public Transform Visual;          // player object or local monster capsule
             public bool Down, Dead;
+            public float DisplayHp;
         }
 
         public readonly List<UnitView> ClientUnits = new List<UnitView>();
@@ -46,6 +47,14 @@ namespace RadiantPool.Game
         public int[] MySlots { get; private set; } = { 0, 0, 0 };
         public string LastRejection { get; private set; } = "";
         public Vector3 GridOrigin { get; private set; }
+        public BattleState State { get; private set; } = BattleState.Inactive;
+        public bool ActionResolving => State == BattleState.ExecutingPlayerAction
+            || State == BattleState.ExecutingEnemyAction
+            || State == BattleState.ApplyingDamage
+            || State == BattleState.UpdatingUi
+            || State == BattleState.CheckingBattleResult;
+        public bool CanAcceptPlayerInput => InCombat.Value && IsMyTurn
+            && State == BattleState.WaitingForPlayerInput;
 
         public UnitView MyUnit => ClientUnits.FirstOrDefault(
             u => u.IsPc && u.OwnerId == LocalConnection.ClientId);
@@ -65,12 +74,24 @@ namespace RadiantPool.Game
         private TurnEngine _engine;
         private IRng _rng;
         private EncounterTrigger _encounter;
+        private EncounterTrigger _retryEncounter;
         private int _encounterCharacterLevel = 1;
         private int _encounterMonsterLevel = 1;
         private Vector3 _origin;
         private bool _turnDone;
         private GameObject _overlay;
         private Material _gridMaterial;
+        private int _actionSequence;
+        private bool _actionQueueRunning;
+
+        private sealed class ServerCombatAction
+        {
+            public BattleState ExecutionState;
+            public Func<IEnumerator> CreateRoutine;
+        }
+
+        private readonly CombatActionQueue<ServerCombatAction> _actionQueue =
+            new CombatActionQueue<ServerCombatAction>();
 
         public int EncounterCharacterLevel => _encounterCharacterLevel;
         public int EncounterMonsterLevel => _encounterMonsterLevel;
@@ -99,22 +120,39 @@ namespace RadiantPool.Game
             _originForClients() + new Vector3(c.x * CellSize, 0f, c.y * CellSize);
         private Vector3 _originForClients() => IsServerStarted ? _origin : GridOrigin;
 
+        [Server]
+        private void SetBattleState(BattleState state)
+        {
+            State = state;
+            RpcBattleState((int)state);
+        }
+
         // ==================== SERVER ====================
 
         [Server]
         public void StartEncounter(EncounterTrigger encounter)
         {
             if (InCombat.Value) return;
+            SetBattleState(BattleState.Initializing);
             _rng ??= new SeededRng(Environment.TickCount);
             _encounter = encounter;
+            _retryEncounter = null;
             _server.Clear();
+            _actionQueue.Clear();
+            _actionQueueRunning = false;
             _origin = new Vector3(
                 Mathf.Round(encounter.transform.position.x / CellSize) * CellSize, 0f,
                 Mathf.Round(encounter.transform.position.z / CellSize) * CellSize);
 
             var players = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
                 .Where(p => p.Sheet != null && !p.Sheet.IsDead).ToList();
-            if (players.Count == 0) return;
+            if (players.Count == 0)
+            {
+                SetBattleState(BattleState.Inactive);
+                return;
+            }
+
+            SetBattleState(BattleState.StartingBattle);
 
             // Scale from the strongest connected hero, not an AI companion. This prevents
             // a high-level player from bringing level-1 enemies into co-op while ensuring
@@ -149,6 +187,7 @@ namespace RadiantPool.Game
                 m++;
             }
 
+            SetBattleState(BattleState.CalculatingTurnOrder);
             _engine = new TurnEngine(_server.Values.Select(u => u.Creature), _rng);
             InCombat.Value = true;
 
@@ -219,6 +258,7 @@ namespace RadiantPool.Game
 
                 if (unit.Player == null)
                 {
+                    SetBattleState(BattleState.ExecutingEnemyAction);
                     yield return new WaitForSeconds(0.45f);
                     yield return MonsterTurn(unit);
                     if (CheckCombatEnd()) yield break;
@@ -228,6 +268,7 @@ namespace RadiantPool.Game
 
                 if (unit.Player.IsCompanion)
                 {
+                    SetBattleState(BattleState.ExecutingEnemyAction);
                     yield return new WaitForSeconds(0.45f);
                     yield return CompanionTurn(unit);
                     if (CheckCombatEnd()) yield break;
@@ -237,6 +278,7 @@ namespace RadiantPool.Game
 
                 // Player turn: wait for intents until EndTurn or timeout.
                 _turnDone = false;
+                SetBattleState(BattleState.WaitingForPlayerInput);
                 float deadline = Time.time + TurnSeconds;
                 while (!_turnDone && Time.time < deadline && InCombat.Value)
                 {
@@ -256,7 +298,13 @@ namespace RadiantPool.Game
         [Server]
         private void EndActiveTurn()
         {
-            var next = _engine.EndTurn();
+            // Combat can resolve from the parallel controlled action timeline before the
+            // turn coroutine resumes. Never advance a cleared engine (and never let a
+            // coroutine exception escape into the player log).
+            var engine = _engine;
+            if (!InCombat.Value || engine == null) return;
+            SetBattleState(BattleState.CheckingBattleResult);
+            engine.EndTurn();
             // Round ticks may have woken/expired conditions; resync everyone cheaply.
             foreach (var u in _server.Values) SyncHp(u.Id);
         }
@@ -274,7 +322,9 @@ namespace RadiantPool.Game
 
             Vector2Int from = monster.Cell;
             int steps = monster.Creature.Speed / 5;
-            while (Chebyshev(target.Cell, monster.Cell) > 1 && steps-- > 0)
+            int longestRange = monster.MonsterDef.Attacks
+                .Select(a => a.RangeFeet).DefaultIfEmpty(5).Max();
+            while (Chebyshev(target.Cell, monster.Cell) * 5 > longestRange && steps-- > 0)
             {
                 var step = new Vector2Int(
                     monster.Cell.x + Math.Sign(target.Cell.x - monster.Cell.x),
@@ -288,21 +338,15 @@ namespace RadiantPool.Game
                 yield return new WaitForSeconds(GlideSeconds(from, monster.Cell) + 0.15f);
             }
 
-            if (Chebyshev(target.Cell, monster.Cell) <= 1)
+            int distanceFeet = Chebyshev(target.Cell, monster.Cell) * 5;
+            var chosen = monster.MonsterDef.Attacks
+                .Where(a => a.RangeFeet >= distanceFeet)
+                .OrderByDescending(a => a.Damage.Average)
+                .ThenBy(a => a.RangeFeet)
+                .FirstOrDefault();
+            if (chosen != null)
             {
-                try
-                {
-                    var attack = monster.MonsterDef.Attacks[0];
-                    var result = CombatMath.ResolveAttack(
-                        monster.Creature, target.Creature, attack, _rng);
-                    Narrate(monster.Creature, target.Creature, attack.Name, result);
-                    SyncHp(target.Id);
-                }
-                catch (Exception e)
-                {
-                    Debug.LogError($"[Combat] Monster attack failed: {e}");
-                }
-                yield return new WaitForSeconds(0.75f);
+                yield return ResolvePhysicalAction(monster, target, chosen);
             }
         }
 
@@ -336,8 +380,7 @@ namespace RadiantPool.Game
                     yield return MoveCompanion(self, hurt.Cell, stopAdjacent: true);
                     if (Chebyshev(self.Cell, hurt.Cell) <= 1)
                     {
-                        TryCompanionCast(self, "cure_wounds", hurt, 1);
-                        yield return new WaitForSeconds(0.75f);
+                        yield return TryCompanionCast(self, "cure_wounds", hurt, 1);
                         yield break;
                     }
                     // Couldn't reach: fall through to attack from range.
@@ -352,52 +395,46 @@ namespace RadiantPool.Game
 
             if (sheet.Class == CharacterClass.Wizard || sheet.Class == CharacterClass.Cleric)
             {
-                TryCompanionCast(self, sheet.Class == CharacterClass.Wizard
+                yield return TryCompanionCast(self, sheet.Class == CharacterClass.Wizard
                     ? "fire_bolt" : "sacred_flame", target, 0);
-                yield return new WaitForSeconds(0.75f);
                 yield break;
             }
 
             yield return MoveCompanion(self, target.Cell, stopAdjacent: true);
             if (Chebyshev(self.Cell, target.Cell) <= 1)
             {
-                TryCompanionAttack(self, target);
-                yield return new WaitForSeconds(0.75f);
+                yield return TryCompanionAttack(self, target);
             }
         }
 
         [Server]
-        private void TryCompanionCast(ServerUnit self, string spellId, ServerUnit target, int slot)
+        private IEnumerator TryCompanionCast(ServerUnit self, string spellId,
+            ServerUnit target, int slot)
         {
-            try
-            {
-                var sheet = (CharacterSheet)self.Creature;
-                var spell = SpellLibrary.Get(spellId);
-                var events = SpellEngine.Cast(sheet, spell, new[] { target.Creature }, slot, _rng);
-                NarrateSpell(sheet, spell, events);
-                foreach (var u in _server.Values) SyncHp(u.Id);
-            }
+            SpellDefinition spell;
+            try { spell = SpellLibrary.Get(spellId); }
             catch (Exception e)
             {
-                Debug.LogError($"[Combat] Companion cast failed: {e}");
+                Debug.LogError($"[Combat] Companion spell lookup failed: {e}");
+                yield break;
             }
+            yield return ResolveSpellAction(self, target, spell, slot);
         }
 
         [Server]
-        private void TryCompanionAttack(ServerUnit self, ServerUnit target)
+        private IEnumerator TryCompanionAttack(ServerUnit self, ServerUnit target)
         {
+            AttackDefinition attack;
             try
             {
-                var attack = self.Player.BasicAttack();
-                var result = CombatMath.ResolveAttack(self.Creature, target.Creature,
-                    attack, _rng);
-                Narrate(self.Creature, target.Creature, attack.Name, result);
-                SyncHp(target.Id);
+                attack = self.Player.BasicAttack();
             }
             catch (Exception e)
             {
-                Debug.LogError($"[Combat] Companion attack failed: {e}");
+                Debug.LogError($"[Combat] Companion attack lookup failed: {e}");
+                yield break;
             }
+            yield return ResolvePhysicalAction(self, target, attack);
         }
 
         /// <summary>Grid movement for a companion: pick the cells, replicate the new
@@ -454,9 +491,11 @@ namespace RadiantPool.Game
         {
             if (_engine == null || !_engine.CombatOver(out bool playersWon)) return false;
 
+            SetBattleState(playersWon ? BattleState.Victory : BattleState.Defeat);
             InCombat.Value = false;
             if (playersWon)
             {
+                _retryEncounter = null;
                 // Full encounter XP to every member (co-op convention; the level-1..5
                 // curve is tuned for this — see CampaignSimulationTests).
                 int xpEach = _server.Values.Where(u => u.MonsterDef != null)
@@ -523,6 +562,7 @@ namespace RadiantPool.Game
             }
             else
             {
+                _retryEncounter = _encounter;
                 int slot = 0;
                 foreach (var pc in _server.Values.Where(u => u.Player != null))
                 {
@@ -547,6 +587,7 @@ namespace RadiantPool.Game
                 RpcSfx("defeat");
                 RpcCombatEnded(false, 0, "");
             }
+            _actionQueue.Clear();
             _engine = null;
             _encounter = null;
             return true;
@@ -559,16 +600,18 @@ namespace RadiantPool.Game
             _server.Values.Any(u => u.Cell == cell && !u.Creature.IsDead);
 
         [Server]
-        private void Narrate(Creature attacker, Creature target, string attackName, AttackResult r)
+        private void Narrate(Creature attacker, Creature target, AttackDefinition attack,
+            AttackResult r)
         {
             string line = !r.Hit
-                ? $"{attacker.Name}'s {attackName} misses {target.Name} ({r.Total} vs AC {target.ArmorClass})."
-                : $"{attacker.Name}'s {attackName}{(r.Critical ? " CRITS" : " hits")} {target.Name} " +
+                ? $"{attacker.Name}'s {attack.Name} misses {target.Name} ({r.Total} vs AC {target.ArmorClass})."
+                : $"{attacker.Name}'s {attack.Name}{(r.Critical ? " CRITS" : " hits")} {target.Name} " +
                   $"for {r.DamageDealt} ({r.Total} vs AC {target.ArmorClass})." +
                   (r.TargetDied ? $" {target.Name} is slain!" :
                    r.TargetDowned ? $" {target.Name} goes down!" : "");
             ServerLog(line);
-            RpcAttackFx(attacker.Id, target.Id, attackName, r.Hit, r.Critical, r.DamageDealt);
+            RpcAttackImpact(attacker.Id, target.Id, attack.Name,
+                attack.VisualEffectId, r.Hit, r.Critical, r.DamageDealt);
             if (r.TargetDied || r.TargetDowned) RpcSfx("down");
         }
 
@@ -586,38 +629,46 @@ namespace RadiantPool.Game
         }
 
         [ObserversRpc]
-        private void RpcAttackFx(string attackerId, string targetId, string attackName,
-            bool hit, bool crit, int damage)
+        private void RpcAttackWindup(string attackerId, string targetId,
+            string animationTrigger, bool requiresApproach)
+        {
+            var attacker = ClientUnits.FirstOrDefault(u => u.Id == attackerId);
+            var target = ClientUnits.FirstOrDefault(u => u.Id == targetId);
+            var fx = CombatFx.Instance;
+            if (fx == null || target?.Visual == null) return;
+            if (attacker?.Visual != null)
+            {
+                CombatFx.Face(attacker.Visual, target.Visual.position);
+                CombatFx.Face(target.Visual, attacker.Visual.position);
+                if (requiresApproach) fx.Lunge(attacker.Visual, target.Visual.position);
+                CharacterVisuals.Trigger(attacker.Visual, animationTrigger);
+                // Triangle over MY current target so the fight is easy to follow.
+                if (attacker.IsPc && attacker.OwnerId == LocalConnection.ClientId)
+                    fx.ShowTargetMarker(target.Visual);
+            }
+        }
+
+        [ObserversRpc]
+        private void RpcAttackImpact(string attackerId, string targetId, string attackName,
+            string visualEffectId, bool hit, bool crit, int damage)
         {
             var attacker = ClientUnits.FirstOrDefault(u => u.Id == attackerId);
             var target = ClientUnits.FirstOrDefault(u => u.Id == targetId);
             var fx = CombatFx.Instance;
             GameAudio.PlayWeaponAttack(attackName, hit, crit);
             if (fx != null && target != null && target.Visual != null)
-                fx.AttackFeedback(target.Visual.position, hit, crit);
-            if (fx == null || target?.Visual == null) return;
-            if (attacker?.Visual != null)
             {
-                CombatFx.Face(attacker.Visual, target.Visual.position);
-                CombatFx.Face(target.Visual, attacker.Visual.position);
-                fx.Lunge(attacker.Visual, target.Visual.position);
-                CharacterVisuals.Trigger(attacker.Visual, "Attack");
-                // Triangle over MY current target so the fight is easy to follow.
-                if (attacker.IsPc && attacker.OwnerId == LocalConnection.ClientId)
-                    fx.ShowTargetMarker(target.Visual);
+                fx.AttackFeedback(target.Visual.position, hit, crit);
+                if (hit) fx.ConfiguredEffect(visualEffectId, target.Visual.position);
             }
+            if (fx == null || target?.Visual == null) return;
             if (hit)
             {
-                // Land the impact when the lunge reaches the target, not at wind-up.
-                fx.After(0.12f, () =>
-                {
-                    if (target.Visual == null) return;
-                    CharacterVisuals.Trigger(target.Visual, "Hit");
-                    fx.Blood(target.Visual.position, crit);
-                    fx.Flash(target.Visual, new Color(1f, 0.35f, 0.3f));
-                    fx.Popup(target.Visual.position, crit ? $"{damage}!" : damage.ToString(),
-                        crit ? new Color(1f, 0.6f, 0.15f) : Color.white, crit ? 1.4f : 1f);
-                });
+                CharacterVisuals.Trigger(target.Visual, "Hit");
+                fx.Blood(target.Visual.position, crit);
+                fx.Flash(target.Visual, new Color(1f, 0.35f, 0.3f));
+                fx.Popup(target.Visual.position, crit ? $"{damage}!" : damage.ToString(),
+                    crit ? new Color(1f, 0.6f, 0.15f) : Color.white, crit ? 1.4f : 1f);
             }
             else
             {
@@ -626,7 +677,37 @@ namespace RadiantPool.Game
         }
 
         [ObserversRpc]
-        private void RpcSpellFx(string casterId, string targetId, int amount, bool isHeal, int colorIdx)
+        private void RpcSpellWindup(string casterId, string targetId, string spellId,
+            string animationTrigger, string soundId, bool isHeal, int colorIdx)
+        {
+            var caster = ClientUnits.FirstOrDefault(u => u.Id == casterId);
+            var target = ClientUnits.FirstOrDefault(u => u.Id == targetId);
+            var fx = CombatFx.Instance;
+            RpcSpellAudioLocal(soundId.Length > 0 ? soundId : spellId, isHeal);
+            if (fx == null || caster?.Visual == null) return;
+            Color[] palette =
+            {
+                new Color(1f, 0.55f, 0.15f),
+                new Color(1f, 0.9f, 0.5f),
+                new Color(0.7f, 0.5f, 1f),
+                new Color(0.45f, 1f, 0.55f)
+            };
+            var color = palette[Mathf.Clamp(colorIdx, 0, palette.Length - 1)];
+            if (target?.Visual != null)
+            {
+                CombatFx.Face(caster.Visual, target.Visual.position);
+                if (!isHeal && caster.IsPc && caster.OwnerId == LocalConnection.ClientId)
+                    fx.ShowTargetMarker(target.Visual);
+            }
+            CharacterVisuals.Trigger(caster.Visual, animationTrigger);
+            fx.CastFlare(caster.Visual.position, color);
+            if (target?.Visual != null && caster != target)
+                fx.Bolt(caster.Visual.position, target.Visual.position, color);
+        }
+
+        [ObserversRpc]
+        private void RpcSpellFx(string casterId, string targetId, int amount, bool isHeal,
+            int colorIdx, string visualEffectId)
         {
             var caster = ClientUnits.FirstOrDefault(u => u.Id == casterId);
             var target = ClientUnits.FirstOrDefault(u => u.Id == targetId);
@@ -640,26 +721,22 @@ namespace RadiantPool.Game
                 new Color(0.45f, 1f, 0.55f)    // heal green
             };
             var color = palette[Mathf.Clamp(colorIdx, 0, palette.Length - 1)];
-            if (caster?.Visual != null && caster != target)
-            {
-                CombatFx.Face(caster.Visual, target.Visual.position);
-                CharacterVisuals.Trigger(caster.Visual, "Attack");
-                fx.CastFlare(caster.Visual.position, color);
-                fx.Bolt(caster.Visual.position, target.Visual.position, color);
-                if (!isHeal && caster.IsPc && caster.OwnerId == LocalConnection.ClientId)
-                    fx.ShowTargetMarker(target.Visual);
-            }
             if (isHeal)
                 fx.Popup(target.Visual.position, $"+{amount}", palette[3]);
             else if (amount > 0)
             {
+                CharacterVisuals.Trigger(target.Visual, "Hit");
                 fx.Flash(target.Visual, color);
                 fx.Popup(target.Visual.position, amount.ToString(), color);
             }
+            fx.ConfiguredEffect(visualEffectId, target.Visual.position);
         }
 
         [ObserversRpc]
         private void RpcSpellAudio(string spellId, bool isHeal) =>
+            GameAudio.PlaySpell(spellId, isHeal);
+
+        private static void RpcSpellAudioLocal(string spellId, bool isHeal) =>
             GameAudio.PlaySpell(spellId, isHeal);
 
         [Server]
@@ -682,10 +759,216 @@ namespace RadiantPool.Game
         [Server]
         private void ServerLog(string line) => RpcLog(line);
 
+        /// <summary>Every player action crosses one serial queue. The queue owns the input
+        /// lock until the controlled animation timeline, impact, HP sync, and recovery are
+        /// all complete.</summary>
+        [Server]
+        private void QueueServerAction(BattleState executionState, Func<IEnumerator> createRoutine)
+        {
+            string key = $"{_engine.ActiveCreature.Id}:{_engine.Round}:{++_actionSequence}";
+            if (!_actionQueue.TryEnqueue(key, new ServerCombatAction
+                {
+                    ExecutionState = executionState,
+                    CreateRoutine = createRoutine
+                }))
+                throw new InvalidOperationException($"Duplicate combat action '{key}'.");
+            if (!_actionQueueRunning) StartCoroutine(DrainActionQueue());
+        }
+
+        [Server]
+        private IEnumerator DrainActionQueue()
+        {
+            _actionQueueRunning = true;
+            while (_actionQueue.TryStartNext(out var action))
+            {
+                SetBattleState(action.ExecutionState);
+                var routine = action.CreateRoutine();
+                while (routine != null)
+                {
+                    bool moved;
+                    object current = null;
+                    try
+                    {
+                        moved = routine.MoveNext();
+                        if (moved) current = routine.Current;
+                    }
+                    catch (Exception e)
+                    {
+                        moved = false;
+                        Debug.LogError($"[Combat] Queued action failed safely: {e}");
+                        ServerLog("The action could not finish; combat recovered safely.");
+                    }
+                    if (!moved) break;
+                    yield return current;
+                }
+
+                _actionQueue.Complete();
+                if (!InCombat.Value) break;
+                SetBattleState(BattleState.CheckingBattleResult);
+                if (CheckCombatEnd()) break;
+                BroadcastBudget();
+                if (InCombat.Value && _engine != null
+                    && _engine.ActiveCreature.IsPlayerCharacter)
+                    SetBattleState(BattleState.WaitingForPlayerInput);
+            }
+            _actionQueueRunning = false;
+        }
+
+        [Server]
+        private IEnumerator ResolvePhysicalAction(ServerUnit attacker, ServerUnit target,
+            AttackDefinition attack)
+        {
+            RpcAttackWindup(attacker.Id, target.Id, attack.AnimationTrigger,
+                attack.RequiresApproach);
+            var timeline = new CombatActionTimeline(Time.time,
+                attack.ImpactDelaySeconds, Math.Max(2.0, attack.ImpactDelaySeconds + 1.5));
+            while (!timeline.TryTakeImpact(Time.time))
+            {
+                if (timeline.TimedOut(Time.time)) break;
+                yield return null;
+            }
+
+            SetBattleState(BattleState.ApplyingDamage);
+            var targetCheck = CombatTargeting.Validate(attacker.Creature, target.Creature,
+                CombatTargetType.Hostile);
+            if (!targetCheck.Allowed)
+            {
+                ServerLog($"{attacker.Creature.Name}'s action is cancelled: {targetCheck.Reason}");
+            }
+            else
+            {
+                try
+                {
+                    var result = CombatMath.ResolveAttack(
+                        attacker.Creature, target.Creature, attack, _rng);
+                    Narrate(attacker.Creature, target.Creature, attack, result);
+                    SyncHp(target.Id);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"[Combat] Physical action failed safely: {e}");
+                    ServerLog($"{attacker.Creature.Name}'s attack fizzles; combat continues.");
+                }
+            }
+
+            SetBattleState(BattleState.UpdatingUi);
+            yield return new WaitForSeconds(0.45f);
+        }
+
+        [Server]
+        private IEnumerator ResolveSpellAction(ServerUnit caster, ServerUnit target,
+            SpellDefinition spell, int slotLevel)
+        {
+            bool healing = spell.Effects.Any(e => e.Kind == EffectOpKind.Heal);
+            RpcSpellWindup(caster.Id, target.Id, spell.Id, spell.AnimationTrigger,
+                spell.SoundEffectId, healing, SpellColor(spell));
+            var timeline = new CombatActionTimeline(Time.time,
+                spell.ImpactDelaySeconds, Math.Max(2.0, spell.ImpactDelaySeconds + 1.5));
+            while (!timeline.TryTakeImpact(Time.time))
+            {
+                if (timeline.TimedOut(Time.time)) break;
+                yield return null;
+            }
+
+            SetBattleState(BattleState.ApplyingDamage);
+            var targetCheck = CombatTargeting.Validate(caster.Creature, target.Creature,
+                spell.TargetType, spell.AllowDownedTarget);
+            if (!targetCheck.Allowed)
+            {
+                ServerLog($"{caster.Creature.Name}'s {spell.Name} is cancelled: " +
+                          targetCheck.Reason);
+            }
+            else
+            {
+                try
+                {
+                    var events = ResolveSpellEvents(caster, target, spell, slotLevel);
+                    NarrateSpell((CharacterSheet)caster.Creature, spell, events);
+                    foreach (var u in _server.Values) SyncHp(u.Id);
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"[Combat] Magic action failed safely: {e}");
+                    ServerLog($"{caster.Creature.Name}'s {spell.Name} fizzles; combat continues.");
+                }
+            }
+
+            SetBattleState(BattleState.UpdatingUi);
+            yield return new WaitForSeconds(0.55f);
+        }
+
+        [Server]
+        private List<SpellEvent> ResolveSpellEvents(ServerUnit caster, ServerUnit target,
+            SpellDefinition spell, int slotLevel)
+        {
+            var sheet = (CharacterSheet)caster.Creature;
+            if (spell.Id == "sleep")
+            {
+                var area = _server.Values
+                    .Where(u => !u.Creature.IsDead && Chebyshev(u.Cell, target.Cell) <= 2
+                                && u.Player == null)
+                    .Select(u => u.Creature).ToList();
+                return SpellEngine.CastSleep(sheet, spell, area, slotLevel, _rng);
+            }
+            if (spell.Id == "burning_hands")
+            {
+                var area = _server.Values
+                    .Where(u => !u.Creature.IsDead && u.Id != caster.Id
+                                && Chebyshev(u.Cell, target.Cell) <= 1)
+                    .Select(u => u.Creature).Distinct().ToList();
+                if (!area.Contains(target.Creature)) area.Add(target.Creature);
+                return SpellEngine.Cast(sheet, spell, area, slotLevel, _rng);
+            }
+            if (spell.Id == "magic_missile")
+                return SpellEngine.Cast(sheet, spell,
+                    new[] { target.Creature, target.Creature, target.Creature }, slotLevel, _rng);
+            return SpellEngine.Cast(sheet, spell, new[] { target.Creature }, slotLevel, _rng);
+        }
+
+        private static int SpellColor(SpellDefinition spell)
+        {
+            var damage = spell.Effects.FirstOrDefault(e => e.Kind == EffectOpKind.Damage);
+            if (damage?.DamageType == DamageType.Fire) return 0;
+            if (damage?.DamageType == DamageType.Radiant) return 1;
+            return spell.Effects.Any(e => e.Kind == EffectOpKind.Heal) ? 3 : 2;
+        }
+
+        [Server]
+        private IEnumerator ResolvePotionAction(ServerUnit unit, GameDirector director)
+        {
+            RpcSpellWindup(unit.Id, unit.Id, "potion_healing", "Attack",
+                "potion_healing", true, 3);
+            yield return new WaitForSeconds(0.2f);
+            SetBattleState(BattleState.ApplyingDamage);
+            try
+            {
+                int rolled = Dice.Roll("2d4+2", _rng).Total;
+                int healed = unit.Creature.Heal(rolled);
+                director.ServerConsumePotion();
+                ServerLog($"{unit.Creature.Name} drinks a Potion of Healing " +
+                          $"and restores {healed} HP.");
+                RpcSpellFx(unit.Id, unit.Id, healed, true, 3, "potion_healing");
+                RpcSfx("chime");
+                SyncHp(unit.Id);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[Combat] Potion action failed safely: {e}");
+                ServerLog("The potion could not be used; combat continues.");
+            }
+            SetBattleState(BattleState.UpdatingUi);
+            yield return new WaitForSeconds(0.4f);
+        }
+
         private ServerUnit ValidatedActor(NetworkConnection conn, out string error)
         {
             error = "";
             if (!InCombat.Value || _engine == null) { error = "No combat in progress."; return null; }
+            if (State != BattleState.WaitingForPlayerInput || _actionQueue.Count > 0)
+            {
+                error = "Wait for the current action to finish.";
+                return null;
+            }
             // A listen-server may execute its own ServerRpc locally; FishNet does not
             // consistently inject the sender connection on that direct host path. Remote
             // RPCs always carry their connection, so only a genuinely local null is
@@ -786,6 +1069,56 @@ namespace RadiantPool.Game
             return true;
         }
 
+        /// <summary>Combat-flow fixture: clusters every surviving enemy beside the active
+        /// hero and leaves it at 1 HP so one authored area spell can prove synchronized
+        /// magic impact, resource cost, defeat removal, and victory resolution.</summary>
+        [Server]
+        public string ServerPrimeMagicFinishForTest()
+        {
+            if (System.Array.IndexOf(System.Environment.GetCommandLineArgs(),
+                    "-combatflowtest") < 0 || _engine == null)
+                return "";
+            if (!_server.TryGetValue(_engine.ActiveCreature.Id, out var actor)
+                || actor.Player == null) return "";
+
+            var enemies = _server.Values.Where(u => u.Player == null && !u.Creature.IsDead)
+                .OrderBy(u => u.Id).ToArray();
+            var offsets = new[]
+            {
+                new Vector2Int(0, 1), new Vector2Int(1, 1),
+                new Vector2Int(-1, 1), new Vector2Int(1, 0),
+                new Vector2Int(-1, 0), new Vector2Int(0, 2)
+            };
+            for (int i = 0; i < enemies.Length; i++)
+            {
+                enemies[i].Cell = actor.Cell + offsets[i % offsets.Length];
+                if (enemies[i].Creature.CurrentHp > 1)
+                    enemies[i].Creature.TakeDamage(
+                        enemies[i].Creature.CurrentHp - 1, DamageType.Force);
+                RpcUnitMoved(enemies[i].Id, enemies[i].Cell.x, enemies[i].Cell.y);
+                SyncHp(enemies[i].Id);
+            }
+            return enemies.FirstOrDefault()?.Id ?? "";
+        }
+
+        /// <summary>Combat-flow fixture: defeats every hero through the real Creature
+        /// damage path. The live turn loop must detect and present the loss.</summary>
+        [Server]
+        public bool ServerDefeatPartyForTest()
+        {
+            if (System.Array.IndexOf(System.Environment.GetCommandLineArgs(),
+                    "-combatflowtest") < 0 || _engine == null)
+                return false;
+            foreach (var hero in _server.Values.Where(u => u.Player != null))
+            {
+                hero.Creature.TakeDamage(hero.Creature.TempHp + hero.Creature.CurrentHp
+                                         + hero.Creature.MaxHp,
+                    DamageType.Force);
+                SyncHp(hero.Id);
+            }
+            return true;
+        }
+
         /// <summary>Breadth-first path on the small fixed combat board. Eight-way steps
         /// match the existing Chebyshev/5-foot movement rule. Occupied cells are walls,
         /// except that an occupied destination becomes an adjacency goal.</summary>
@@ -844,8 +1177,12 @@ namespace RadiantPool.Game
         {
             var unit = ValidatedActor(conn, out string err);
             if (unit == null) { TargetReject(conn, err); return; }
-            if (!_server.TryGetValue(targetId, out var target) || target.Creature.IsDead)
+            if (!_server.TryGetValue(targetId, out var target))
             { TargetReject(conn, "No such target."); return; }
+            var targetCheck = CombatTargeting.Validate(unit.Creature, target.Creature,
+                CombatTargetType.Hostile);
+            if (!targetCheck.Allowed)
+            { TargetReject(conn, targetCheck.Reason); return; }
             var reach = unit.Player.BasicAttack();
             if (Chebyshev(unit.Cell, target.Cell) * 5 > reach.RangeFeet)
             {
@@ -861,8 +1198,8 @@ namespace RadiantPool.Game
             try
             {
                 var attack = unit.Player.BasicAttack();
-                var result = CombatMath.ResolveAttack(unit.Creature, target.Creature, attack, _rng);
-                Narrate(unit.Creature, target.Creature, attack.Name, result);
+                QueueServerAction(BattleState.ExecutingPlayerAction,
+                    () => ResolvePhysicalAction(unit, target, attack));
             }
             catch (Exception e)
             {
@@ -870,8 +1207,6 @@ namespace RadiantPool.Game
                 Debug.LogError($"[Combat] Attack resolution failed: {e}");
                 TargetReject(conn, "The attack fizzled — a bug was logged.");
             }
-            SyncHp(target.Id);
-            BroadcastBudget();
         }
 
         [ServerRpc(RequireOwnership = false)]
@@ -885,12 +1220,19 @@ namespace RadiantPool.Game
             SpellDefinition spell;
             try { spell = SpellLibrary.Get(spellId); }
             catch (KeyNotFoundException) { TargetReject(conn, "Unknown spell."); return; }
-            if (!_server.TryGetValue(targetId, out var target) || target.Creature.IsDead)
+            if (!_server.TryGetValue(targetId, out var target))
             { TargetReject(conn, "No such target."); return; }
+            var targetCheck = CombatTargeting.Validate(sheet, target.Creature,
+                spell.TargetType, spell.AllowDownedTarget);
+            if (!targetCheck.Allowed)
+            { TargetReject(conn, targetCheck.Reason); return; }
 
             int distFeet = Chebyshev(unit.Cell, target.Cell) * 5;
             if (spell.RangeFeet > 0 && distFeet > spell.RangeFeet)
             { TargetReject(conn, $"Out of range ({distFeet} ft > {spell.RangeFeet} ft)."); return; }
+            int slotLevel = Math.Max(1, spell.Level);
+            if (spell.Level > 0 && !sheet.HasSlot(slotLevel))
+            { TargetReject(conn, $"No level-{slotLevel} spell slot remains."); return; }
 
             try
             {
@@ -901,36 +1243,8 @@ namespace RadiantPool.Game
 
             try
             {
-                List<SpellEvent> events;
-                if (spellId == "sleep")
-                {
-                    var area = _server.Values
-                        .Where(u => !u.Creature.IsDead && Chebyshev(u.Cell, target.Cell) <= 2
-                                    && u.Player == null)
-                        .Select(u => u.Creature).ToList();
-                    events = SpellEngine.CastSleep(sheet, spell, area, Math.Max(1, spell.Level), _rng);
-                }
-                else if (spellId == "burning_hands")
-                {
-                    var area = _server.Values
-                        .Where(u => !u.Creature.IsDead && u.Id != unit.Id
-                                    && Chebyshev(u.Cell, target.Cell) <= 1)
-                        .Select(u => u.Creature).Distinct().ToList();
-                    if (!area.Contains(target.Creature)) area.Add(target.Creature);
-                    events = SpellEngine.Cast(sheet, spell, area, Math.Max(1, spell.Level), _rng);
-                }
-                else if (spellId == "magic_missile")
-                {
-                    events = SpellEngine.Cast(sheet, spell,
-                        new[] { target.Creature, target.Creature, target.Creature },
-                        Math.Max(1, spell.Level), _rng);
-                }
-                else
-                {
-                    events = SpellEngine.Cast(sheet, spell, new[] { target.Creature },
-                        Math.Max(1, spell.Level), _rng);
-                }
-                NarrateSpell(sheet, spell, events);
+                QueueServerAction(BattleState.ExecutingPlayerAction,
+                    () => ResolveSpellAction(unit, target, spell, slotLevel));
             }
             catch (RuleViolationException e)
             {
@@ -943,8 +1257,6 @@ namespace RadiantPool.Game
                 TargetReject(conn, "The spell fizzled — a bug was logged.");
             }
 
-            foreach (var u in _server.Values) SyncHp(u.Id);
-            BroadcastBudget();
         }
 
         /// <summary>Drink a Potion of Healing mid-fight. SRD 5.1: drinking a potion is an
@@ -971,14 +1283,8 @@ namespace RadiantPool.Game
 
             try
             {
-                int rolled = Dice.Roll("2d4+2", _rng).Total;
-                int healed = unit.Creature.Heal(rolled);
-                director.ServerConsumePotion();
-                ServerLog($"{unit.Creature.Name} drinks a Potion of Healing " +
-                          $"and restores {healed} HP.");
-                RpcSpellAudio("potion_healing", true);
-                RpcSpellFx(unit.Id, unit.Id, healed, true, 3);   // green heal numbers
-                RpcSfx("chime");
+                QueueServerAction(BattleState.ExecutingPlayerAction,
+                    () => ResolvePotionAction(unit, director));
             }
             catch (Exception e)
             {
@@ -986,9 +1292,6 @@ namespace RadiantPool.Game
                 Debug.LogError($"[Combat] Potion failed: {e}");
                 TargetReject(conn, "The potion fizzled — a bug was logged.");
             }
-
-            SyncHp(unit.Id);
-            BroadcastBudget();
         }
 
         [ServerRpc(RequireOwnership = false)]
@@ -1010,13 +1313,23 @@ namespace RadiantPool.Game
             _turnDone = true;
         }
 
+        [ServerRpc(RequireOwnership = false)]
+        public void CmdRetryEncounter(NetworkConnection conn = null)
+        {
+            if (InCombat.Value || State != BattleState.Defeat || _retryEncounter == null
+                || _retryEncounter.Consumed)
+            {
+                TargetReject(conn, "That battle can no longer be retried.");
+                return;
+            }
+            RpcDismissOutcome();
+            StartEncounter(_retryEncounter);
+        }
+
         [Server]
         private void NarrateSpell(CharacterSheet caster, SpellDefinition spell,
             List<SpellEvent> events)
         {
-            // One cast cue per spell, independent of hit/miss and target count. Area
-            // spells used to stack a generic sound once for every affected creature.
-            RpcSpellAudio(spell.Id, events.Any(e => e is SpellHealEvent));
             foreach (var ev in events)
             {
                 string targetName = _server.TryGetValue(GetTargetId(ev), out var t)
@@ -1046,12 +1359,14 @@ namespace RadiantPool.Game
                                    d.TargetDowned ? $" {targetName} goes down!" : ""));
                         RpcSpellFx(caster.Id, d.TargetId, d.Damage, false,
                             d.DamageType == DamageType.Fire ? 0 :
-                            d.DamageType == DamageType.Radiant ? 1 : 2);
+                            d.DamageType == DamageType.Radiant ? 1 : 2,
+                            spell.VisualEffectId);
                         if (d.TargetDied || d.TargetDowned) RpcSfx("down");
                         break;
                     case SpellHealEvent h:
                         ServerLog($"{spell.Name} restores {h.Healed} HP to {targetName}.");
-                        RpcSpellFx(caster.Id, h.TargetId, h.Healed, true, 3);
+                        RpcSpellFx(caster.Id, h.TargetId, h.Healed, true, 3,
+                            spell.VisualEffectId);
                         break;
                     case SpellConditionEvent c:
                         ServerLog($"{targetName} is {c.Condition} ({spell.Name}).");
@@ -1125,6 +1440,13 @@ namespace RadiantPool.Game
         // ==================== CLIENT ====================
 
         [ObserversRpc]
+        private void RpcBattleState(int state)
+        {
+            State = Enum.IsDefined(typeof(BattleState), state)
+                ? (BattleState)state : BattleState.Inactive;
+        }
+
+        [ObserversRpc]
         private void RpcCombatStarted(Vector3 origin, string[] ids, string[] names,
             bool[] isPc, int[] maxHp, int[] hp, int[] cellX, int[] cellY, int[] ownerIds)
         {
@@ -1132,12 +1454,15 @@ namespace RadiantPool.Game
             ClientUnits.Clear();
             Log.Clear();
             LastRejection = "";
+            OutcomeOpen = false;
+            BannerTitle = "";
             for (int i = 0; i < ids.Length; i++)
             {
                 var view = new UnitView
                 {
                     Id = ids[i], Name = names[i], IsPc = isPc[i],
                     MaxHp = maxHp[i], Hp = hp[i],
+                    DisplayHp = hp[i],
                     Cell = new Vector2Int(cellX[i], cellY[i]), OwnerId = ownerIds[i]
                 };
                 view.Visual = ResolveVisual(view);
@@ -1496,6 +1821,16 @@ namespace RadiantPool.Game
         public string BannerDetail { get; private set; } = "";
         public bool BannerVictory { get; private set; }
         public float BannerUntil { get; private set; }
+        public bool OutcomeOpen { get; private set; }
+
+        public void DismissOutcome()
+        {
+            OutcomeOpen = false;
+            BannerUntil = 0f;
+        }
+
+        [ObserversRpc]
+        private void RpcDismissOutcome() => DismissOutcome();
 
         [ObserversRpc]
         private void RpcCombatEnded(bool victory, int xpEach, string lootSummary)
@@ -1506,6 +1841,7 @@ namespace RadiantPool.Game
                 ? $"+{xpEach} XP each" + (lootSummary.Length > 0 ? $"\nLoot: {lootSummary}" : "")
                 : "The party is carried back to Havenrock,\nbruised but alive. The block remains hostile.";
             BannerUntil = Time.time + 6f;
+            OutcomeOpen = true;
             if (CombatFx.Instance != null) CombatFx.Instance.CombatEnded(victory);
 
             ActiveUnitId = "";
@@ -1518,6 +1854,7 @@ namespace RadiantPool.Game
                 // Everyone alive is on their feet after combat (revive/respawn) — clear
                 // the death pose too, not just the capsule rotation.
                 CharacterVisuals.SetDead(u.Visual, false);
+                if (victory) CharacterVisuals.Trigger(u.Visual, "Victory");
             }
             if (_overlay != null) Destroy(_overlay);
             if (_gridMaterial != null) Destroy(_gridMaterial);

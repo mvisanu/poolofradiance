@@ -13,8 +13,8 @@ namespace RadiantPool.Game
         public static CharacterBuild Default(int classIndex) => classIndex switch
         {
             0 => new CharacterBuild { ClassIndex = 0, RaceIndex = 0, Str = 15, Dex = 13, Con = 14, Int = 8, Wis = 12, Cha = 10 },
-            1 => new CharacterBuild { ClassIndex = 1, RaceIndex = 1, Str = 14, Dex = 8, Con = 13, Int = 10, Wis = 15, Cha = 12 },
-            2 => new CharacterBuild { ClassIndex = 2, RaceIndex = 2, Str = 8, Dex = 14, Con = 13, Int = 15, Wis = 12, Cha = 10 },
+            1 => new CharacterBuild { ClassIndex = 1, RaceIndex = 2, Str = 8, Dex = 14, Con = 13, Int = 15, Wis = 12, Cha = 10 },
+            2 => new CharacterBuild { ClassIndex = 2, RaceIndex = 1, Str = 14, Dex = 8, Con = 13, Int = 10, Wis = 15, Cha = 12 },
             _ => new CharacterBuild { ClassIndex = 3, RaceIndex = 3, Str = 10, Dex = 15, Con = 13, Int = 14, Wis = 12, Cha = 8 },
         };
 

@@ -148,6 +148,20 @@ Stop-Process -Id $fightProc.Id -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 $fightText = Get-Content $fightLog -Raw
 
+# The complete combat contract gets a Wizard and its own clean campaign: physical menu
+# action, enemy AI turn, magic action + spell-slot cost, victory modal, defeat modal, retry.
+Write-Host "Starting full combat-flow instance (-combatflowtest)..."
+$combatFlowLog = Join-Path $logDir "combat-flow.log"
+Remove-Item $combatFlowLog -ErrorAction SilentlyContinue
+$combatFlowSave = Join-Path $logDir "combatflowsave"
+Remove-Item -Recurse -Force $combatFlowSave -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $combatFlowSave | Out-Null
+$combatFlowProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Mira","-class","Wizard","-autohost","-combatflowtest","-savedir",$combatFlowSave,"-logFile",$combatFlowLog -PassThru
+Start-Sleep -Seconds 65
+Stop-Process -Id $combatFlowProc.Id -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+$combatFlowText = Get-Content $combatFlowLog -Raw
+
 $hostText = Get-Content $hostLog -Raw
 $clientText = Get-Content $clientLog -Raw
 
@@ -202,6 +216,8 @@ $checks = @(
     @{ Name = "spell cast and impact sounds are used"; Ok = $fightText -match "\[SpellAudioTest\] PASS.+fire cast \+ impact" },
     @{ Name = "combat light covers every living unit"; Ok = $fightText -match "\[CombatLightTest\] PASS" },
     @{ Name = "no NullReference in combat log";    Ok = $fightText -notmatch "NullReferenceException" }
+    @{ Name = "full physical, enemy, magic, victory, defeat, and retry flow"; Ok = $combatFlowText -match "\[CombatFlowTest\] PASS" },
+    @{ Name = "full combat flow has no failed assertion or runtime exception"; Ok = $combatFlowText -notmatch "\[CombatFlowTest\] FAIL|Exception" }
 )
 
 $failed = 0
@@ -209,6 +225,6 @@ foreach ($c in $checks) {
     if ($c.Ok) { Write-Host "  PASS  $($c.Name)" -ForegroundColor Green }
     else { Write-Host "  FAIL  $($c.Name)" -ForegroundColor Red; $failed++ }
 }
-Write-Host "Logs: $hostLog | $clientLog | $recruitLog | $recruitRestoreLog | $migrationLog | $siteActionLog | $travelLog | $scalingLog | $fightLog"
+Write-Host "Logs: $hostLog | $clientLog | $recruitLog | $recruitRestoreLog | $migrationLog | $siteActionLog | $travelLog | $scalingLog | $fightLog | $combatFlowLog"
 if ($failed -gt 0) { exit 1 }
 Write-Host "Smoke test passed - two instances hosted, joined, and spawned characters." -ForegroundColor Green

@@ -180,6 +180,8 @@ namespace RadiantPool.Game
                 StartCoroutine(ServerWarpToSmith());
             if (System.Array.IndexOf(args, "-attacktest") >= 0)
                 StartCoroutine(AttackSelfTest());
+            if (System.Array.IndexOf(args, "-combatflowtest") >= 0)
+                StartCoroutine(CombatFlowSelfTest());
             if (System.Array.IndexOf(args, "-weapontest") >= 0)
                 StartCoroutine(WeaponVisualSelfTest());
             if (System.Array.IndexOf(args, "-recruittest") >= 0)
@@ -1350,6 +1352,120 @@ namespace RadiantPool.Game
                       $"classes {(classes ? "kept" : "LOST")}, " +
                       $"level/XP {(parity ? "kept" : "LOST")}, " +
                       $"quest gear {(gear ? "kept" : "LOST")}");
+        }
+
+        /// <summary>Full traditional-combat acceptance path. It uses the visible combat
+        /// menu's public methods, real server intents, real enemy turns, a spell slot,
+        /// damage/defeat rules, both outcome modals, and the retry command.</summary>
+        private System.Collections.IEnumerator CombatFlowSelfTest()
+        {
+            yield return new WaitForSeconds(9f);
+
+            var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => !p.IsCompanion && p.Owner != null && p.Owner.IsValid);
+            var fights = FindObjectsByType<EncounterTrigger>(FindObjectsSortMode.None)
+                .Where(t => !t.Consumed && t.MonsterIds.Length >= 2
+                            && !ConsumedEncounterIds.Contains(t.EncounterId))
+                .OrderBy(t => t.EncounterId == "enc_docks_01" ? 0 : 1)
+                .ThenBy(t => t.MonsterIds.Length).ToArray();
+            var combat = CombatManager.Instance;
+            var ui = CombatClientUI.Instance;
+            if (holder?.Sheet == null || holder.Sheet.Class != CharacterClass.Wizard
+                || fights.Length < 2 || combat == null || ui == null)
+            {
+                Debug.Log("[CombatFlowTest] FAIL - needs a Wizard, combat UI, and two encounters");
+                yield break;
+            }
+
+            // Initiative is random; keep the level-1 acceptance-test Wizard alive even
+            // when every enemy acts before the first player turn.
+            holder.Sheet.GrantTempHp(100);
+            Warp(holder.transform, fights[0].transform.position);
+            yield return null;
+            combat.StartEncounter(fights[0]);
+
+            float deadline = Time.time + 30f;
+            while ((!combat.InCombat.Value || !combat.CanAcceptPlayerInput)
+                   && Time.time < deadline)
+                yield return new WaitForSeconds(0.1f);
+            var mine = combat.MyUnit;
+            if (mine == null || !combat.CanAcceptPlayerInput)
+            {
+                Debug.Log("[CombatFlowTest] FAIL - physical turn did not initialize");
+                yield break;
+            }
+            var physicalTarget = combat.ClientUnits.Where(u => !u.IsPc && !u.Dead)
+                .OrderByDescending(u => Chebyshev(mine.Cell, u.Cell)).FirstOrDefault();
+            if (physicalTarget == null)
+            {
+                Debug.Log("[CombatFlowTest] FAIL - physical turn did not initialize");
+                yield break;
+            }
+
+            ui.PickAttack();
+            ui.PickTarget(physicalTarget.Id);
+            deadline = Time.time + 15f;
+            while (combat.InCombat.Value && (combat.ActionLeft || combat.ActionResolving)
+                   && Time.time < deadline)
+                yield return null;
+            string heroName = holder.Sheet.Name;
+            string physicalLine = combat.Log.LastOrDefault(l =>
+                l.Contains(heroName) && l.Contains(physicalTarget.Name.Split('(')[0].Trim())) ?? "";
+            bool physicalResolved = physicalLine.Length > 0 && !combat.ActionLeft;
+            Debug.Log($"[CombatFlowTest] physical state {combat.State}, " +
+                      $"action {combat.ActionLeft}, rejection '{combat.LastRejection}', " +
+                      $"line '{physicalLine}'");
+
+            int beforeEnemyTurns = combat.Log.Count;
+            combat.CmdEndTurn();
+            deadline = Time.time + 25f;
+            while (combat.InCombat.Value
+                   && (!combat.CanAcceptPlayerInput || combat.Round < 2)
+                   && Time.time < deadline)
+                yield return new WaitForSeconds(0.1f);
+            bool enemyActed = combat.Log.Skip(beforeEnemyTurns).Any(l => l.Contains(heroName));
+
+            string magicTarget = combat.ServerPrimeMagicFinishForTest();
+            int slotsBefore = combat.MySlots.Sum();
+            ui.PickSpell("burning_hands");
+            ui.PickTarget(magicTarget);
+            deadline = Time.time + 15f;
+            while (!combat.OutcomeOpen && Time.time < deadline)
+                yield return new WaitForSeconds(0.1f);
+            bool magicResolved = combat.Log.Any(l => l.Contains("Burning Hands deals"));
+            bool slotSpent = combat.MySlots.Sum() < slotsBefore;
+            bool victoryModal = combat.OutcomeOpen && combat.BannerVictory
+                                && combat.State == BattleState.Victory;
+            Debug.Log($"[CombatFlowTest] magic state {combat.State}, " +
+                      $"slots {slotsBefore}->{combat.MySlots.Sum()}, " +
+                      $"target '{magicTarget}', rejection '{combat.LastRejection}', " +
+                      $"outcome {combat.OutcomeOpen}/{combat.BannerTitle}");
+
+            combat.DismissOutcome();
+            yield return null;
+            combat.StartEncounter(fights[1]);
+            deadline = Time.time + 15f;
+            while (!combat.InCombat.Value && Time.time < deadline)
+                yield return new WaitForSeconds(0.1f);
+            bool defeatApplied = combat.ServerDefeatPartyForTest();
+            deadline = Time.time + 10f;
+            while (!combat.OutcomeOpen && Time.time < deadline)
+                yield return new WaitForSeconds(0.1f);
+            bool defeatModal = defeatApplied && combat.OutcomeOpen && !combat.BannerVictory
+                               && combat.State == BattleState.Defeat;
+
+            combat.CmdRetryEncounter();
+            deadline = Time.time + 10f;
+            while (!combat.InCombat.Value && Time.time < deadline)
+                yield return new WaitForSeconds(0.1f);
+            bool retried = combat.InCombat.Value;
+
+            bool pass = physicalResolved && enemyActed && magicResolved && slotSpent
+                        && victoryModal && defeatModal && retried;
+            Debug.Log($"[CombatFlowTest] {(pass ? "PASS" : "FAIL")} - " +
+                      $"physical {physicalResolved}, enemy turn {enemyActed}, " +
+                      $"magic+slot {magicResolved && slotSpent}, victory modal {victoryModal}, " +
+                      $"defeat modal {defeatModal}, retry {retried}");
         }
 
         /// <summary>Unattended combat check (`RadiantPool.exe -autohost -attacktest`, asserted

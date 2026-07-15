@@ -1,16 +1,15 @@
 # Known limitations — v1 vertical slice
 
 Gameplay
-- All three zones (Old Docks, Drowned Market, Glasslit Temple) are playable gray-box in
-  one map with quest-gated barriers; per-zone scenes with real art arrive at 3f.
-- Level-ups apply automatically (HP/slots/features per SRD); no choice UI (e.g. ASI
-  allocation is deferred — flagged for 3c-full).
+- All 27 campaign destinations share one streamed/generated world scene; separate scene
+  loading per destination is not implemented.
 - Rogue Sneak Attack, Fighter Action Surge/Second Wind, and Cleric Channel Divinity are
   listed as features but not yet usable actions in combat.
 - Bless approximates concentration as a fixed 10-round duration; only 10 spells total.
-- Potions are party-stash items usable out of combat only; no per-character inventory or
-  equipment swapping yet (3e-full).
-- Monster AI is a simple "close and swing" melee routine; ranged monster attacks unused.
+- Area spells start from one selected unit; there is no free-position area cursor or
+  multi-select target picker yet.
+- Monster AI greedily chooses its strongest authored in-range attack and moves only when
+  necessary. It has no coordinated tactics, retreat behavior, or support abilities yet.
 
 Multiplayer
 - Explore movement is client-authoritative (combat is fully server-validated); a modified
@@ -25,4 +24,4 @@ Presentation
   procedural AudioSynth fallback until `scripts/install-audio-assets.py` is run.
 - Combat sound is currently a polished 2D mix; positional attenuation, obstruction, and
   reverb zones are future spatial-audio work.
-- No keybind remapping (fixed WASD/E/J/F5/Esc).
+- No keybind remapping (combat also fixes A/C/Backspace/Space for its menu flow).

@@ -57,6 +57,8 @@ namespace RadiantPool.Rules
                 {
                     Id = "cure_wounds", Name = "Cure Wounds", Level = 1,
                     Delivery = SpellDelivery.NoRoll, RangeFeet = 5,
+                    TargetType = CombatTargetType.Friendly, AllowDownedTarget = true,
+                    RequiresApproach = true,
                     Classes = { CharacterClass.Cleric },
                     Effects = { new EffectOp { Kind = EffectOpKind.Heal, Dice = "1d8",
                         DicePerExtraSlotLevel = "1d8", AddSpellcastingMod = true } }
@@ -65,6 +67,7 @@ namespace RadiantPool.Rules
                 {
                     Id = "healing_word", Name = "Healing Word", Level = 1,
                     Delivery = SpellDelivery.NoRoll, RangeFeet = 60, IsBonusAction = true,
+                    TargetType = CombatTargetType.Friendly, AllowDownedTarget = true,
                     Classes = { CharacterClass.Cleric },
                     Effects = { new EffectOp { Kind = EffectOpKind.Heal, Dice = "1d4",
                         DicePerExtraSlotLevel = "1d4", AddSpellcastingMod = true } }
@@ -73,6 +76,7 @@ namespace RadiantPool.Rules
                 {
                     Id = "bless", Name = "Bless", Level = 1,
                     Delivery = SpellDelivery.NoRoll, RangeFeet = 30, MaxTargets = 3,
+                    TargetType = CombatTargetType.Friendly,
                     Classes = { CharacterClass.Cleric },
                     // Concentration approximated as fixed 10-round duration in v1 (flagged).
                     Effects = { new EffectOp { Kind = EffectOpKind.ApplyCondition,
@@ -82,6 +86,7 @@ namespace RadiantPool.Rules
                 {
                     Id = "shield", Name = "Shield", Level = 1,
                     Delivery = SpellDelivery.NoRoll, RangeFeet = 0, IsReaction = true,
+                    TargetType = CombatTargetType.Self,
                     Classes = { CharacterClass.Wizard },
                     // +5 AC until start of caster's next turn (1 round).
                     Effects = { new EffectOp { Kind = EffectOpKind.ApplyCondition,
@@ -110,7 +115,16 @@ namespace RadiantPool.Rules
             };
 
             var dict = new Dictionary<string, SpellDefinition>();
-            foreach (var s in spells) dict[s.Id] = s;
+            foreach (var s in spells)
+            {
+                s.Description = s.Description.Length > 0
+                    ? s.Description
+                    : $"{s.Name}: {s.Delivery}, {s.RangeFeet} ft range.";
+                s.VisualEffectId = s.VisualEffectId.Length > 0 ? s.VisualEffectId : s.Id;
+                s.SoundEffectId = s.SoundEffectId.Length > 0 ? s.SoundEffectId : s.Id;
+                s.CriticalHitEligible = s.Delivery == SpellDelivery.SpellAttack;
+                dict[s.Id] = s;
+            }
             return dict;
         }
     }

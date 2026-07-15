@@ -63,7 +63,11 @@ namespace RadiantPool.Game
 
         /// <summary>Adds a short, bounded presentation shake. Combat rules never read it;
         /// the camera applies it after follow/orbit so it cannot accumulate drift.</summary>
-        public void AddTrauma(float amount) => _trauma = Mathf.Clamp01(_trauma + amount);
+        public void AddTrauma(float amount)
+        {
+            if (SettingsMenu.ReducedMotion) return;
+            _trauma = Mathf.Clamp01(_trauma + amount);
+        }
 
         public void SetTarget(Transform target)
         {
@@ -146,6 +150,11 @@ namespace RadiantPool.Game
 
         private void ApplyTrauma(Quaternion baseRotation)
         {
+            if (SettingsMenu.ReducedMotion)
+            {
+                _trauma = 0f;
+                return;
+            }
             if (_trauma <= 0f) return;
             float power = _trauma * _trauma;
             float t = Time.unscaledTime * 22f;
@@ -358,6 +367,11 @@ namespace RadiantPool.Game
 
         private void Fade(Renderer r, float target)
         {
+            // Combat retry destroys the old encounter renderers between the blocker scan
+            // and this fade pass. Unity's destroyed-object fake null must be tested before
+            // touching sharedMaterials; otherwise the native renderer throws here.
+            if (r == null) return;
+
             var g = GhostFor(r);
             if (g == null) return;
 
@@ -387,6 +401,7 @@ namespace RadiantPool.Game
 
         private Ghost GhostFor(Renderer r)
         {
+            if (r == null) return null;
             if (_ghosts.TryGetValue(r, out var g)) return g;
 
             var solid = r.sharedMaterials;

@@ -117,6 +117,25 @@ namespace RadiantPool.Game
             StartCoroutine(ImpactSparks(at + Vector3.up * 1.15f, critical ? 12 : 7));
         }
 
+        private readonly Dictionary<string, GameObject> _configuredVfx =
+            new Dictionary<string, GameObject>();
+
+        /// <summary>Optional drop-in adapter for purchased or custom ability VFX. A prefab
+        /// at Resources/CombatVfx/&lt;ability visualEffectId&gt; replaces no rules code; missing
+        /// art is a silent generated-FX fallback.</summary>
+        public void ConfiguredEffect(string visualEffectId, Vector3 at)
+        {
+            if (string.IsNullOrEmpty(visualEffectId)) return;
+            if (!_configuredVfx.TryGetValue(visualEffectId, out var prefab))
+            {
+                prefab = Resources.Load<GameObject>($"CombatVfx/{visualEffectId}");
+                _configuredVfx[visualEffectId] = prefab;
+            }
+            if (prefab == null) return;
+            var instance = Instantiate(prefab, at, Quaternion.identity);
+            Destroy(instance, 4f);
+        }
+
         private static IEnumerator CaptureCombatFrame(string path)
         {
             // The replicated event arrives at wind-up; capture when the lunge/impact lands.
@@ -171,19 +190,35 @@ namespace RadiantPool.Game
 
         // ---------- damage numbers ----------
 
+        private readonly Queue<(GameObject Root, TextMesh Text)> _popupPool =
+            new Queue<(GameObject Root, TextMesh Text)>();
+
         public void Popup(Vector3 worldPos, string text, Color color, float size = 1f)
         {
-            var go = new GameObject("DmgPopup");
+            GameObject go;
+            TextMesh tm;
+            if (_popupPool.Count > 0)
+            {
+                var pooled = _popupPool.Dequeue();
+                go = pooled.Root;
+                tm = pooled.Text;
+                go.SetActive(true);
+            }
+            else
+            {
+                go = new GameObject("DmgPopup");
+                go.transform.SetParent(transform, true);
+                tm = go.AddComponent<TextMesh>();
+                go.AddComponent<Billboard>();
+            }
             go.transform.position = worldPos + Vector3.up * 2.2f
                 + new Vector3(Random.Range(-0.3f, 0.3f), 0f, Random.Range(-0.3f, 0.3f));
-            var tm = go.AddComponent<TextMesh>();
             tm.text = text;
             tm.characterSize = 0.12f * size;
             tm.fontSize = 46;
             tm.fontStyle = FontStyle.Bold;
             tm.anchor = TextAnchor.MiddleCenter;
             tm.color = color;
-            go.AddComponent<Billboard>();
             StartCoroutine(FloatAndFade(go, tm));
         }
 
@@ -200,7 +235,11 @@ namespace RadiantPool.Game
                 tm.color = new Color(c.r, c.g, c.b, 1f - t / dur * t / dur);
                 yield return null;
             }
-            Destroy(go);
+            if (go != null)
+            {
+                go.SetActive(false);
+                _popupPool.Enqueue((go, tm));
+            }
         }
 
         // ---------- grid glide ----------

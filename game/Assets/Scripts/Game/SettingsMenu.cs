@@ -12,6 +12,7 @@ namespace RadiantPool.Game
     public class SettingsMenu : MonoBehaviour
     {
         public static float MouseSensitivity { get; private set; } = 3.5f;
+        public static bool ReducedMotion { get; private set; }
         public static SettingsMenu Instance { get; private set; }
 
         private void Awake() => Instance = this;
@@ -34,6 +35,7 @@ namespace RadiantPool.Game
             _vsync = PlayerPrefs.GetInt("vsync", 1) == 1;
             _graphics = Mathf.Clamp(PlayerPrefs.GetInt("graphics", 2), 0, GraphicsNames.Length - 1);
             MouseSensitivity = PlayerPrefs.GetFloat("sensitivity", 3.5f);
+            ReducedMotion = PlayerPrefs.GetInt("reducedMotion", 0) == 1;
             Apply();
         }
 
@@ -50,6 +52,7 @@ namespace RadiantPool.Game
             PlayerPrefs.SetInt("vsync", _vsync ? 1 : 0);
             PlayerPrefs.SetFloat("sensitivity", MouseSensitivity);
             PlayerPrefs.SetInt("graphics", _graphics);
+            PlayerPrefs.SetInt("reducedMotion", ReducedMotion ? 1 : 0);
         }
 
         private void Update()
@@ -65,7 +68,7 @@ namespace RadiantPool.Game
             Ui.Begin();
             if (!Ui.IsOpen(Ui.Panel.Settings)) return;
 
-            var rect = Ui.Fit(360f, 370f);
+            var rect = Ui.Fit(360f, 398f);
             GUILayout.BeginArea(rect, Theme.PanelStyle);
             GUILayout.BeginHorizontal();
             GUILayout.Label("Settings", Theme.Header);
@@ -88,6 +91,8 @@ namespace RadiantPool.Game
             GUILayout.Space(6);
             bool fullscreen = GUILayout.Toggle(_fullscreen, " Fullscreen (borderless)");
             bool vsync = GUILayout.Toggle(_vsync, " VSync");
+            bool reducedMotion = GUILayout.Toggle(ReducedMotion,
+                " Reduced motion (disable camera shake)");
             if (GUILayout.Button($"GRAPHICS — {GraphicsNames[_graphics]}"))
             {
                 _graphics = (_graphics + 1) % GraphicsNames.Length;
@@ -97,12 +102,14 @@ namespace RadiantPool.Game
             if (!Mathf.Approximately(uiScale, Ui.UserScale))
                 Ui.UserScale = uiScale;
             if (!Mathf.Approximately(volume, _volume) || fullscreen != _fullscreen
-                || vsync != _vsync || !Mathf.Approximately(sens, MouseSensitivity))
+                || vsync != _vsync || reducedMotion != ReducedMotion
+                || !Mathf.Approximately(sens, MouseSensitivity))
             {
                 _volume = volume;
                 _fullscreen = fullscreen;
                 _vsync = vsync;
                 MouseSensitivity = sens;
+                ReducedMotion = reducedMotion;
                 Apply();
             }
 

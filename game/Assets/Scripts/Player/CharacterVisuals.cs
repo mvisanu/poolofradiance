@@ -138,8 +138,23 @@ namespace RadiantPool.Game
         public static void Trigger(Transform unitRoot, string trigger)
         {
             var animator = AnimatorOf(unitRoot);
-            if (animator != null && animator.runtimeAnimatorController != null)
-                animator.SetTrigger(trigger);
+            if (animator == null || animator.runtimeAnimatorController == null) return;
+            bool found = false;
+            foreach (var parameter in animator.parameters)
+                if (parameter.type == AnimatorControllerParameterType.Trigger
+                    && parameter.name == trigger)
+                { found = true; break; }
+            // Imported models may not have the dedicated Cast trigger yet. Attack is the
+            // safe authored fallback and avoids Animator's noisy missing-parameter error.
+            if (!found && (trigger == "Cast" || trigger == "Victory"))
+            {
+                trigger = "Attack";
+                foreach (var parameter in animator.parameters)
+                    if (parameter.type == AnimatorControllerParameterType.Trigger
+                        && parameter.name == trigger)
+                    { found = true; break; }
+            }
+            if (found) animator.SetTrigger(trigger);
         }
 
         /// <summary>Puts a weapon/shield model into the character's hand slot at runtime

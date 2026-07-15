@@ -30,9 +30,11 @@ scripts/ip-scan.ps1
 ```
 
 Build output: `game/Builds/Win64/RadiantPool.exe`. Exe flags for automation:
-`-name <n> -autohost` / `-name <n> -autojoin localhost`; **self-tests** `-selltest`
+`-name <n> [-class Fighter|Wizard|Cleric|Rogue] -autohost` /
+`-name <n> -autojoin localhost`; **self-tests** `-selltest`
 (bag → trader → purse), `-leveltest` (XP → level → point spent), `-attacktest` (one click on
-a distant enemy → walk → blow), `-warpsmith` (park at the smithy so a shop panel can be
+a distant enemy → walk → blow), `-combatflowtest` (physical menu → enemy round →
+slotted magic → victory modal → defeat modal → retry), `-warpsmith` (park at the smithy so a shop panel can be
 LOOKED at); **visual QA** `-worldmapcapture <png>` opens the maximized campaign atlas through
 `MiniMap.ShowCampaignAtlasForTest`, captures it without desktop input, and restores the
 temporary quest states; `-savedir <dir>` keeps a test run off the real campaign.
@@ -77,8 +79,10 @@ mouse and the self-test drive the very same code.
   `SpellLibrary`, `LootLibrary` (tests keep JSON and code aligned by id).
 - `game/Assets/Scripts` — runtime (FishNet networking). Server-authoritative: clients
   send intents (`Cmd*` ServerRpcs), server validates via the rules lib, broadcasts
-  results (`Rpc*`). `CombatManager` = combat FSM + grid (click-to-move via `CmdMoveTo`,
-  paced AI turn coroutines, glide movement); `GameDirector` = quests/party state/saves
+  results (`Rpc*`). `CombatManager` = explicit `BattleState` FSM + grid + one serial
+  `CombatActionQueue` (click-to-move via `CmdMoveTo`, controlled wind-up/impact/recovery
+  timelines, paced AI turns, glide movement). `CombatTargeting` and
+  `BattleResultEvaluator` live in the pure rules library; `GameDirector` = quests/party state/saves
   (4-zone chain: docks → market → warcamp → temple; `ServerRecountZone` derives cleared
   counts from `ConsumedEncounterIds` and `ServerRecheckZone` heals cleared-before-active
   dead ends — both run on load, which repairs old saves); `SessionLauncher` = title screen
@@ -104,9 +108,16 @@ mouse and the self-test drive the very same code.
   take two clicks — walk, then swing — and the second was the easiest thing in the game to
   forget). Click ground = move, Space = end turn, **WASD/middle-drag pans the
   camera and F recentres** (the grid owns movement, so those keys are free).
+  The turn strip also exposes **Physical Attack [A] / Magic Attack [C] / Backspace cancel**;
+  its target buttons converge on the same close-in-and-strike path. While a queued action is
+  resolving, input is locked until wind-up, configured impact, HP sync, and recovery finish.
+  Damage is applied at impact, not at button press. Victory/defeat are persistent modals;
+  defeat offers a server-validated retry of the same encounter.
   `RadiantPool.exe -autohost -attacktest` drives that click on the FURTHEST enemy and asserts
   both the walk and the blow; `smoke-test.ps1` runs it in its OWN instance — a live fight
   under the sell/level self-tests would fight them for the turn clock.
+  `RadiantPool.exe -class Wizard -autohost -combatflowtest` covers the complete physical,
+  enemy, magic-resource, victory, defeat, and retry path; see `docs/combat-system.md`.
   `OrbitCamera` **x-rays whatever hides a combatant**: every unit on the board gets a
   sight line in combat (just the player out of it), and any environment renderer blocking
   one fades to a transparent clone of its own materials, shadows off. Kenney props have no
@@ -242,6 +253,12 @@ mouse and the self-test drive the very same code.
   explicit UTF8. Repair: `utf8.GetString(cp1252.GetBytes($text))`.
 - **Never let an exception escape a ServerRpc** — FishNet kicks the sender as a
   malformed-packet attacker. All combat resolution is try/caught; keep it that way.
+- **A terminal combat result can clear `_engine` while another combat coroutine is resuming.**
+  `EndActiveTurn` captures and null-checks the engine before advancing. Keep the guard: retry
+  testing found the old coroutine otherwise threw after an otherwise successful battle.
+- **Character creation class labels must match `CharacterClass` numeric order exactly**
+  (`Fighter, Wizard, Cleric, Rogue`). The launcher once displayed Cleric/Wizard in the
+  opposite order and silently created the other caster class.
 - **Dice strings**: negative modifiers must render `1d6-1`, never `1d6+-1`.
 - **`Shader.Find` fails in builds** for shaders nothing references — materials used at
   runtime must be assets under `Resources/` (see `Resources/Fx/M_GridOverlay`).

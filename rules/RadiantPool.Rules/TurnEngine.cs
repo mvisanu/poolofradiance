@@ -125,11 +125,9 @@ namespace RadiantPool.Rules
 
         public bool CombatOver(out bool playersWon)
         {
-            bool anyPlayerUp = _order.Any(c => c.IsPlayerCharacter && !c.IsDead && !c.IsDown);
-            bool anyMonsterUp = _order.Any(c => !c.IsPlayerCharacter && !c.IsDead
-                                                && !c.Conditions.Has(ConditionType.Asleep));
-            playersWon = !anyMonsterUp;
-            return !anyPlayerUp || !anyMonsterUp;
+            var result = BattleResultEvaluator.Evaluate(_order);
+            playersWon = result == BattleResult.Victory;
+            return result != BattleResult.InProgress;
         }
     }
 }

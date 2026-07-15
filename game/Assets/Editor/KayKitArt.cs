@@ -169,6 +169,8 @@ namespace RadiantPool.EditorTools
             var controller = AnimatorController.CreateAnimatorControllerAtPath(ControllerPath);
             controller.AddParameter("Speed", AnimatorControllerParameterType.Float);
             controller.AddParameter("Attack", AnimatorControllerParameterType.Trigger);
+            controller.AddParameter("Cast", AnimatorControllerParameterType.Trigger);
+            controller.AddParameter("Victory", AnimatorControllerParameterType.Trigger);
             controller.AddParameter("Hit", AnimatorControllerParameterType.Trigger);
             controller.AddParameter("Dead", AnimatorControllerParameterType.Bool);
 
@@ -186,6 +188,12 @@ namespace RadiantPool.EditorTools
             // lunge+weapon carry the rest. Never leave the state empty (it freezes).
             attack.motion = FindClip(clips, "1H_Melee_Attack_Slice", "1H_Melee_Attack",
                 "Melee_Attack", "Attack", "Throw", "Interact")
+                ?? idle.motion;
+            var cast = sm.AddState("Cast");
+            cast.motion = FindClip(clips, "Spellcast", "Spell", "Magic", "Throw", "Interact")
+                ?? attack.motion ?? idle.motion;
+            var victory = sm.AddState("Victory");
+            victory.motion = FindClip(clips, "Victory", "Cheer", "Dance", "Interact")
                 ?? idle.motion;
             var hit = sm.AddState("Hit");
             hit.motion = FindClip(clips, "Hit_A", "Hit") ?? idle.motion;
@@ -214,6 +222,26 @@ namespace RadiantPool.EditorTools
             attackDone.hasExitTime = true;
             attackDone.exitTime = 0.9f;
             attackDone.duration = 0.1f;
+
+            var anyCast = sm.AddAnyStateTransition(cast);
+            anyCast.AddCondition(AnimatorConditionMode.If, 0, "Cast");
+            anyCast.hasExitTime = false;
+            anyCast.duration = 0.05f;
+            anyCast.canTransitionToSelf = false;
+            var castDone = cast.AddTransition(idle);
+            castDone.hasExitTime = true;
+            castDone.exitTime = 0.9f;
+            castDone.duration = 0.1f;
+
+            var anyVictory = sm.AddAnyStateTransition(victory);
+            anyVictory.AddCondition(AnimatorConditionMode.If, 0, "Victory");
+            anyVictory.hasExitTime = false;
+            anyVictory.duration = 0.05f;
+            anyVictory.canTransitionToSelf = false;
+            var victoryDone = victory.AddTransition(idle);
+            victoryDone.hasExitTime = true;
+            victoryDone.exitTime = 0.9f;
+            victoryDone.duration = 0.1f;
 
             var anyHit = sm.AddAnyStateTransition(hit);
             anyHit.AddCondition(AnimatorConditionMode.If, 0, "Hit");

@@ -36,6 +36,7 @@ namespace RadiantPool.Rules
     {
         public string Id { get; set; } = "";
         public string Name { get; set; } = "";
+        public string Description { get; set; } = "";
         public int Level { get; set; }                    // 0 = cantrip
         public SpellDelivery Delivery { get; set; }
         public Ability SaveAbility { get; set; }
@@ -44,6 +45,15 @@ namespace RadiantPool.Rules
         public int RangeFeet { get; set; }
         public int MaxTargets { get; set; } = 1;          // Bless = 3, Magic Missile darts = 3 (+1/slot)
         public bool AreaOfEffect { get; set; }            // Burning Hands cone, Sleep sphere
+        public CombatTargetType TargetType { get; set; } = CombatTargetType.Hostile;
+        public bool AllowDownedTarget { get; set; }
+        public string AnimationTrigger { get; set; } = "Cast";
+        public string VisualEffectId { get; set; } = "";
+        public string SoundEffectId { get; set; } = "";
+        public double ImpactDelaySeconds { get; set; } = 0.35;
+        public bool RequiresApproach { get; set; }
+        public bool CriticalHitEligible { get; set; }
+        public int CooldownRounds { get; set; }
         public List<EffectOp> Effects { get; set; } = new List<EffectOp>();
         public List<CharacterClass> Classes { get; set; } = new List<CharacterClass>();
     }
@@ -130,7 +140,8 @@ namespace RadiantPool.Rules
                         });
                         if (hit)
                             ApplyEffects(caster, spell, target, upcast, cantripTier,
-                                crit: d20.IsNat20, halve: false, rng, events);
+                                crit: spell.CriticalHitEligible && d20.IsNat20,
+                                halve: false, rng, events);
                         break;
                     }
                     case SpellDelivery.SaveNegates:

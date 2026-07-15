@@ -4,20 +4,44 @@ namespace RadiantPool.Rules
 {
     public sealed class AttackDefinition
     {
+        public string Id { get; }
         public string Name { get; }
+        public string Description { get; }
         public int ToHitBonus { get; }
         public DiceExpression Damage { get; }
         public DamageType DamageType { get; }
         public int RangeFeet { get; }
+        public CombatTargetType TargetType => CombatTargetType.Hostile;
+        public string AnimationTrigger { get; }
+        public string VisualEffectId { get; }
+        public string SoundEffectId { get; }
+        public double ImpactDelaySeconds { get; }
+        public bool RequiresApproach { get; }
+        public bool CriticalHitEligible { get; }
+        public int CooldownRounds { get; }
 
         public AttackDefinition(string name, int toHitBonus, string damage,
-                                DamageType damageType, int rangeFeet = 5)
+            DamageType damageType, int rangeFeet = 5, string? id = null,
+            string description = "", string animationTrigger = "Attack",
+            string visualEffectId = "physical_hit", string soundEffectId = "weapon",
+            double impactDelaySeconds = 0.25, bool requiresApproach = true,
+            bool criticalHitEligible = true, int cooldownRounds = 0)
         {
+            Id = string.IsNullOrWhiteSpace(id)
+                ? name.Trim().ToLowerInvariant().Replace(' ', '_') : id;
             Name = name;
+            Description = description;
             ToHitBonus = toHitBonus;
             Damage = DiceExpression.Parse(damage);
             DamageType = damageType;
             RangeFeet = rangeFeet;
+            AnimationTrigger = animationTrigger;
+            VisualEffectId = visualEffectId;
+            SoundEffectId = soundEffectId;
+            ImpactDelaySeconds = impactDelaySeconds;
+            RequiresApproach = requiresApproach && rangeFeet <= 5;
+            CriticalHitEligible = criticalHitEligible;
+            CooldownRounds = Math.Max(0, cooldownRounds);
         }
     }
 
@@ -82,7 +106,8 @@ namespace RadiantPool.Rules
             int total = d20.Value + attack.ToHitBonus + blessBonus - easing + scaling;
 
             bool hit = !d20.IsNat1 && (d20.IsNat20 || total >= target.ArmorClass);
-            bool crit = hit && (d20.IsNat20 || pointBlankOnHelpless);
+            bool crit = attack.CriticalHitEligible
+                        && hit && (d20.IsNat20 || pointBlankOnHelpless);
 
             if (!hit)
                 return new AttackResult(d20, total, false, false, 0, false, false);

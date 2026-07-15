@@ -86,6 +86,8 @@ RadiantPool.Rules/
                      //   effect ops = small vocabulary: Damage, Heal, ApplyCondition,
                      //   GrantTempHp, ModifyAC … interpreted, not hard-coded per spell
   Conditions.cs      // prone, poisoned, unconscious, dying (death saves) …
+  CombatFlow.cs      // battle states, targeting, result evaluation, serial action queue,
+                     // controlled impact timeline + missing-event fallback
   TurnEngine.cs      // initiative roll + order, per-turn budget {Move, Action, Bonus},
                      //   ValidateAction(state, intent) → Ok | RuleViolation(reason)
                      //   ExecuteAction(state, intent, rng) → ActionEvents[]
@@ -100,10 +102,12 @@ attack resolution. Required fights can reveal a level-matched challenge cache, a
 turn-ins resolve their equipment tier from the current hero level; when that tier contains
 a class-legal improvement, the server guarantees one upgrade before adding random rolls.
 
-Key contract: `TurnEngine.ExecuteAction` returns an **ordered event list**
-(`AttackRolled`, `DamageApplied`, `ConditionAdded`, `UnitDowned` …). The server applies
-events to authoritative state and broadcasts them; clients replay events for
-animation/VFX/log. One code path, no client-side rules math to drift.
+Key contract: a client sends only an intent. `CombatManager` validates it through the pure
+rules services, serializes it through `CombatActionQueue`, broadcasts wind-up presentation,
+applies `CombatMath`/`SpellEngine` at the configured impact time, then broadcasts impact and
+the exact HP/resource snapshot. The explicit `BattleState` locks duplicate input throughout
+resolution. One rules path, no client-side math to drift; a controlled timeline fallback
+prevents a missing animation event from stalling the turn.
 
 10 SRD spells for 3a: Fire Bolt, Sacred Flame, Magic Missile, Burning Hands, Cure Wounds,
 Healing Word, Bless, Shield, Sleep, Guiding Bolt.

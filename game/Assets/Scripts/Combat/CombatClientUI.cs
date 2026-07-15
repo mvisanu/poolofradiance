@@ -44,6 +44,33 @@ namespace RadiantPool.Game
             _mode = Mode.PickSpellTarget;
         }
 
+        public void PickMagic()
+        {
+            _autoTarget = "";
+            _pendingSpell = "";
+            _mode = Mode.PickSpell;
+        }
+
+        /// <summary>Shared target confirmation used by target buttons and unattended
+        /// combat verification. It submits the same intent selected by the visible menu.</summary>
+        public void PickTarget(string targetId)
+        {
+            var combat = CombatManager.Instance;
+            if (combat == null || !combat.CanAcceptPlayerInput) return;
+            if (_mode == Mode.PickAttackTarget)
+            {
+                var target = combat.ClientUnits.FirstOrDefault(u => u.Id == targetId);
+                _mode = Mode.Root;
+                if (target != null) ClickCell(target.Cell);
+                return;
+            }
+            else if (_mode == Mode.PickSpellTarget && _pendingSpell.Length > 0)
+                combat.CmdCast(_pendingSpell, targetId);
+            else
+                return;
+            _mode = Mode.Root;
+        }
+
         /// <summary>Class spell loadout (v1 fixed lists) — shared with the HotBar.</summary>
         public static string[] KnownSpells(CharacterClass cls) => cls switch
         {
@@ -54,9 +81,17 @@ namespace RadiantPool.Game
             _ => System.Array.Empty<string>()
         };
 
-        public static PlayerCharacterHolder LocalPlayerHolder() =>
-            Object.FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
-                .FirstOrDefault(p => p.IsOwner);
+        private static PlayerCharacterHolder _localPlayerHolder;
+
+        public static PlayerCharacterHolder LocalPlayerHolder()
+        {
+            // HotBar asks every GUI frame. Cache the owned component instead of repeating
+            // a scene-wide search throughout combat; Unity fake-null handles despawn here.
+            if (_localPlayerHolder == null)
+                _localPlayerHolder = Object.FindObjectsByType<PlayerCharacterHolder>(
+                        FindObjectsSortMode.None).FirstOrDefault(p => p.IsOwner);
+            return _localPlayerHolder;
+        }
 
         private static readonly System.Collections.Generic.Dictionary<string, Texture2D>
             IconCache = new System.Collections.Generic.Dictionary<string, Texture2D>();
@@ -86,9 +121,26 @@ namespace RadiantPool.Game
         private void Update()
         {
             var combat = CombatManager.Instance;
+            if (combat != null)
+            {
+                foreach (var unit in combat.ClientUnits)
+                {
+                    unit.DisplayHp = Mathf.MoveTowards(unit.DisplayHp, unit.Hp,
+                        Mathf.Max(12f, unit.MaxHp * 2.5f) * Time.deltaTime);
+                    if (Mathf.Abs(unit.DisplayHp - unit.Hp) < 0.01f)
+                        unit.DisplayHp = unit.Hp;
+                }
+            }
             var mine = combat?.MyUnit;
-            bool acting = combat != null && combat.IsMyTurn && _mode == Mode.Root
+            bool acting = combat != null && combat.CanAcceptPlayerInput && _mode == Mode.Root
                           && mine is { Down: false, Dead: false };
+
+            if (combat != null && combat.CanAcceptPlayerInput && !Ui.Typing && !Ui.PanelOpen)
+            {
+                if (Input.GetKeyDown(KeyCode.A)) PickAttack();
+                if (Input.GetKeyDown(KeyCode.C)) PickMagic();
+                if (Input.GetKeyDown(KeyCode.Backspace)) _mode = Mode.Root;
+            }
 
             // A walk ordered by an earlier click may have arrived: swing. This is deliberately
             // OUTSIDE the camera check below — the blow has to land in a headless run too
@@ -138,7 +190,8 @@ namespace RadiantPool.Game
         {
             var combat = CombatManager.Instance;
             var mine = combat?.MyUnit;
-            if (combat == null || mine == null || !combat.IsMyTurn || cell == mine.Cell) return;
+            if (combat == null || mine == null || !combat.CanAcceptPlayerInput
+                || cell == mine.Cell) return;
 
             var enemy = combat.ClientUnits.FirstOrDefault(
                 u => !u.IsPc && !u.Dead && u.Cell == cell);
@@ -399,7 +452,7 @@ namespace RadiantPool.Game
             GUI.Label(new Rect(row.x, row.y - 2, 26, 14), "HP", Theme.Caps);
             float barW = Mathf.Max(60f, inner - 28f - 56f);
             Theme.Bar(new Rect(row.x + 28, row.y + 1, barW, 9),
-                mine.MaxHp > 0 ? (float)mine.Hp / mine.MaxHp : 0f, Theme.HpRed);
+                mine.MaxHp > 0 ? mine.DisplayHp / mine.MaxHp : 0f, Theme.HpRed);
             GUI.Label(new Rect(row.x + 32 + barW, row.y - 2, 56, 14),
                 $"{mine.Hp}/{mine.MaxHp}", Theme.Caps);
 
@@ -418,14 +471,9 @@ namespace RadiantPool.Game
         /// the fight resolves (fades near the end).</summary>
         private void DrawOutcomeBanner(CombatManager combat)
         {
-            float remaining = combat.BannerUntil - Time.time;
-            if (remaining <= 0f || combat.BannerTitle.Length == 0) return;
+            if (!combat.OutcomeOpen || combat.BannerTitle.Length == 0) return;
 
-            float alpha = Mathf.Clamp01(remaining / 1.2f);   // fade out over the last bit
-            var prevColor = GUI.color;
-            GUI.color = new Color(1f, 1f, 1f, alpha);
-
-            var rect = Ui.Fit(460f, 150f);
+            var rect = Ui.Fit(460f, 188f);
             rect.y = Ui.H * 0.22f;
             GUI.Box(rect, GUIContent.none, Theme.PanelStyle);
 
@@ -446,7 +494,22 @@ namespace RadiantPool.Game
             GUI.Label(new Rect(rect.x + 12, rect.y + 62, rect.width - 24, rect.height - 70),
                 combat.BannerDetail, detailStyle);
 
-            GUI.color = prevColor;
+            float buttonY = rect.yMax - 42f;
+            if (combat.BannerVictory)
+            {
+                if (GUI.Button(new Rect(rect.x + 140f, buttonY, 180f, 30f),
+                        "Continue", Theme.BtnPrimary))
+                    combat.DismissOutcome();
+            }
+            else
+            {
+                if (GUI.Button(new Rect(rect.x + 38f, buttonY, 180f, 30f),
+                        "Retry Battle", Theme.BtnPrimary))
+                    combat.CmdRetryEncounter();
+                if (GUI.Button(new Rect(rect.x + 242f, buttonY, 180f, 30f),
+                        "Return to Havenrock"))
+                    combat.DismissOutcome();
+            }
         }
 
         private Vector2 _initScroll;
@@ -474,7 +537,7 @@ namespace RadiantPool.Game
                 {
                     var row = GUILayoutUtility.GetRect(barW + 48f, 9f);
                     Theme.Bar(new Rect(row.x + 2, row.y, barW, 7),
-                        u.MaxHp > 0 ? (float)u.Hp / u.MaxHp : 0f, Theme.HpRed);
+                        u.MaxHp > 0 ? u.DisplayHp / u.MaxHp : 0f, Theme.HpRed);
                     GUI.Label(new Rect(row.x + barW + 8f, row.y - 4, 46, 14),
                         $"{u.Hp}/{u.MaxHp}", Theme.Caps);
                 }
@@ -523,7 +586,7 @@ namespace RadiantPool.Game
         /// only while a target picker is open.</summary>
         private void DrawActions(CombatManager combat)
         {
-            float h = _mode == Mode.Root ? 50f : 100f;
+            float h = _mode == Mode.Root ? 88f : 112f;
             float w = Mathf.Min(740f, Ui.W - 24f);
             // Sits on the hotbar, wherever the hotbar ended up — it moves with the window.
             float barTop = HotBar.BarRect.height > 0f ? HotBar.BarRect.y : Ui.H - 82f;
@@ -534,8 +597,10 @@ namespace RadiantPool.Game
             // The hint line is the thing that gets cut off first on a narrow window, so it
             // sheds detail rather than overflowing: essentials always, the rest if it fits.
             bool roomy = Ui.W > 900f;
-            string info = combat.LastRejection.Length > 0
-                ? $"<color=#f2ca50>{combat.LastRejection}</color>"
+            string info = combat.ActionResolving
+                ? $"<color=#f2ca50>Resolving {combat.State} - input locked</color>"
+                : combat.LastRejection.Length > 0
+                    ? $"<color=#f2ca50>{combat.LastRejection}</color>"
                 : $"<color=#d0c5af>move <b>{combat.MoveLeft} ft</b> · click square = walk · " +
                   "click enemy = close in and attack · Space = end turn"
                   + (roomy ? " · WASD/middle-drag = pan, F = recenter" : "")
@@ -546,16 +611,37 @@ namespace RadiantPool.Game
 
             switch (_mode)
             {
-                case Mode.PickAttackTarget: DrawTargets(combat, enemiesOnly: true,
-                    id => { combat.CmdAttack(id); _mode = Mode.Root; }); break;
+                case Mode.Root: DrawRootActions(combat); break;
+                case Mode.PickAttackTarget: DrawTargets(combat,
+                    CombatTargetType.Hostile, allowDowned: false,
+                    PickTarget); break;
                 case Mode.PickSpell: DrawSpells(combat); break;
                 case Mode.PickSpellTarget:
-                    bool friendly = _pendingSpell is "cure_wounds" or "healing_word" or "bless" or "shield";
-                    DrawTargets(combat, enemiesOnly: !friendly,
-                        id => { combat.CmdCast(_pendingSpell, id); _mode = Mode.Root; });
+                    var spell = SpellLibrary.Get(_pendingSpell);
+                    DrawTargets(combat, spell.TargetType, spell.AllowDownedTarget,
+                        PickTarget);
                     break;
             }
             GUILayout.EndArea();
+        }
+
+        private void DrawRootActions(CombatManager combat)
+        {
+            var holder = LocalHolder();
+            bool ready = combat.CanAcceptPlayerInput;
+            bool hasMagic = holder != null && KnownSpells(holder.Class).Length > 0;
+            GUILayout.BeginHorizontal();
+            GUI.enabled = ready && combat.ActionLeft;
+            if (GUILayout.Button(WithIcon("attack", "Physical Attack  [A]"),
+                    GUILayout.Height(34f))) PickAttack();
+            GUI.enabled = ready && hasMagic && (combat.ActionLeft || combat.BonusLeft);
+            if (GUILayout.Button(WithIcon("cast", "Magic Attack  [C]"),
+                    GUILayout.Height(34f))) PickMagic();
+            GUI.enabled = ready;
+            if (GUILayout.Button(WithIcon("end_turn", "End Turn  [Space]"),
+                    GUILayout.Height(34f))) combat.CmdEndTurn();
+            GUI.enabled = true;
+            GUILayout.EndHorizontal();
         }
 
         private void DrawSpells(CombatManager combat)
@@ -573,10 +659,10 @@ namespace RadiantPool.Game
                 if (col == 3) { GUILayout.EndHorizontal(); GUILayout.BeginHorizontal(); col = 0; }
                 col++;
                 var spell = SpellLibrary.Get(id);
-                bool usable = spell.Level == 0
+                bool usable = combat.CanAcceptPlayerInput && (spell.Level == 0
                     ? combat.ActionLeft
                     : (spell.IsBonusAction ? combat.BonusLeft : combat.ActionLeft)
-                      && combat.MySlots[0] + combat.MySlots[1] + combat.MySlots[2] > 0;
+                      && combat.MySlots[Mathf.Clamp(spell.Level - 1, 0, 2)] > 0);
                 GUI.enabled = usable;
                 if (GUILayout.Button(WithIcon(id, spell.Name), GUILayout.Height(32)))
                 {
@@ -585,24 +671,47 @@ namespace RadiantPool.Game
                 }
             }
             GUI.enabled = true;
-            if (GUILayout.Button("Back")) _mode = Mode.Root;
+            if (GUILayout.Button("Back  [Backspace]")) _mode = Mode.Root;
             GUILayout.EndHorizontal();
         }
 
-        private void DrawTargets(CombatManager combat, bool enemiesOnly,
+        private void DrawTargets(CombatManager combat, CombatTargetType targetType,
+            bool allowDowned,
             System.Action<string> onPick)
         {
+            var mine = combat.MyUnit;
             int col = 0;
             GUILayout.BeginHorizontal();
-            foreach (var u in combat.ClientUnits.Where(u => !u.Dead
-                && (enemiesOnly ? !u.IsPc : u.IsPc)))
+            foreach (var u in combat.ClientUnits.Where(u =>
+                ClientTargetAllowed(mine, u, targetType, allowDowned)))
             {
                 if (col == 3) { GUILayout.EndHorizontal(); GUILayout.BeginHorizontal(); col = 0; }
                 col++;
-                if (GUILayout.Button($"{u.Name} ({u.Hp})")) onPick(u.Id);
+                if (GUILayout.Button($"{u.Name} ({u.Hp}/{u.MaxHp})"))
+                {
+                    CombatFx.Instance?.ShowTargetMarker(u.Visual);
+                    onPick(u.Id);
+                }
             }
-            if (GUILayout.Button("Back")) _mode = Mode.Root;
+            if (GUILayout.Button("Back  [Backspace]")) _mode = Mode.Root;
             GUILayout.EndHorizontal();
+        }
+
+        private static bool ClientTargetAllowed(CombatManager.UnitView actor,
+            CombatManager.UnitView target, CombatTargetType targetType, bool allowDowned)
+        {
+            if (actor == null || target == null || target.Dead
+                || (target.Down && !allowDowned)) return false;
+            bool same = actor.Id == target.Id;
+            bool sameTeam = actor.IsPc == target.IsPc;
+            return targetType switch
+            {
+                CombatTargetType.Hostile => !same && !sameTeam,
+                CombatTargetType.Friendly => sameTeam,
+                CombatTargetType.Self => same,
+                CombatTargetType.AnyLiving => true,
+                _ => false
+            };
         }
 
         private PlayerCharacterHolder LocalHolder()
