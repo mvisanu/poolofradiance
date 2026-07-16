@@ -187,6 +187,7 @@ namespace RadiantPool.Game
             var variety = new SeededRng(encounter.EncounterId.GetHashCode());
             var takenCells = new HashSet<Vector2Int>();
             foreach (var u in _server.Values) takenCells.Add(u.Cell);   // reserve player cells
+            var playerCells = _server.Values.Select(u => u.Cell).ToArray();
 
             int m = 0;
             foreach (var authoredId in encounter.MonsterIds)
@@ -200,7 +201,7 @@ namespace RadiantPool.Game
                 _server[creature.Id] = new ServerUnit
                 {
                     Id = creature.Id, Creature = creature, MonsterDef = def,
-                    Cell = ScatterEnemyCell(variety, takenCells)
+                    Cell = ScatterEnemyCell(variety, takenCells, playerCells)
                 };
                 m++;
             }
@@ -230,19 +231,30 @@ namespace RadiantPool.Game
         }
 
         /// <summary>Places one enemy on the far half of the board at a random free cell,
-        /// instead of the old fixed (-2+m%4, 2+m/4) block. Cells stay well within the ~17-wide
-        /// grid and never collide with a player or another enemy already placed this fight.</summary>
-        private static Vector2Int ScatterEnemyCell(IRng rng, HashSet<Vector2Int> taken)
+        /// instead of the old fixed (-2+m%4, 2+m/4) block. Every candidate remains within
+        /// one-click approach range of every starting party cell: five movement steps to reach
+        /// adjacency, plus one spare step for an occupied-cell detour. This preserves the
+        /// click-enemy = walk-and-strike contract while still varying the formation.</summary>
+        private static Vector2Int ScatterEnemyCell(IRng rng, HashSet<Vector2Int> taken,
+            IReadOnlyList<Vector2Int> playerCells)
         {
             for (int attempt = 0; attempt < 64; attempt++)
             {
                 var cell = new Vector2Int(rng.Next(-6, 6), rng.Next(1, 7));
+                if (playerCells.Any(p => Chebyshev(p, cell) > 6)) continue;
                 if (taken.Add(cell)) return cell;
             }
-            // Degenerate fallback (never reached with <=42 enemies on a 13x6 field).
-            var fallback = new Vector2Int(0, 4);
-            while (!taken.Add(fallback)) fallback.y++;
-            return fallback;
+            // Deterministic fallback over the same valid domain. Current encounters use at
+            // most a handful of enemies, so exhausting these cells is a content error.
+            for (int y = 1; y <= 7; y++)
+                for (int x = -6; x <= 6; x++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    if (playerCells.Any(p => Chebyshev(p, cell) > 6)) continue;
+                    if (taken.Add(cell)) return cell;
+                }
+            throw new InvalidOperationException(
+                "Encounter has too many enemies for the one-click approach formation.");
         }
 
         [Server]

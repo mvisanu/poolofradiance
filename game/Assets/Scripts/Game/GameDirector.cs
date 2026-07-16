@@ -1690,7 +1690,8 @@ namespace RadiantPool.Game
             int levelSuffix = enemy.Name.LastIndexOf(" (L", System.StringComparison.Ordinal);
             string narratedEnemy = levelSuffix > 0 ? enemy.Name.Substring(0, levelSuffix) : enemy.Name;
             string blow = combat.Log.LastOrDefault(
-                l => l.Contains(mine.Name) && l.Contains(narratedEnemy)) ?? "";
+                l => l.StartsWith($"{mine.Name}'s ", System.StringComparison.Ordinal)
+                     && l.Contains(narratedEnemy)) ?? "";
             // Once the automatic handoff reaches the enemy, ActionLeft describes the
             // ENEMY budget. Narration is the authoritative proof our blow landed.
             bool struck = blow.Length > 0;

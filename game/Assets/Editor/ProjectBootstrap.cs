@@ -1644,7 +1644,7 @@ namespace RadiantPool.EditorTools
                 // locations share a formation, spaced so fights never merge, and kept clear of
                 // the arrival point so nothing triggers the instant you step off the waystone.
                 var layoutRng = new System.Random(siteIndex * 2749 + 41);
-                float xLimit = ArenaHalf - 8f;                       // ~22
+                float xLimit = ArenaHalf - 8f;                       // 16
                 var offsets = new Vector3[site.Encounters.Length];
                 var placedXZ = new System.Collections.Generic.List<Vector2>();
                 for (int fi = 0; fi < offsets.Length; fi++)
@@ -1653,7 +1653,7 @@ namespace RadiantPool.EditorTools
                     for (int attempt = 0; attempt < 48; attempt++)
                     {
                         float px = (float)(layoutRng.NextDouble() * 2.0 - 1.0) * xLimit;
-                        float pz = -3f + (float)layoutRng.NextDouble() * (ArenaHalf - 4f); // ~-3..26
+                        float pz = -3f + (float)layoutRng.NextDouble() * (ArenaHalf - 4f); // -3..17
                         p = new Vector2(px, pz);
                         bool clear = true;
                         foreach (var q in placedXZ)
