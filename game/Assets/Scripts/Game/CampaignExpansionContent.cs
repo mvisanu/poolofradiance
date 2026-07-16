@@ -232,7 +232,7 @@ namespace RadiantPool.Game
                 new[] { "old_docks" }, false, false,
                 new Vector3(-150f, 0f, -95f), CampaignSiteTheme.Wilds,
                 E("trail", "the scorched trail", "giant_spider", "giant_spider"),
-                E("crossing", "the wild crossing", "brown_bear", "goblin", "goblin"),
+                E("crossing", "the wild crossing", "brown_bear", "dust_jackal", "goblin"),
                 E("vessel", "the vessel hollow", "brown_bear", "giant_spider", "giant_spider")),
 
             new CampaignSitePlan("wild_lairs", "The Wilder Dens", "Marks on the Wild",
@@ -371,7 +371,7 @@ namespace RadiantPool.Game
                 Travel("the Whispervault", "Descend through the speaking crypts and discover who awakened their oathbound dead."),
                 new[] { "duskmire_crossing" }, false, false,
                 new Vector3(-100f, 0f, 205f), CampaignSiteTheme.Crypt,
-                E("vestibule", "the oathbound vestibule", "ironbound_veteran", "veil_adept", "grave_wraith"),
+                E("vestibule", "the oathbound vestibule", "barrow_wight", "veil_adept", "grave_wraith"),
                 E("choir", "the whispering choir", "grave_wraith", "grave_wraith", "ironbound_veteran"),
                 E("seal", "the lowest seal", "grave_wraith", "mire_troll", "ironbound_veteran")),
 

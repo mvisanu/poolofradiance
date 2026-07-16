@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "ash_ogre",
+  "name": "Ash Ogre",
+  "srdRef": "Ogre (SRD 5.1)",
+  "size": "Large",
+  "ac": 11,
+  "hpDice": "7d10+21",
+  "speed": 40,
+  "abilities": { "str": 19, "dex": 8, "con": 16, "int": 5, "wis": 7, "cha": 7 },
+  "attacks": [
+    { "name": "Ash Greatclub", "toHit": 6, "damage": "2d8+4", "damageType": "bludgeoning", "rangeFeet": 5 },
+    { "name": "Hurled Rock", "toHit": 5, "damage": "2d6+4", "damageType": "bludgeoning", "rangeFeet": 60 }
+  ],
+  "xp": 450,
+  "ai": "brute",
+  "lootTable": "lt_raider"
+}

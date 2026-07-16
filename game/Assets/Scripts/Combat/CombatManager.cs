@@ -181,16 +181,26 @@ namespace RadiantPool.Game
                 i++;
             }
 
+            // Per-encounter seed: stable across a retry within this session (the same fight
+            // keeps its shape) but different between encounters and between sessions, so the
+            // monster mix and formation vary instead of repeating the identical block.
+            var variety = new SeededRng(encounter.EncounterId.GetHashCode());
+            var takenCells = new HashSet<Vector2Int>();
+            foreach (var u in _server.Values) takenCells.Add(u.Cell);   // reserve player cells
+
             int m = 0;
-            foreach (var monsterId in encounter.MonsterIds)
+            foreach (var authoredId in encounter.MonsterIds)
             {
+                // Same-XP, same-theme swap: keeps the encounter's total XP (and the pinned
+                // campaign curve) identical while widening which creatures actually appear.
+                string monsterId = MonsterVariety.Pick(authoredId, variety);
                 var def = MonsterLibrary.Get(monsterId);
                 var creature = def.Spawn($"m{m}_{monsterId}", _rng,
                     encounterLevel: _encounterMonsterLevel);
                 _server[creature.Id] = new ServerUnit
                 {
                     Id = creature.Id, Creature = creature, MonsterDef = def,
-                    Cell = new Vector2Int(-2 + (m % 4), 2 + (m / 4))
+                    Cell = ScatterEnemyCell(variety, takenCells)
                 };
                 m++;
             }
@@ -217,6 +227,22 @@ namespace RadiantPool.Game
                       $"enemies challenge the level-{_encounterCharacterLevel} party. Roll initiative.");
             RpcSfx("combat_start");
             StartCoroutine(TurnLoop());
+        }
+
+        /// <summary>Places one enemy on the far half of the board at a random free cell,
+        /// instead of the old fixed (-2+m%4, 2+m/4) block. Cells stay well within the ~17-wide
+        /// grid and never collide with a player or another enemy already placed this fight.</summary>
+        private static Vector2Int ScatterEnemyCell(IRng rng, HashSet<Vector2Int> taken)
+        {
+            for (int attempt = 0; attempt < 64; attempt++)
+            {
+                var cell = new Vector2Int(rng.Next(-6, 6), rng.Next(1, 7));
+                if (taken.Add(cell)) return cell;
+            }
+            // Degenerate fallback (never reached with <=42 enemies on a 13x6 field).
+            var fallback = new Vector2Int(0, 4);
+            while (!taken.Add(fallback)) fallback.y++;
+            return fallback;
         }
 
         [Server]
@@ -1585,6 +1611,24 @@ namespace RadiantPool.Game
             { "night_regent", ("Rogue_Hooded|Knight", new Color(0.48f, 0.3f, 0.58f), 1.3f) },
             { "starbound_juggernaut", ("Knight", new Color(0.7f, 0.78f, 0.88f), 2.15f) },
             { "hollow_star_lich", ("Skeleton_Mage", new Color(0.62f, 0.4f, 0.82f), 1.45f) },
+
+            // Variety roster — reuse the same base prefabs with distinct tint/scale so each
+            // reads as its own creature without new art. Every id here has a MonsterLibrary
+            // entry, so ValidateMonsterModels stays green (no capsule fallbacks).
+            { "plague_rat", ("Rat|Rogue", new Color(0.55f, 0.72f, 0.5f), 1.05f) },
+            { "fen_croaker", ("Bear", new Color(0.42f, 0.66f, 0.38f), 0.5f) },
+            { "grave_crawler", ("Spider", new Color(0.82f, 0.8f, 0.72f), 0.6f) },
+            { "gray_knife", ("Rogue_Hooded", new Color(0.55f, 0.58f, 0.62f), 1f) },
+            { "ember_acolyte", ("Rogue_Hooded", new Color(1f, 0.6f, 0.38f), 1f) },
+            { "dust_jackal", ("Bear", new Color(0.74f, 0.64f, 0.44f), 0.55f) },
+            { "sand_scuttler", ("Spider", new Color(0.78f, 0.7f, 0.45f), 0.8f) },
+            { "reed_scout", ("Ranger", new Color(0.58f, 0.72f, 0.5f), 1f) },
+            { "ironpost_soldier", ("Orc|Barbarian", new Color(0.7f, 0.74f, 0.78f), 1f) },
+            { "thornback_boar", ("Bear", new Color(0.4f, 0.32f, 0.28f), 0.9f) },
+            { "bloated_drowned", ("Skeleton_Warrior|Skeleton_Minion", new Color(0.5f, 0.62f, 0.45f), 1.35f) },
+            { "iron_sentinel", ("Knight", new Color(0.55f, 0.57f, 0.6f), 1.05f) },
+            { "ash_ogre", ("Orc_Skull|Orc|Barbarian", new Color(0.62f, 0.56f, 0.5f), 1.5f) },
+            { "barrow_wight", ("Skeleton_Warrior", new Color(0.56f, 0.4f, 0.68f), 1.15f) },
         };
 
         /// <summary>Visible combat loadouts mirror each humanoid monster's authored
@@ -1606,6 +1650,15 @@ namespace RadiantPool.Game
             { "cinder_giant", ("greatsword", false) },
             { "night_regent", ("rapier", false) },
             { "hollow_star_lich", ("runed_staff", false) },
+            // Variety roster held weapons (natural-weapon creatures deliberately omitted:
+            // plague_rat, fen_croaker, grave_crawler, dust_jackal, sand_scuttler,
+            // thornback_boar, bloated_drowned, iron_sentinel).
+            { "gray_knife", ("shortsword", false) },
+            { "ember_acolyte", ("dagger", false) },
+            { "reed_scout", ("shortsword", false) },
+            { "ironpost_soldier", ("longsword", true) },
+            { "ash_ogre", ("greatsword", false) },
+            { "barrow_wight", ("longsword", false) },
         };
 
         public static bool HasWeaponLoadout(string monsterId) =>

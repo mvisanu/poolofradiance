@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "thornback_boar",
+  "name": "Thornback Boar",
+  "srdRef": "Giant Boar (SRD 5.1)",
+  "size": "Large",
+  "ac": 12,
+  "hpDice": "5d8+10",
+  "speed": 40,
+  "abilities": { "str": 17, "dex": 11, "con": 16, "int": 2, "wis": 9, "cha": 5 },
+  "attacks": [
+    { "name": "Goring Tusks", "toHit": 5, "damage": "2d6+3", "damageType": "slashing", "rangeFeet": 5 }
+  ],
+  "xp": 200,
+  "ai": "brute",
+  "lootTable": "lt_beast_den"
+}

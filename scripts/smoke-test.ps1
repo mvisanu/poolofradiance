@@ -217,7 +217,7 @@ $checks = @(
     @{ Name = "no failed quest-guidance assertion"; Ok = $hostText -notmatch "\[QuestGuidanceTest\] FAIL" },
     @{ Name = "world atlas nests every destination inside ten campaign regions"; Ok = $hostText -match "\[WorldMap\] PASS - 10 regions contain 39/39 campaign destinations" },
     @{ Name = "world atlas hierarchy has no structural failure"; Ok = $hostText -notmatch "\[WorldMap\] FAIL" },
-    @{ Name = "every creature mapping produces a visible real model"; Ok = $hostText -match "\[CreatureTest\] PASS - all creature visuals 23/23 visible, mappings 23/23" },
+    @{ Name = "every creature mapping produces a visible real model"; Ok = $hostText -match "\[CreatureTest\] PASS - all creature visuals 37/37 visible, mappings 37/37" },
     @{ Name = "no failed creature visual or capsule fallback"; Ok = $hostText -notmatch "\[CreatureTest\] FAIL|falling back to a capsule" },
     @{ Name = "Warrior Pack drives party and humanoid monster combat states"; Ok = $hostText -match "\[AnimationPackTest\] PASS - licensed clips 4/4, humanoid avatars True, states True, party 1H True, monster ranged True, styles True, hit timings True" },
     @{ Name = "Warrior Pack integration has no failed assertion"; Ok = $hostText -notmatch "\[AnimationPackTest\] FAIL" },

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "reed_scout",
+  "name": "Reed Scout",
+  "srdRef": "Scout (SRD 5.1 p.394)",
+  "size": "Medium",
+  "ac": 13,
+  "hpDice": "2d8+2",
+  "speed": 30,
+  "abilities": { "str": 11, "dex": 14, "con": 12, "int": 11, "wis": 13, "cha": 11 },
+  "attacks": [
+    { "name": "Shortsword", "toHit": 4, "damage": "1d6+2", "damageType": "slashing", "rangeFeet": 5 },
+    { "name": "Longbow", "toHit": 4, "damage": "1d8+2", "damageType": "piercing", "rangeFeet": 150 }
+  ],
+  "xp": 50,
+  "ai": "skirmisher",
+  "lootTable": "lt_skulker"
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "grave_crawler",
+  "name": "Grave Crawler",
+  "srdRef": "Giant Centipede (SRD 5.1 p.377)",
+  "size": "Small",
+  "ac": 12,
+  "hpDice": "2d6",
+  "speed": 30,
+  "abilities": { "str": 5, "dex": 14, "con": 12, "int": 1, "wis": 7, "cha": 3 },
+  "attacks": [
+    { "name": "Venom Bite", "toHit": 4, "damage": "1d4+2", "damageType": "poison", "rangeFeet": 5 }
+  ],
+  "xp": 25,
+  "ai": "skirmisher",
+  "lootTable": "lt_undead"
+}

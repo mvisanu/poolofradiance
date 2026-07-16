@@ -298,6 +298,164 @@ namespace RadiantPool.Rules
                         new AttackDefinition("Grave Touch", 12, "3d6+3", DamageType.Necrotic, 5)
                     }
                 },
+
+                // --- Variety roster (added to widen encounter mixes). Every entry shares an
+                // existing XP tier value so it is a drop-in, balance-neutral alternative for a
+                // same-tier monster: equal Xp keeps encounter XP totals (and the pinned
+                // level-20 curve) identical whether it appears via runtime substitution or an
+                // equal-XP authored swap. Each carries an SRD stat-block reference. ---
+
+                // Tier 25 -------------------------------------------------------------------
+                new MonsterDefinition
+                {
+                    Id = "plague_rat", Name = "Plague Rat",
+                    ArmorClass = 12, HpDice = "2d6", Speed = 30,
+                    Abilities = new AbilityScores(7, 15, 11, 2, 10, 4),
+                    Xp = 25, LootTable = "lt_vermin",
+                    SrdRef = "Giant Rat (SRD 5.1 p.379), diseased variant",
+                    Attacks = { new AttackDefinition("Filthy Bite", 4, "1d4+2", DamageType.Piercing, 5) }
+                },
+                new MonsterDefinition
+                {
+                    Id = "fen_croaker", Name = "Fen Croaker",
+                    ArmorClass = 11, HpDice = "2d8", Speed = 30,
+                    Abilities = new AbilityScores(12, 13, 11, 2, 10, 3),
+                    Xp = 25, LootTable = "lt_beast_den",
+                    SrdRef = "Giant Frog (SRD 5.1 p.377)",
+                    Attacks = { new AttackDefinition("Gulping Bite", 3, "1d6+1", DamageType.Piercing, 5) }
+                },
+                new MonsterDefinition
+                {
+                    Id = "grave_crawler", Name = "Grave Crawler",
+                    ArmorClass = 12, HpDice = "2d6", Speed = 30,
+                    Abilities = new AbilityScores(5, 14, 12, 1, 7, 3),
+                    Xp = 25, LootTable = "lt_undead",
+                    SrdRef = "Giant Centipede (SRD 5.1 p.377)",
+                    Attacks = { new AttackDefinition("Venom Bite", 4, "1d4+2", DamageType.Poison, 5) }
+                },
+                new MonsterDefinition
+                {
+                    Id = "gray_knife", Name = "Gray Knife Cutter",
+                    ArmorClass = 12, HpDice = "2d8", Speed = 30,
+                    Abilities = new AbilityScores(13, 11, 12, 10, 10, 11),
+                    Xp = 25, LootTable = "lt_skulker", SrdRef = "Thug (SRD 5.1 p.395)",
+                    Attacks =
+                    {
+                        new AttackDefinition("Cudgel", 4, "1d6+2", DamageType.Bludgeoning, 5),
+                        new AttackDefinition("Sling", 4, "1d4+2", DamageType.Bludgeoning, 30)
+                    }
+                },
+                new MonsterDefinition
+                {
+                    Id = "ember_acolyte", Name = "Ember Acolyte",
+                    ArmorClass = 12, HpDice = "2d8", Speed = 30,
+                    Abilities = new AbilityScores(10, 11, 11, 10, 14, 11),
+                    Xp = 25, LootTable = "lt_kindled", SrdRef = "Acolyte (SRD 5.1 p.395)",
+                    Attacks =
+                    {
+                        new AttackDefinition("Ritual Dagger", 3, "1d4+1", DamageType.Piercing, 5),
+                        new AttackDefinition("Ember Bolt", 4, "1d8", DamageType.Fire, 60)
+                    }
+                },
+
+                // Tier 50 -------------------------------------------------------------------
+                new MonsterDefinition
+                {
+                    Id = "dust_jackal", Name = "Dust Jackal",
+                    ArmorClass = 12, HpDice = "2d8+2", Speed = 40,
+                    Abilities = new AbilityScores(13, 15, 12, 3, 12, 6),
+                    Xp = 50, LootTable = "lt_beast_den", SrdRef = "Wolf (SRD 5.1 p.341)",
+                    Attacks = { new AttackDefinition("Snapping Bite", 4, "1d6+2", DamageType.Piercing, 5) }
+                },
+                new MonsterDefinition
+                {
+                    Id = "sand_scuttler", Name = "Sand Scuttler",
+                    ArmorClass = 13, HpDice = "2d8+2", Speed = 30,
+                    Abilities = new AbilityScores(12, 16, 13, 3, 11, 4),
+                    Xp = 50, LootTable = "lt_beast_den",
+                    SrdRef = "Giant Wolf Spider (SRD 5.1 p.378)",
+                    Attacks = { new AttackDefinition("Fanged Bite", 4, "1d6+2", DamageType.Piercing, 5) }
+                },
+                new MonsterDefinition
+                {
+                    Id = "reed_scout", Name = "Reed Scout",
+                    ArmorClass = 13, HpDice = "2d8+2", Speed = 30,
+                    Abilities = new AbilityScores(11, 14, 12, 11, 13, 11),
+                    Xp = 50, LootTable = "lt_skulker", SrdRef = "Scout (SRD 5.1 p.394)",
+                    Attacks =
+                    {
+                        new AttackDefinition("Shortsword", 4, "1d6+2", DamageType.Slashing, 5),
+                        new AttackDefinition("Longbow", 4, "1d8+2", DamageType.Piercing, 150)
+                    }
+                },
+
+                // Tier 100 ------------------------------------------------------------------
+                new MonsterDefinition
+                {
+                    Id = "ironpost_soldier", Name = "Ironpost Soldier",
+                    ArmorClass = 15, HpDice = "2d8+6", Speed = 30,
+                    Abilities = new AbilityScores(15, 12, 16, 10, 10, 9),
+                    Xp = 100, LootTable = "lt_raider", SrdRef = "Hobgoblin (SRD 5.1)",
+                    Attacks =
+                    {
+                        new AttackDefinition("Longsword", 4, "1d8+2", DamageType.Slashing, 5),
+                        new AttackDefinition("Longbow", 3, "1d8+1", DamageType.Piercing, 150)
+                    }
+                },
+
+                // Tier 200 ------------------------------------------------------------------
+                new MonsterDefinition
+                {
+                    Id = "thornback_boar", Name = "Thornback Boar",
+                    ArmorClass = 12, HpDice = "5d8+10", Speed = 40,
+                    Abilities = new AbilityScores(17, 11, 16, 2, 9, 5),
+                    Xp = 200, LootTable = "lt_beast_den", SrdRef = "Giant Boar (SRD 5.1)",
+                    Attacks = { new AttackDefinition("Goring Tusks", 5, "2d6+3", DamageType.Slashing, 5) }
+                },
+                new MonsterDefinition
+                {
+                    Id = "bloated_drowned", Name = "Bloated Drowned",
+                    ArmorClass = 9, HpDice = "6d8+18", Speed = 20,
+                    Abilities = new AbilityScores(17, 6, 17, 3, 6, 5),
+                    Xp = 200, LootTable = "lt_undead", SrdRef = "Ogre Zombie (SRD 5.1)",
+                    Attacks = { new AttackDefinition("Heaving Slam", 5, "2d8+4", DamageType.Bludgeoning, 5) }
+                },
+                new MonsterDefinition
+                {
+                    Id = "iron_sentinel", Name = "Iron Sentinel",
+                    ArmorClass = 18, HpDice = "6d8+6", Speed = 25,
+                    Abilities = new AbilityScores(14, 11, 13, 1, 3, 1),
+                    Xp = 200, LootTable = "lt_warden", SrdRef = "Animated Armor (SRD 5.1)",
+                    Attacks = { new AttackDefinition("Iron Fist", 4, "1d10+2", DamageType.Bludgeoning, 5) }
+                },
+
+                // Tier 450 ------------------------------------------------------------------
+                new MonsterDefinition
+                {
+                    Id = "ash_ogre", Name = "Ash Ogre",
+                    ArmorClass = 11, HpDice = "7d10+21", Speed = 40,
+                    Abilities = new AbilityScores(19, 8, 16, 5, 7, 7),
+                    Xp = 450, LootTable = "lt_raider", SrdRef = "Ogre (SRD 5.1)",
+                    Attacks =
+                    {
+                        new AttackDefinition("Ash Greatclub", 6, "2d8+4", DamageType.Bludgeoning, 5),
+                        new AttackDefinition("Hurled Rock", 5, "2d6+4", DamageType.Bludgeoning, 60)
+                    }
+                },
+
+                // Tier 700 ------------------------------------------------------------------
+                new MonsterDefinition
+                {
+                    Id = "barrow_wight", Name = "Barrow Wight",
+                    ArmorClass = 14, HpDice = "6d8+12", Speed = 30,
+                    Abilities = new AbilityScores(15, 14, 16, 10, 13, 15),
+                    Xp = 700, LootTable = "lt_undead", SrdRef = "Wight (SRD 5.1)",
+                    Attacks =
+                    {
+                        new AttackDefinition("Barrow Blade", 4, "2d6+2", DamageType.Slashing, 5),
+                        new AttackDefinition("Life Leech", 4, "1d8+2", DamageType.Necrotic, 5)
+                    }
+                },
             };
 
             var dict = new Dictionary<string, MonsterDefinition>();

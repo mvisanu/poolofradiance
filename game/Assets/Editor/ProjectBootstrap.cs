@@ -1068,7 +1068,7 @@ namespace RadiantPool.EditorTools
                         "kindled_zealot", "bonewalker" });
             Encounter("enc_ashen_03", "ashen_ward", "the hollow shrine",
                 new Vector3(42, 1.5f, 52), new Vector3(10, 3, 9), true,
-                new[] { "giant_spider", "giant_spider", "kindled_zealot", "kindled_zealot" });
+                new[] { "iron_sentinel", "giant_spider", "kindled_zealot", "kindled_zealot" });
 
             // Zone 2 — The Sunken Warcamp (south, gated): orc warband + boss fight.
             Encounter("enc_warcamp_01", "sunken_warcamp", "the picket line",
@@ -1352,15 +1352,27 @@ namespace RadiantPool.EditorTools
                 glowSite.EnableKeyword("_EMISSION");
                 glowSite.SetColor("_EmissionColor", accent * 1.7f);
 
+                // Arena footprint. Enlarged from the original 44x44 so each destination is a
+                // roomier field to fight across; S scales every perimeter placement below so
+                // the dressing, walls and backdrops grow with the boundary instead of leaving
+                // props stranded in the middle of a bigger empty slab.
+                // Sites sit on a 50-unit grid, so the arena stays under that spacing (edges +
+                // dressing must not bleed into the neighbouring cell). 48 is as large as fits
+                // with a margin; the per-site randomized fight spread below is what really
+                // makes each destination feel different, not raw size alone.
+                const float ArenaSize = 48f;              // was 44
+                const float S = ArenaSize / 44f;          // ~1.09 perimeter scale factor
+                const float ArenaHalf = ArenaSize / 2f;   // 24 — invisible boundary half-extent
+
                 // Gameplay remains a simple, reliable collider slab. Its renderer is hidden
                 // beneath a hand-painted plane so combat navigation never depends on prop mesh.
                 var floorCollider = Box($"SiteGround_{site.ZoneId}", site.Center + Vector3.down * 0.18f,
-                    new Vector3(44f, 0.35f, 44f), groundSite);
+                    new Vector3(ArenaSize, 0.35f, ArenaSize), groundSite);
                 floorCollider.GetComponent<Renderer>().enabled = false;
                 var paintedGround = GameObject.CreatePrimitive(PrimitiveType.Plane);
                 paintedGround.name = $"Environment_HandpaintedGrass_{site.ZoneId}";
                 paintedGround.transform.position = site.Center + Vector3.down * 0.005f;
-                paintedGround.transform.localScale = new Vector3(4.4f, 1f, 4.4f);
+                paintedGround.transform.localScale = new Vector3(ArenaSize / 10f, 1f, ArenaSize / 10f);
                 Object.DestroyImmediate(paintedGround.GetComponent<Collider>());
                 var paintedMaterial = HandpaintedGroundArt.ForTheme(site.Theme, baseColor);
                 paintedGround.GetComponent<Renderer>().sharedMaterial = paintedMaterial ?? groundSite;
@@ -1373,14 +1385,14 @@ namespace RadiantPool.EditorTools
                 // walls, rocks, trees and fences now carry the visible silhouette.
                 foreach (var edge in new[]
                 {
-                    Box($"SiteEdgeN_{site.ZoneId}", site.Center + new Vector3(0f, 0.55f, 22f), new Vector3(44f, 1.1f, 0.8f), edgeSite),
-                    Box($"SiteEdgeS_{site.ZoneId}", site.Center + new Vector3(0f, 0.55f, -22f), new Vector3(44f, 1.1f, 0.8f), edgeSite),
-                    Box($"SiteEdgeE_{site.ZoneId}", site.Center + new Vector3(22f, 0.55f, 0f), new Vector3(0.8f, 1.1f, 44f), edgeSite),
-                    Box($"SiteEdgeW_{site.ZoneId}", site.Center + new Vector3(-22f, 0.55f, 0f), new Vector3(0.8f, 1.1f, 44f), edgeSite)
+                    Box($"SiteEdgeN_{site.ZoneId}", site.Center + new Vector3(0f, 0.55f, ArenaHalf), new Vector3(ArenaSize, 1.1f, 0.8f), edgeSite),
+                    Box($"SiteEdgeS_{site.ZoneId}", site.Center + new Vector3(0f, 0.55f, -ArenaHalf), new Vector3(ArenaSize, 1.1f, 0.8f), edgeSite),
+                    Box($"SiteEdgeE_{site.ZoneId}", site.Center + new Vector3(ArenaHalf, 0.55f, 0f), new Vector3(0.8f, 1.1f, ArenaSize), edgeSite),
+                    Box($"SiteEdgeW_{site.ZoneId}", site.Center + new Vector3(-ArenaHalf, 0.55f, 0f), new Vector3(0.8f, 1.1f, ArenaSize), edgeSite)
                 }) edge.GetComponent<Renderer>().enabled = false;
 
                 var titleGo = new GameObject($"SiteLabel_{site.ZoneId}");
-                titleGo.transform.position = site.Center + new Vector3(0f, 4.2f, 19f);
+                titleGo.transform.position = site.Center + new Vector3(0f, 4.2f, 19f * S);
                 var title = titleGo.AddComponent<TextMesh>();
                 title.text = site.DisplayName;
                 title.characterSize = 0.075f;
@@ -1405,7 +1417,7 @@ namespace RadiantPool.EditorTools
                 for (int i = 0; i < 14; i++)
                 {
                     float angle = (i / 14f) * Mathf.PI * 2f + (float)(random.NextDouble() - 0.5) * 0.24f;
-                    float radius = 18f + (float)random.NextDouble() * 2.5f;
+                    float radius = (18f + (float)random.NextDouble() * 2.5f) * S;
                     var pos = site.Center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius;
                     PolyPackArt.Kind kind;
                     if (site.Theme == CampaignSiteTheme.Wilds) kind = i % 4 == 0 ? PolyPackArt.Kind.Bush : PolyPackArt.Kind.Tree;
@@ -1442,7 +1454,7 @@ namespace RadiantPool.EditorTools
                     var gsrc = PolyPackArt.Source.GraveyardNature;
 
                     // Cemetery gate on the front (-Z) axis, in the gap the perimeter left.
-                    var gatePos = site.Center + new Vector3(0f, 0f, -20f);
+                    var gatePos = site.Center + new Vector3(0f, 0f, -20f * S);
                     if (SiteVisual(gsrc, PolyPackArt.Kind.Ruin,
                             PolyPackArt.IndexOf(gsrc, PolyPackArt.Kind.Ruin, "Gate"),
                             site, gatePos, 0f, 5.0f, false) != null)
@@ -1453,7 +1465,7 @@ namespace RadiantPool.EditorTools
                     // in the rear wall gap. It sits just OUTSIDE the arena as a backdrop
                     // landmark, never between the camera and the fighting centre, so the
                     // combat x-ray occlusion can't fade it into a translucent blob.
-                    var mausPos = site.Center + new Vector3(0f, 0f, 23f);
+                    var mausPos = site.Center + new Vector3(0f, 0f, 23f * S);
                     var maus = SiteVisual(gsrc, PolyPackArt.Kind.House,
                         PolyPackArt.IndexOf(gsrc, PolyPackArt.Kind.House, "tower"),
                         site, mausPos, 180f, 9f, true);
@@ -1463,9 +1475,9 @@ namespace RadiantPool.EditorTools
                             new Color(0.62f, 0.44f, 1f));   // violet ritual glow at the door
                         int statue = PolyPackArt.IndexOf(gsrc, PolyPackArt.Kind.Grave, "statue");
                         SiteVisual(gsrc, PolyPackArt.Kind.Grave, statue, site,
-                            site.Center + new Vector3(-5f, 0f, 17f), 150f, 2.4f, false);
+                            site.Center + new Vector3(-5f * S, 0f, 17f * S), 150f, 2.4f, false);
                         SiteVisual(gsrc, PolyPackArt.Kind.Grave, statue, site,
-                            site.Center + new Vector3(5f, 0f, 17f), 210f, 2.4f, false);
+                            site.Center + new Vector3(5f * S, 0f, 17f * S), 210f, 2.4f, false);
                     }
 
                     // Clustered graves — small groups at varied angle/radius/rotation/scale,
@@ -1568,7 +1580,7 @@ namespace RadiantPool.EditorTools
                     for (int i = 0; i < 10; i++)
                     {
                         float angle = (i / 10f) * Mathf.PI * 2f + 0.18f;
-                        float radius = i % 3 == 0 ? 18.2f : 20.4f;
+                        float radius = (i % 3 == 0 ? 18.2f : 20.4f) * S;
                         var pos = site.Center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius;
                         SiteVisual(PolyPackArt.Source.Dungeon, PolyPackArt.Kind.Ruin,
                             siteIndex * 19 + i, site, pos, -angle * Mathf.Rad2Deg + 90f,
@@ -1579,7 +1591,7 @@ namespace RadiantPool.EditorTools
                     for (int i = 0; i < 4; i++)
                     {
                         float angle = i * Mathf.PI * 0.5f + 0.7f;
-                        var pos = site.Center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * 16.8f;
+                        var pos = site.Center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * 16.8f * S;
                         SiteVisual(PolyPackArt.Source.Dungeon, PolyPackArt.Kind.Prop,
                             i == 0 ? lightIndex : siteIndex * 13 + i, site, pos,
                             i * 83f, i == 0 ? 2.2f : 1.45f, true);
@@ -1594,7 +1606,7 @@ namespace RadiantPool.EditorTools
                     for (int i = 0; i < 4; i++)
                     {
                         float angle = i * Mathf.PI * 0.5f + 0.75f;
-                        var pos = site.Center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * 19f;
+                        var pos = site.Center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * 19f * S;
                         var kind = site.Theme == CampaignSiteTheme.Camp && i % 2 == 0
                             ? PolyPackArt.Kind.Tent : PolyPackArt.Kind.House;
                         if (SiteVisual(PolyPackArt.Source.RpgPoly, kind, siteIndex * 7 + i,
@@ -1606,7 +1618,7 @@ namespace RadiantPool.EditorTools
                     for (int i = 0; i < 8; i++)
                     {
                         float angle = i * Mathf.PI * 0.25f;
-                        var pos = site.Center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * 16.5f;
+                        var pos = site.Center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * 16.5f * S;
                         SiteVisual(PolyPackArt.Source.RpgPoly,
                             i % 3 == 0 ? PolyPackArt.Kind.Fence : PolyPackArt.Kind.Prop,
                             siteIndex * 23 + i, site, pos, i * 47f,
@@ -1620,17 +1632,37 @@ namespace RadiantPool.EditorTools
                     for (int i = 0; i < 3; i++)
                     {
                         float angle = i * Mathf.PI * 2f / 3f + 0.4f;
-                        var pos = site.Center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * 15.8f;
+                        var pos = site.Center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * 15.8f * S;
                         SiteVisual(PolyPackArt.Source.RpgPoly, PolyPackArt.Kind.Prop,
                             siteIndex * 17 + i, site, pos, i * 113f, 1.5f, true);
                     }
                 }
 
-                var offsets = new[]
+                // Per-site randomized fight layout. Instead of the same three fixed offsets at
+                // every destination, the encounters spread across the (now larger) northern
+                // field in front of the south waystone arrival — seeded per site so no two
+                // locations share a formation, spaced so fights never merge, and kept clear of
+                // the arrival point so nothing triggers the instant you step off the waystone.
+                var layoutRng = new System.Random(siteIndex * 2749 + 41);
+                float xLimit = ArenaHalf - 8f;                       // ~22
+                var offsets = new Vector3[site.Encounters.Length];
+                var placedXZ = new System.Collections.Generic.List<Vector2>();
+                for (int fi = 0; fi < offsets.Length; fi++)
                 {
-                    new Vector3(-10f, 1.5f, 4f), new Vector3(0f, 1.5f, 12f),
-                    new Vector3(10f, 1.5f, 4f)
-                };
+                    Vector2 p = Vector2.zero;
+                    for (int attempt = 0; attempt < 48; attempt++)
+                    {
+                        float px = (float)(layoutRng.NextDouble() * 2.0 - 1.0) * xLimit;
+                        float pz = -3f + (float)layoutRng.NextDouble() * (ArenaHalf - 4f); // ~-3..26
+                        p = new Vector2(px, pz);
+                        bool clear = true;
+                        foreach (var q in placedXZ)
+                            if (Vector2.Distance(q, p) < 12f) { clear = false; break; }
+                        if (clear) break;
+                    }
+                    placedXZ.Add(p);
+                    offsets[fi] = new Vector3(p.x, 1.5f, p.y);
+                }
                 for (int i = 0; i < site.Encounters.Length; i++)
                 {
                     var fight = site.Encounters[i];
@@ -1658,21 +1690,21 @@ namespace RadiantPool.EditorTools
                         true, fight.MonsterIds);
                 }
 
-                Waystone(site.DisplayName, site.Center + new Vector3(0f, 0f, -14f),
+                Waystone(site.DisplayName, site.Center + new Vector3(0f, 0f, -14f * S),
                     zoneIndex, false);
                 var actionConfig = site.ToZoneConfig();
                 if (!string.IsNullOrEmpty(actionConfig.SiteAction))
                 {
                     var objective = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                     objective.name = $"QuestObjective_{site.ZoneId}";
-                    objective.transform.position = site.Center + new Vector3(0f, 0.7f, 17f);
+                    objective.transform.position = site.Center + new Vector3(0f, 0.7f, 17f * S);
                     objective.transform.localScale = new Vector3(0.8f, 0.7f, 0.8f);
                     objective.GetComponent<Renderer>().sharedMaterial = glowSite;
                     objective.GetComponent<Renderer>().enabled = false;
                     objective.AddComponent<CampaignObjectiveInteract>().ZoneIndex = zoneIndex;
                     int objectiveLantern = PolyPackArt.IndexOf(PolyPackArt.Source.Dungeon,
                         PolyPackArt.Kind.Prop, "Light_08");
-                    var objectivePos = site.Center + new Vector3(0f, 0f, 17f);
+                    var objectivePos = site.Center + new Vector3(0f, 0f, 17f * S);
                     SiteVisual(PolyPackArt.Source.Dungeon, PolyPackArt.Kind.Prop,
                         objectiveLantern, site, objectivePos, siteIndex * 29f, 2.4f, true);
                     SitePointLight(site, 20, objectivePos, accent);
@@ -1682,7 +1714,7 @@ namespace RadiantPool.EditorTools
                 siteLight.type = LightType.Point;
                 siteLight.color = accent;
                 siteLight.intensity = 1.7f;
-                siteLight.range = 30f;
+                siteLight.range = 30f * S;
             }
 
             for (int i = 0; i < CampaignExpansionContent.Sites.Length; i++)

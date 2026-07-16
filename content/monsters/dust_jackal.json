@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "dust_jackal",
+  "name": "Dust Jackal",
+  "srdRef": "Wolf (SRD 5.1 p.341)",
+  "size": "Medium",
+  "ac": 12,
+  "hpDice": "2d8+2",
+  "speed": 40,
+  "abilities": { "str": 13, "dex": 15, "con": 12, "int": 3, "wis": 12, "cha": 6 },
+  "attacks": [
+    { "name": "Snapping Bite", "toHit": 4, "damage": "1d6+2", "damageType": "piercing", "rangeFeet": 5 }
+  ],
+  "xp": 50,
+  "ai": "skirmisher",
+  "lootTable": "lt_beast_den"
+}

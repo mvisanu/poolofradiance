@@ -36,7 +36,7 @@ python scripts/install-warrior-animations.py
 ```
 
 Build output: `game/Builds/Win64/RadiantPool.exe`. Installer output:
-`game/Builds/Installer/RadiantPool-Setup-1.0.0.exe`. Exe flags for automation:
+`game/Builds/Installer/RadiantPool-Setup-1.0.1.exe`. Exe flags for automation:
 `-name <n> [-class Fighter|Wizard|Cleric|Rogue] -autohost` /
 `-name <n> -autojoin localhost`; **self-tests** `-selltest`
 (bag → trader → purse), `-leveltest` (XP → level → point spent), `-attacktest` (one click on
@@ -46,6 +46,9 @@ LOOKED at), `-questmarkertest` (yellow ! → gray ? → yellow ? → hidden),
 `-waystonehighlighttest` (tracked active quest → green route; turn-in → no outbound route);
 **visual QA** `-questmarkercapture <dir>` captures all three visible quest-giver states;
 `-waystonecapture <png>` opens the network and captures its green quest destination;
+`-combatuicapture <png>` runs the rendered Attack path and captures the temporary target
+picker above the hotbar; `[CombatUiTest]` also proves the normal combat log is fully above
+`HotBar.BarRect` and is stowed while any attack/spell target picker is open;
 `-worldmapcapture <png>` opens the maximized campaign atlas through
 `MiniMap.ShowCampaignAtlasForTest`, captures it without desktop input, and restores the
 temporary quest states; it also asserts three simultaneous active commissions produce
@@ -77,6 +80,14 @@ mouse and the self-test drive the very same code.
   and attack at −1 to hit; PCs stay pure SRD, XP is untouched. Stat blocks in
   `Monsters.cs` stay canonical (ContentValidationTests pins them to the JSON) — retune
   the knobs, never the blocks. `DifficultyTests` pins the current values.
+  **Encounter variety without balance drift**: `CombatManager.StartEncounter` seeds a
+  per-encounter RNG (stable on retry within a session) that scatters monsters across the
+  enemy half of the board (`ScatterEnemyCell`, no more fixed `(-2+m%4, 2+m/4)` block) and
+  swaps each authored "mook" for a same-XP, same-theme alternative from `MonsterVariety`
+  (rules lib). Every substitution pool shares one XP value — `MonsterVarietyTests` fails the
+  build otherwise — so kill XP and the pinned level curve are unchanged. Named bosses/uniques
+  are outside every pool and never substitute. Adding an authored encounter monster still
+  needs an equal-XP swap to keep `CampaignSimulationTests` green.
   **Levelling lives in `Progression.cs`** (the PC-side counterpart to `Difficulty.cs`): the
   XP table, hit dice and the 20 cap stay pure SRD, but the ability-point grant is a house
   rule — **one point per level, two at 4th** — so every one of the twenty levels carries
@@ -107,7 +118,7 @@ mouse and the self-test drive the very same code.
 - `content/` — zones/quests/monsters/items/loot/dialogue as JSON. Cross-referenced and
   IP-scanned by `ContentValidationTests`. In-code mirrors: `MonsterLibrary`,
   `SpellLibrary`, `LootLibrary` (tests keep JSON and code aligned by id).
-  **The complete campaign is 39 zones / 37 quest files / 23 monsters.** The twelve-zone
+  **The complete campaign is 39 zones / 37 quest files / 37 monsters.** The twelve-zone
   `level20_expansion.json` adds four original three-stage arcs: Stormglass, Frostbound,
   Titan's Chain, and Hollow Star. Its normal required path reaches level 20 during the
   Dawnspire finale. High-level quest rewards use tiers 5–7; full-caster slots serialize
@@ -145,7 +156,12 @@ mouse and the self-test drive the very same code.
   (`CombatClientUI.PickAttack`, keyboard A), named spells delegate to `PickSpell`, and the
   bar shrinks/wraps combat actions above utilities instead of overflowing (a combat cleric
   needs 13 slots). Only a temporary responsive target picker appears above the bar (fixed-width
-  two-line cards, columns from `Ui.W`, capped scroll). **Your HEALTH rides above the bar**
+  two-line cards, columns from `Ui.W`, capped scroll). **The combat message log never owns the
+  bottom edge**: `CombatClientUI.LogRect` docks at least 8 logical units above the complete
+  `HotBar.BarRect` (including the health strip), and `_logRect` is cleared while an attack or
+  spell target picker is open so the temporary casting/target bar and main bar cannot be
+  covered. `IsMouseOverHud` gates clicks with the same published visible rect. **Your HEALTH
+  rides above the bar**
   (`HotBar.DrawHealth`): bar + `hp/max` + percentage — the combat unit's HP in a fight
   (`RpcHpSync`), `PlayerCharacterHolder.CurrentHpSynced` between fights. Stays when the bar is
   stowed. In combat: **click enemy = close in AND attack, one click, however far away**
@@ -160,8 +176,9 @@ mouse and the self-test drive the very same code.
   icon (never font glyphs). While a queued action resolves, input is locked through wind-up,
   impact, HP sync, and recovery; damage applies at impact, not button press. Victory/defeat
   are persistent modals; defeat offers a server-validated retry of the same encounter.
-  `RadiantPool.exe -autohost -attacktest` opens Attack, asserts the picker/hotbar fit the
-  logical canvas and the instruction window is absent, chooses the FURTHEST enemy, and proves
+  `RadiantPool.exe -autohost -attacktest` first asserts the normal combat log is above the
+  complete hotbar, opens Attack, asserts the picker/hotbar fit the logical canvas and the log
+  is stowed, confirms the instruction window is absent, chooses the FURTHEST enemy, and proves
   walk, blow, and automatic turn handoff; `smoke-test.ps1` runs it in its OWN instance — a live fight
   under the sell/level self-tests would fight them for the turn clock.
   `RadiantPool.exe -class Wizard -autohost -combatflowtest` covers the complete physical,
@@ -273,6 +290,12 @@ mouse and the self-test drive the very same code.
   or black under URP** — `SetupMaterials()` reads serialized albedo/normal/metallic/occlusion
   slots even with the shader missing, then converts all 40 to URP Lit. Buildings stay a
   **collider box with the model parented inside** (renderer off): box is gameplay, model is look.
+  **Remote arenas are bigger and per-site randomized** (`ProjectBootstrap.RemoteSite`): the
+  boundary is `ArenaSize`/`S` (48, capped under the 50-unit site grid so edges + dressing never
+  bleed into the neighbour), and each site's fights are placed by a seeded `layoutRng` spread
+  across the northern field (non-overlapping, ≥12 apart, clear of the south waystone arrival)
+  instead of the old three fixed offsets — so no two destinations share a formation. Every
+  perimeter/backdrop placement scales by `S`, keeping the mausoleum-outside-the-wall rule.
 - `game/Assets/Editor` — `ProjectBootstrap` regenerates the ENTIRE scene, prefabs, URP
   config, and materials from code (scene is disposable; never hand-edit it). Includes
   `DressWorld()` (seeded forests/scatter/wilds sites, sunny lighting) and the district
@@ -355,6 +378,11 @@ mouse and the self-test drive the very same code.
   (`new Rect(12, Ui.H - 174, ...)`), which drifted from the panels the moment either moved.
   They are now `Rect` PROPERTIES (`LogRect`, `MyCardRect`, `InitiativeRect`, plus
   `HotBar.BarRect` / `MiniMap.MapRect`) — one definition, both users. Never re-type a rect.
+  **Bottom HUD panels dock from `HotBar.BarRect`, never `Ui.H`**: a screen-bottom log covered
+  both wrapped hotbar rows. The combat log now ends at `BarRect.yMin - 8`; while `_mode` is an
+  attack/spell target picker it draws nothing and publishes `default`, so neither rendering
+  nor click blocking can preserve an invisible overlapping panel. Keep the rendered
+  `-combatuicapture` assertion whenever this geometry changes.
 - **`GUI.tooltip` is GLOBAL to the frame, not to your panel.** Whatever control was hovered
   last sets it, so any panel that prints `GUI.tooltip` prints the *other* panel's hint — the
   hotbar spent a build rendering the minimap's "Show map (M)" across the health readout. Gate

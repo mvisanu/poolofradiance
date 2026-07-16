@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "ironpost_soldier",
+  "name": "Ironpost Soldier",
+  "srdRef": "Hobgoblin (SRD 5.1)",
+  "size": "Medium",
+  "ac": 15,
+  "hpDice": "2d8+6",
+  "speed": 30,
+  "abilities": { "str": 15, "dex": 12, "con": 16, "int": 10, "wis": 10, "cha": 9 },
+  "attacks": [
+    { "name": "Longsword", "toHit": 4, "damage": "1d8+2", "damageType": "slashing", "rangeFeet": 5 },
+    { "name": "Longbow", "toHit": 3, "damage": "1d8+1", "damageType": "piercing", "rangeFeet": 150 }
+  ],
+  "xp": 100,
+  "ai": "brute",
+  "lootTable": "lt_raider"
+}

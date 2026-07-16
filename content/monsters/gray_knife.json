@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "gray_knife",
+  "name": "Gray Knife Cutter",
+  "srdRef": "Thug (SRD 5.1 p.395)",
+  "size": "Medium",
+  "ac": 12,
+  "hpDice": "2d8",
+  "speed": 30,
+  "abilities": { "str": 13, "dex": 11, "con": 12, "int": 10, "wis": 10, "cha": 11 },
+  "attacks": [
+    { "name": "Cudgel", "toHit": 4, "damage": "1d6+2", "damageType": "bludgeoning", "rangeFeet": 5 },
+    { "name": "Sling", "toHit": 4, "damage": "1d4+2", "damageType": "bludgeoning", "rangeFeet": 30 }
+  ],
+  "xp": 25,
+  "ai": "brute",
+  "lootTable": "lt_skulker"
+}

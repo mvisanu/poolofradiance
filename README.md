@@ -3,7 +3,9 @@
 A 3D online co-op party CRPG for 2–4 friends: create characters, take quests from the
 hub town of **Aldenmere**, clear the ruined quarters block-by-block (turn-based tactical
 combat, SRD 5.1 rules), progress from level 1→20 across 39 playable locations, and free
-the city and its surrounding realms from the Hollow Flame and Hollow Star. Structure
+the city and its surrounding realms from the Hollow Flame and Hollow Star. A bestiary of
+37 SRD-based creatures fills those fights, and encounters draw a themed, level-matched mix
+onto a freshly scattered battlefield each time, so no two clears feel identical. Structure
 inspired by classic late-80s party CRPGs; all names, setting, and lore are original.
 Explicitly **not** an MMO — think Baldur's Gate 3 / Solasta co-op sessions with a
 WoW-style camera.
@@ -26,7 +28,7 @@ WoW-style camera.
 
 To make a single friend-ready Windows installer after building the player, install
 [Inno Setup](https://jrsoftware.org/isdl.php) and run `scripts/build-installer.ps1`.
-Share `game/Builds/Installer/RadiantPool-Setup-1.0.0.exe`; the recipient does not need
+Share `game/Builds/Installer/RadiantPool-Setup-1.0.1.exe`; the recipient does not need
 Unity and can install, launch, and uninstall Radiant Pool like a normal Windows app.
 
 ## Rules tests only (no Unity required)

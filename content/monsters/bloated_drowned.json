@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "bloated_drowned",
+  "name": "Bloated Drowned",
+  "srdRef": "Ogre Zombie (SRD 5.1)",
+  "size": "Large",
+  "ac": 9,
+  "hpDice": "6d8+18",
+  "speed": 20,
+  "abilities": { "str": 17, "dex": 6, "con": 17, "int": 3, "wis": 6, "cha": 5 },
+  "attacks": [
+    { "name": "Heaving Slam", "toHit": 5, "damage": "2d8+4", "damageType": "bludgeoning", "rangeFeet": 5 }
+  ],
+  "xp": 200,
+  "ai": "brute",
+  "lootTable": "lt_undead"
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "sand_scuttler",
+  "name": "Sand Scuttler",
+  "srdRef": "Giant Wolf Spider (SRD 5.1 p.378)",
+  "size": "Medium",
+  "ac": 13,
+  "hpDice": "2d8+2",
+  "speed": 30,
+  "abilities": { "str": 12, "dex": 16, "con": 13, "int": 3, "wis": 11, "cha": 4 },
+  "attacks": [
+    { "name": "Fanged Bite", "toHit": 4, "damage": "1d6+2", "damageType": "piercing", "rangeFeet": 5 }
+  ],
+  "xp": 50,
+  "ai": "skirmisher",
+  "lootTable": "lt_beast_den"
+}

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "ember_acolyte",
+  "name": "Ember Acolyte",
+  "srdRef": "Acolyte (SRD 5.1 p.395)",
+  "size": "Medium",
+  "ac": 12,
+  "hpDice": "2d8",
+  "speed": 30,
+  "abilities": { "str": 10, "dex": 11, "con": 11, "int": 10, "wis": 14, "cha": 11 },
+  "attacks": [
+    { "name": "Ritual Dagger", "toHit": 3, "damage": "1d4+1", "damageType": "piercing", "rangeFeet": 5 },
+    { "name": "Ember Bolt", "toHit": 4, "damage": "1d8", "damageType": "fire", "rangeFeet": 60 }
+  ],
+  "xp": 25,
+  "ai": "caster",
+  "lootTable": "lt_kindled"
+}

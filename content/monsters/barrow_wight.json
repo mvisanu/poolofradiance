@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "barrow_wight",
+  "name": "Barrow Wight",
+  "srdRef": "Wight (SRD 5.1)",
+  "size": "Medium",
+  "ac": 14,
+  "hpDice": "6d8+12",
+  "speed": 30,
+  "abilities": { "str": 15, "dex": 14, "con": 16, "int": 10, "wis": 13, "cha": 15 },
+  "attacks": [
+    { "name": "Barrow Blade", "toHit": 4, "damage": "2d6+2", "damageType": "slashing", "rangeFeet": 5 },
+    { "name": "Life Leech", "toHit": 4, "damage": "1d8+2", "damageType": "necrotic", "rangeFeet": 5 }
+  ],
+  "xp": 700,
+  "ai": "brute",
+  "lootTable": "lt_undead"
+}

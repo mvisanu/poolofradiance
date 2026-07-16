@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "iron_sentinel",
+  "name": "Iron Sentinel",
+  "srdRef": "Animated Armor (SRD 5.1)",
+  "size": "Medium",
+  "ac": 18,
+  "hpDice": "6d8+6",
+  "speed": 25,
+  "abilities": { "str": 14, "dex": 11, "con": 13, "int": 1, "wis": 3, "cha": 1 },
+  "attacks": [
+    { "name": "Iron Fist", "toHit": 4, "damage": "1d10+2", "damageType": "bludgeoning", "rangeFeet": 5 }
+  ],
+  "xp": 200,
+  "ai": "brute",
+  "lootTable": "lt_warden"
+}
