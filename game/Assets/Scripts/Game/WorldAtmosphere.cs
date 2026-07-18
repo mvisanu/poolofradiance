@@ -370,8 +370,10 @@ namespace RadiantPool.Game
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Exponential;
             RenderSettings.fogColor = fog;
-            RenderSettings.fogDensity = Mathf.Max(0.006f,
-                Mathf.Lerp(0.022f, 0.007f, daylight)
+            // Day haze is AERIAL PERSPECTIVE, not weather: the mid-ground stays crisp
+            // and only the far distance melts into the sky (0.007 washed whole sites).
+            RenderSettings.fogDensity = Mathf.Max(0.0035f,
+                Mathf.Lerp(0.022f, 0.0035f, daylight)
                 + twilight * 0.003f - combatWeight * 0.004f);
 
             if (_sky != null)

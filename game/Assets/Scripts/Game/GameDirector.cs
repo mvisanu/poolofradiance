@@ -1563,14 +1563,18 @@ namespace RadiantPool.Game
             }
             var sheet = holder.Sheet;
 
-            Warp(holder.transform, new Vector3(0f, 0f, 55f));   // far outside town radius
+            // (25, 20): outside the town radius AND in the verified gap between the
+            // market (x 15-25, z 30-40) and temple (x>=42) encounter trigger boxes —
+            // (0,0,55) sat dead-centre in the Toll-Keeper's gate and started a fight,
+            // which correctly paused regen and failed the whole measurement.
+            Warp(holder.transform, new Vector3(25f, 0f, 20f));
             yield return null;
             sheet.TakeDamage(Mathf.Max(0, sheet.CurrentHp - 1), DamageType.Bludgeoning);
             int fieldStart = sheet.CurrentHp;
             yield return new WaitForSeconds(7f);
             int fieldGain = sheet.CurrentHp - fieldStart;
 
-            Warp(holder.transform, hall.transform.position + new Vector3(2f, 0f, 2f));
+            Warp(holder.transform, hall.transform.position + new Vector3(0f, 0f, -6f));
             yield return null;
             int townStart = sheet.CurrentHp;
             yield return new WaitForSeconds(7f);
@@ -1642,7 +1646,7 @@ namespace RadiantPool.Game
             // bearing definition the assist eases to. Runs before the blocked-approach
             // fixture below, which moves a monster and would shift the true centroid.
             var orbit = Camera.main != null ? Camera.main.GetComponent<OrbitCamera>() : null;
-            float camDeadline = Time.time + 4f;
+            float camDeadline = Time.time + 6f;   // covers the glide-in settle window
             while (orbit != null && orbit.TacticalAssistActive && Time.time < camDeadline)
                 yield return null;
             bool facingKnown = OrbitCamera.CombatFacingBearing(out float wantYaw);

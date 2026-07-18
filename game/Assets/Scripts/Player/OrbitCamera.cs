@@ -39,6 +39,8 @@ namespace RadiantPool.Game
         private bool _assistYawReady; // facing computed (units can spawn a few frames late)
         private bool _assistHasYaw;   // there was a living enemy to face
         private float _assistYaw;     // bearing from my unit to the enemy centroid
+        private float _assistPrevLive;   // last frame's live bearing
+        private float _assistStable;     // seconds the live bearing has held still
         private bool _wasInCombat;
         private Vector3 _smoothedFocus;
         private bool _focusReady;
@@ -100,6 +102,7 @@ namespace RadiantPool.Game
                 _tacticalEase = true;
                 _assistYawReady = false;
                 _assistHasYaw = false;
+                _assistStable = 0f;
                 RecenterPan();   // a stale free-look pan would frame the wrong ground
             }
             if (!inCombat)
@@ -137,6 +140,13 @@ namespace RadiantPool.Game
                 // stays a one-shot assist.
                 if (CombatFacingBearing(out float liveYaw))
                 {
+                    // Completion needs a SETTLED bearing: the ease used to finish while
+                    // units were still gliding in, freezing the camera 16 deg behind
+                    // where the pack actually stopped.
+                    _assistStable = _assistHasYaw && Mathf.Abs(
+                        Mathf.DeltaAngle(_assistPrevLive, liveYaw)) < 0.2f
+                        ? _assistStable + Time.deltaTime : 0f;
+                    _assistPrevLive = liveYaw;
                     _assistYaw = liveYaw;
                     _assistHasYaw = true;
                     _assistYawReady = true;
@@ -146,7 +156,8 @@ namespace RadiantPool.Game
                 if (_assistYawReady && _assistHasYaw)
                 {
                     _yaw = Mathf.MoveTowardsAngle(_yaw, _assistYaw, 220f * Time.deltaTime);
-                    yawDone = Mathf.Abs(Mathf.DeltaAngle(_yaw, _assistYaw)) < 0.5f;
+                    yawDone = Mathf.Abs(Mathf.DeltaAngle(_yaw, _assistYaw)) < 0.5f
+                              && _assistStable >= 0.35f;
                 }
                 else if (!_assistYawReady) yawDone = false;   // units still replicating
 

@@ -126,11 +126,19 @@ namespace RadiantPool.EditorTools
             {
                 if (webPipe != null)
                 {
-                    UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline = prevDefault;
+                    // A -buildTarget WebGL launch can invalidate the pre-capture pipeline
+                    // references, so restoring the captured value can write NULL into
+                    // Graphics/Quality settings — which desktop then ships with (every
+                    // quality level pipeline-less). Fall back to the desktop asset by path.
+                    var desktopPipe = AssetDatabase.LoadAssetAtPath<UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset>(
+                        "Assets/Resources/URP/URP_Desktop.asset");
+                    UnityEngine.Rendering.GraphicsSettings.defaultRenderPipeline =
+                        prevDefault != null ? prevDefault : desktopPipe;
                     for (int i = 0; i < QualitySettings.names.Length; i++)
                     {
                         QualitySettings.SetQualityLevel(i, false);
-                        QualitySettings.renderPipeline = prevQuality[i];
+                        QualitySettings.renderPipeline =
+                            prevQuality[i] != null ? prevQuality[i] : desktopPipe;
                     }
                     QualitySettings.SetQualityLevel(prevLevel, false);
                 }
