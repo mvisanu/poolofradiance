@@ -44,8 +44,8 @@ Build output: `game/Builds/Win64/RadiantPool.exe`. Installer output:
 `-name <n> [-class Fighter|Wizard|Cleric|Rogue] -autohost` /
 `-name <n> -autojoin localhost`; **self-tests** `-selltest`
 (bag → trader → purse), `-leveltest` (XP → level → point spent), `-attacktest` (one click on
-a distant enemy → walk → blow → automatic turn end + monster HUD + combat-start camera
-facing the enemies), `-regentest` (out-of-combat HP regen: field trickle < town rate),
+a distant enemy → walk → blow → automatic turn end + monster HUD + combat camera never
+auto-moves), `-regentest` (out-of-combat HP regen: field trickle < town rate),
 `-combatflowtest` (direct world attack → enemy round →
 slotted magic → victory modal → defeat modal → retry), `-warpsmith` (park at the smithy so a shop panel can be
 LOOKED at), `-questmarkertest` (yellow ! → gray ? → yellow ? → hidden),
@@ -466,9 +466,14 @@ mouse and the self-test drive the very same code.
 - **Companions have no connection** (server-owned AI, `Owner` invalid). A `TargetRpc` aimed
   at one logs "Target is not an observer" on every call — guard with
   `!IsCompanion && Owner != null && Owner.IsValid` (see `CombatManager.SyncHp`).
-- **Camera assists must be one-shot, not per-frame.** The combat "tactical assist" ran every
-  frame and hauled pitch/zoom back the moment the mouse was released — the camera would not
-  stay where the player put it. It now fires once per fight and any camera input cancels it.
+- **The camera NEVER moves without user input; blockers fade instead.** Combat used to run
+  a "tactical assist" every frame that hauled pitch/zoom back the moment the mouse was
+  released — the camera would not stay where the player put it — and a collision pull-in
+  auto-shortened zoom whenever geometry stood in the way. Both are gone: yaw/pitch/distance
+  change only from direct player input (or the explicit F recentre); a building between the
+  camera and its target fades to see-through (`OrbitCamera`'s x-ray) instead of the camera
+  moving. `-attacktest`'s `[CombatCameraTest]` now asserts the view holds still across combat
+  start and that every occluder the x-ray flags actually got ghosted.
   It also swings the YAW to face the enemy centroid (`OrbitCamera.CombatFacingBearing`, the
   one definition the `-attacktest` assertion shares) — and it must track the LIVE bearing
   while easing, because units glide to their grid cells for the first second of a fight and

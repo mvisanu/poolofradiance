@@ -1640,23 +1640,32 @@ namespace RadiantPool.Game
                 yield break;
             }
 
-            // The camera must OPEN the fight facing the enemies (start-of-fight yaw
-            // assist), not wherever the walk-in left it pointed. Wait out the one-shot
-            // ease, then judge the yaw against OrbitCamera.CombatFacingBearing — the very
-            // bearing definition the assist eases to. Runs before the blocked-approach
-            // fixture below, which moves a monster and would shift the true centroid.
+            // The camera must NEVER auto-move: combat starting used to ease yaw/pitch/
+            // distance to a board view (the old tactical assist). Sample the view now,
+            // let a full second pass with no synthetic input (this test only ever drives
+            // CombatClientUI.ClickCell, never the camera), then confirm nothing drifted.
+            // "Building in the way" is answered by the x-ray fade alone now — a blocker
+            // gets ghosted, the camera never pulls in or swings to dodge one — so this
+            // also asserts every renderer the x-ray currently judges as blocking has
+            // actually had its see-through material swapped in.
             var orbit = Camera.main != null ? Camera.main.GetComponent<OrbitCamera>() : null;
-            float camDeadline = Time.time + 6f;   // covers the glide-in settle window
-            while (orbit != null && orbit.TacticalAssistActive && Time.time < camDeadline)
-                yield return null;
-            bool facingKnown = OrbitCamera.CombatFacingBearing(out float wantYaw);
-            float yawError = orbit != null && facingKnown
-                ? Mathf.Abs(Mathf.DeltaAngle(orbit.Yaw, wantYaw)) : 0f;
-            bool cameraFacing = orbit == null || (facingKnown && yawError <= 5f);
-            Debug.Log($"[CombatCameraTest] {(cameraFacing ? "PASS" : "FAIL")} - " +
-                      $"combat-start yaw {(orbit != null ? orbit.Yaw : 0f):0.0} vs enemy " +
-                      $"bearing {wantYaw:0.0} (error {yawError:0.0} deg, bearing " +
-                      $"{(facingKnown ? "known" : "unknown")})");
+            float yawStart = orbit != null ? orbit.Yaw : 0f;
+            float pitchStart = orbit != null ? orbit.Pitch : 0f;
+            float distStart = orbit != null ? orbit.Distance : 0f;
+            yield return new WaitForSeconds(1f);
+            float yawDrift = orbit != null
+                ? Mathf.Abs(Mathf.DeltaAngle(yawStart, orbit.Yaw)) : 0f;
+            float pitchDrift = orbit != null ? Mathf.Abs(orbit.Pitch - pitchStart) : 0f;
+            float distDrift = orbit != null ? Mathf.Abs(orbit.Distance - distStart) : 0f;
+            bool cameraStill = orbit == null
+                || (yawDrift < 0.05f && pitchDrift < 0.05f && distDrift < 0.01f);
+            bool xrayConsistent = orbit == null || orbit.AllBlockersGhosted;
+            bool cameraNeverMoved = cameraStill && xrayConsistent;
+            Debug.Log($"[CombatCameraTest] {(cameraNeverMoved ? "PASS" : "FAIL")} - " +
+                      $"camera held still at combat start (yaw drift {yawDrift:0.000}, " +
+                      $"pitch drift {pitchDrift:0.000}, distance drift {distDrift:0.000}); " +
+                      $"x-ray fading {(orbit != null ? orbit.BlockingCount : 0)} blocker(s), " +
+                      $"all ghosted {xrayConsistent}");
 
             bool blockedApproach = combat.ServerArrangeBlockedApproachForTest(mine.Id, enemy.Id);
             yield return new WaitForSeconds(0.2f); // board view + tactical light settle

@@ -4,12 +4,19 @@ using UnityEngine;
 namespace RadiantPool.Game
 {
     /// <summary>WoW-style orbit camera: follows a target, right-mouse drag rotates,
-    /// scroll wheel zooms. In combat it eases to a steeper tactical angle (so rooftops
-    /// don't hide the grid), and any environment piece that hides a combatant fades to a
-    /// see-through ghost (props have no colliders, so this tests renderer bounds against
-    /// the view lines). Out of combat only your own line of sight is cleared; in combat
-    /// every unit on the board gets one, so a monster standing inside a warehouse is
-    /// still something you can see and click.
+    /// scroll wheel zooms. The camera NEVER moves on its own — not at the start of
+    /// combat, not for collision avoidance. The only automatic behaviors are the
+    /// smoothed follow of the focus point (so the view doesn't hitch when the target
+    /// steps) and putting the pan back on you at a fight's start/end (see UpdatePan).
+    /// Yaw, pitch, and zoom distance change only from direct player input or an
+    /// explicit F recentre.
+    ///
+    /// Whatever hides what you're looking at fades to a see-through ghost instead of
+    /// the camera pulling in or swinging around it (props have no colliders, so this
+    /// tests renderer bounds against the view lines). Out of combat only your own line
+    /// of sight is cleared; in combat every unit on the board gets one too, so a
+    /// monster standing inside a warehouse is still something you can see and click —
+    /// and your own camera-to-you line is always included in both states.
     ///
     /// The view can also be panned off the player — middle-mouse drag any time, and in
     /// combat WASD/arrows too (the grid owns movement then, so those keys are free), which
@@ -28,30 +35,19 @@ namespace RadiantPool.Game
         [SerializeField] private float panSpeed = 14f;      // metres/sec on the keys
         [SerializeField] private float maxPan = 40f;        // leash, so you can't get lost
         [SerializeField] private float followSharpness = 16f;
-        [SerializeField] private float collisionRadius = 0.28f;
-        [SerializeField] private float collisionPadding = 0.18f;
 
         private Transform _target;
         private float _yaw;
         private float _pitch = 25f;
         private Vector3 _pan;         // world-space XZ offset of the focus point
-        private bool _tacticalEase;   // one-shot board-view nudge at the start of a fight
-        private bool _assistYawReady; // facing computed (units can spawn a few frames late)
-        private bool _assistHasYaw;   // there was a living enemy to face
-        private float _assistYaw;     // bearing from my unit to the enemy centroid
-        private float _assistPrevLive;   // last frame's live bearing
-        private float _assistStable;     // seconds the live bearing has held still
         private bool _wasInCombat;
         private Vector3 _smoothedFocus;
         private bool _focusReady;
         private float _trauma;
-        private readonly RaycastHit[] _cameraHits = new RaycastHit[16];
 
         public float Yaw => _yaw;
-
-        /// <summary>True while the start-of-fight assist is still easing the view.
-        /// The -attacktest camera assertion waits on this before judging the yaw.</summary>
-        public bool TacticalAssistActive => _tacticalEase;
+        public float Pitch => _pitch;
+        public float Distance => distance;
 
         /// <summary>True while the view is pushed off the player (HUD shows a hint).</summary>
         public bool IsPanned => _pan.sqrMagnitude > 0.01f;
@@ -63,7 +59,6 @@ namespace RadiantPool.Game
         /// bearing, pitch and distance without sending desktop input.</summary>
         public void SetPresentationView(float yaw, float pitch, float wantedDistance)
         {
-            _tacticalEase = false;   // capture flags own the view — assist must not fight them
             _yaw = yaw;
             _pitch = Mathf.Clamp(pitch, pitchMin, pitchMax);
             distance = Mathf.Clamp(wantedDistance, minDistance, maxDistance);
@@ -92,32 +87,14 @@ namespace RadiantPool.Game
             bool inCombat = CombatManager.Instance != null
                             && CombatManager.Instance.InCombat.Value;
 
-            // The tactical assist is a ONE-TIME nudge when a fight starts, not a spring.
-            // It used to run every frame combat was active, so the moment you let go of
-            // the mouse it hauled the pitch back to 55° and the zoom back to 11 m — the
-            // camera would never stay where you put it. Any camera input at all now ends
-            // the assist for the rest of the fight: the view is yours.
-            if (inCombat && !_wasInCombat)
-            {
-                _tacticalEase = true;
-                _assistYawReady = false;
-                _assistHasYaw = false;
-                _assistStable = 0f;
-                RecenterPan();   // a stale free-look pan would frame the wrong ground
-            }
-            if (!inCombat)
-            {
-                _tacticalEase = false;
-                if (_wasInCombat) RecenterPan();   // fight over: put the view back on you
-            }
+            // The ONLY automatic camera behavior left at a fight's start/end is putting
+            // the pan back on you — a stale free-look pan would otherwise frame the
+            // wrong ground the moment the fight begins (or ends). Yaw, pitch, and zoom
+            // are never touched here; they change only from direct input below.
+            if (inCombat != _wasInCombat) RecenterPan();
             _wasInCombat = inCombat;
 
             float scroll = Input.GetAxis("Mouse ScrollWheel");
-            bool touchingCamera = Input.GetMouseButton(1) || Input.GetMouseButton(2)
-                || Mathf.Abs(scroll) > 0.001f
-                || (inCombat && (Input.GetAxisRaw("Horizontal") != 0f
-                                 || Input.GetAxisRaw("Vertical") != 0f));
-            if (touchingCamera) _tacticalEase = false;
 
             if (Input.GetMouseButton(1))
             {
@@ -126,46 +103,6 @@ namespace RadiantPool.Game
                 _yaw += Input.GetAxis("Mouse X") * sens;
                 _pitch -= Input.GetAxis("Mouse Y") * sens;
                 _pitch = Mathf.Clamp(_pitch, pitchMin, pitchMax);
-            }
-            else if (_tacticalEase)
-            {
-                // Ease once toward a board view so the grid is readable, then let go.
-                // The yaw part is the fix for "combat starts and I'm facing the wrong
-                // way": swing the camera behind my unit so it looks TOWARD the enemies,
-                // whatever direction the fight was walked into from.
-                // Track the LIVE bearing while easing: units glide to their grid cells
-                // for the first second of a fight, and a bearing captured at combat
-                // start eased the camera to where the pack USED to be (16 deg off in
-                // -attacktest). Once the ease completes it never re-engages, so this
-                // stays a one-shot assist.
-                if (CombatFacingBearing(out float liveYaw))
-                {
-                    // Completion needs a SETTLED bearing: the ease used to finish while
-                    // units were still gliding in, freezing the camera 16 deg behind
-                    // where the pack actually stopped.
-                    _assistStable = _assistHasYaw && Mathf.Abs(
-                        Mathf.DeltaAngle(_assistPrevLive, liveYaw)) < 0.2f
-                        ? _assistStable + Time.deltaTime : 0f;
-                    _assistPrevLive = liveYaw;
-                    _assistYaw = liveYaw;
-                    _assistHasYaw = true;
-                    _assistYawReady = true;
-                }
-                else if (!_assistYawReady) TryComputeCombatFacing();
-                bool yawDone = true;
-                if (_assistYawReady && _assistHasYaw)
-                {
-                    _yaw = Mathf.MoveTowardsAngle(_yaw, _assistYaw, 220f * Time.deltaTime);
-                    yawDone = Mathf.Abs(Mathf.DeltaAngle(_yaw, _assistYaw)) < 0.5f
-                              && _assistStable >= 0.35f;
-                }
-                else if (!_assistYawReady) yawDone = false;   // units still replicating
-
-                _pitch = Mathf.MoveTowards(_pitch, Mathf.Max(_pitch, 55f),
-                    40f * Time.deltaTime);
-                if (distance < 11f)
-                    distance = Mathf.MoveTowards(distance, 11f, 8f * Time.deltaTime);
-                if (_pitch >= 54.5f && distance >= 10.9f && yawDone) _tacticalEase = false;
             }
 
             if (Mathf.Abs(scroll) > 0.001f && !MiniMap.MouseOverMap)
@@ -188,8 +125,11 @@ namespace RadiantPool.Game
 
             Vector3 focus = _smoothedFocus;
             Vector3 backwards = -(rotation * Vector3.forward);
-            float cameraDistance = CollisionDistance(focus, backwards, distance);
-            transform.position = focus + backwards * cameraDistance;
+            // No collision pull-in: the rendered distance is exactly what the player
+            // dialed in with scroll. Whatever stands between the camera and the focus
+            // fades to see-through instead (UpdateOcclusion below) — the camera itself
+            // never moves to dodge geometry.
+            transform.position = focus + backwards * distance;
             transform.rotation = rotation;
             ApplyTrauma(rotation);
 
@@ -214,22 +154,6 @@ namespace RadiantPool.Game
             transform.rotation *= Quaternion.Euler(y * 0.65f * power,
                 x * 0.55f * power, roll * 0.8f * power);
             _trauma = Mathf.MoveTowards(_trauma, 0f, Time.unscaledDeltaTime * 2.6f);
-        }
-
-        private float CollisionDistance(Vector3 focus, Vector3 direction, float wanted)
-        {
-            int count = Physics.SphereCastNonAlloc(focus, collisionRadius, direction,
-                _cameraHits, wanted, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
-            float nearest = wanted;
-            for (int i = 0; i < count; i++)
-            {
-                var hit = _cameraHits[i];
-                if (hit.collider == null) continue;
-                var t = hit.collider.transform;
-                if (_target != null && (t == _target || t.IsChildOf(_target))) continue;
-                nearest = Mathf.Min(nearest, hit.distance - collisionPadding);
-            }
-            return Mathf.Clamp(nearest, minDistance * 0.35f, wanted);
         }
 
         /// <summary>Free-look panning across the ground plane. Middle-mouse drags the view
@@ -278,69 +202,6 @@ namespace RadiantPool.Game
         private static bool AnyPanelWantsKeys() =>
             GUIUtility.keyboardControl != 0;
 
-        /// <summary>The bearing (camera yaw) that looks from my combat unit toward the
-        /// centroid of the living enemies. ONE definition: the start-of-fight assist eases
-        /// to it and the -attacktest assertion checks against it, so the test cannot pass
-        /// on math the camera never uses. False while units are absent or all enemies are
-        /// dead/unspawned.</summary>
-        public static bool CombatFacingBearing(out float yaw)
-        {
-            yaw = 0f;
-            var combat = CombatManager.Instance;
-            if (combat == null || combat.ClientUnits.Count == 0) return false;
-
-            var mine = combat.MyUnit;
-            if (mine == null || mine.Visual == null) return false;
-
-            Vector3 sum = Vector3.zero;
-            int living = 0;
-            foreach (var u in combat.ClientUnits)
-            {
-                if (u == null || u.IsPc || u.Dead || u.Visual == null) continue;
-                sum += u.Visual.position;
-                living++;
-            }
-            if (living == 0) return false;
-
-            Vector3 dir = sum / living - mine.Visual.position;
-            dir.y = 0f;
-            if (dir.sqrMagnitude < 0.04f) return false;   // standing inside the pack
-            yaw = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
-            return true;
-        }
-
-        /// <summary>Resolve the assist's facing once units exist. Ready-with-no-yaw is a
-        /// terminal state (no living enemy to face — melee started on top of us, or a
-        /// combat with every visual gone); not-ready retries next frame, because monsters
-        /// replicate a few frames after InCombat flips true.</summary>
-        private void TryComputeCombatFacing()
-        {
-            var combat = CombatManager.Instance;
-            if (combat == null) { _assistYawReady = true; return; }
-
-            if (CombatFacingBearing(out float facing))
-            {
-                _assistYaw = facing;
-                _assistHasYaw = true;
-                _assistYawReady = true;
-                return;
-            }
-
-            // Give up cleanly only when the roster is genuinely complete and there is
-            // still nothing to face (all enemies dead, or the pack is standing on us).
-            // An enemy entry whose Visual has not spawned yet means: retry next frame.
-            bool anyEnemy = false, anyEnemyPending = false;
-            foreach (var u in combat.ClientUnits)
-            {
-                if (u == null || u.IsPc) continue;
-                anyEnemy = true;
-                if (!u.Dead && u.Visual == null) anyEnemyPending = true;
-            }
-            if (anyEnemy && !anyEnemyPending && combat.MyUnit != null
-                && combat.MyUnit.Visual != null)
-                _assistYawReady = true;
-        }
-
         // ---------- x-ray: see through whatever is hiding a combatant ----------
 
         /// <summary>A blocking renderer's two faces: its real materials, and transparent
@@ -368,6 +229,28 @@ namespace RadiantPool.Game
         private readonly List<Renderer> _sweep = new List<Renderer>();
         private float _envScanAt;
         private float _blockScanAt;
+
+        /// <summary>How many renderers the x-ray currently judges to be blocking a sight
+        /// line (the camera's own line to the focus, plus every living unit's in combat).
+        /// Read-only diagnostic for self-tests — this is the ONE mechanism that answers
+        /// "building in the way" now that the camera never pulls in or swings to dodge one.</summary>
+        public int BlockingCount => _blocking.Count;
+
+        /// <summary>True if every renderer currently judged as blocking has actually had its
+        /// see-through ghost swapped in (or is mid-fade to it). False only signals a real
+        /// bug — DriveFades applies the swap the same frame a blocker is recomputed.</summary>
+        public bool AllBlockersGhosted
+        {
+            get
+            {
+                foreach (var r in _blocking)
+                {
+                    if (r == null) continue;
+                    if (!_ghosts.TryGetValue(r, out var g) || !g.FadeApplied) return false;
+                }
+                return true;
+            }
+        }
 
         /// <summary>Static environment renderers tall enough to block the view (houses,
         /// walls, pillars). Ground/roads (flat bounds) and anything belonging to a

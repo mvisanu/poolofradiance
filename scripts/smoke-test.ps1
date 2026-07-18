@@ -269,7 +269,7 @@ $checks = @(
     @{ Name = "realistic weapon sounds are used"; Ok = $fightText -match "\[CombatAudioTest\] PASS.+licensed weapon SFX played" },
     @{ Name = "spell cast and impact sounds are used"; Ok = $fightText -match "\[SpellAudioTest\] PASS.+fire cast \+ impact" },
     @{ Name = "combat light covers every living unit"; Ok = $fightText -match "\[CombatLightTest\] PASS" },
-    @{ Name = "combat opens with the camera facing the enemies"; Ok = $fightText -match "\[CombatCameraTest\] PASS" },
+    @{ Name = "combat camera never auto-moves; occluders fade to see-through instead"; Ok = $fightText -match "\[CombatCameraTest\] PASS" },
     @{ Name = "no failed combat camera assertion"; Ok = $fightText -notmatch "\[CombatCameraTest\] FAIL" },
     @{ Name = "out-of-combat regen heals afield and faster in town"; Ok = $regenText -match "\[RegenTest\] PASS" },
     @{ Name = "no failed regen assertion"; Ok = $regenText -notmatch "\[RegenTest\] FAIL" },
