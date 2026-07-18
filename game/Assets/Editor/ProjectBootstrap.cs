@@ -233,10 +233,13 @@ namespace RadiantPool.EditorTools
             for (int x = 0; x < size; x++)
                 for (int y = 0; y < size; y++)
                 {
-                    float broad = Noise(x, y, 8) * 0.10f;          // patchiness
+                    float broad = Noise(x, y, 8) * 0.14f;          // patchiness
                     float fine = (float)rand.NextDouble() * 0.06f;  // blade speckle
-                    float v = 0.90f + broad + fine;
-                    tex.SetPixel(x, y, new Color(0.22f * v, 0.30f * v, 0.20f * v));
+                    float v = 0.88f + broad + fine;
+                    // Vivid painted-grass green. The texture CARRIES the colour and the
+                    // material tint stays white — the old dark-green-times-dark-green
+                    // multiply left the hub at ~5% albedo (near-black grass at noon).
+                    tex.SetPixel(x, y, new Color(0.30f * v, 0.47f * v, 0.17f * v));
                 }
             tex.Apply();
             System.IO.File.WriteAllBytes(path, tex.EncodeToPNG());
@@ -374,15 +377,31 @@ namespace RadiantPool.EditorTools
                 Nature(scatter[rnd.Next(scatter.Length)], pos, size);
             }
 
-            // Forest bands along the map edges (leave zone interiors playable).
+            // Forest bands along the map edges (leave zone interiors playable). Dense on
+            // purpose: a WoW vista is walled by trees, not dotted with them.
             foreach (var (cx, cz, count) in new (float, float, int)[]
             {
-                (-52, 30, 8), (-52, -12, 7), (-30, 52, 7), (8, 55, 6),
-                (55, 40, 6), (58, -38, 7), (28, -55, 7), (-14, -52, 7), (-55, -44, 6)
+                (-52, 30, 13), (-52, -12, 11), (-30, 52, 11), (8, 55, 10),
+                (55, 40, 10), (58, -38, 11), (28, -55, 11), (-14, -52, 11), (-55, -44, 10)
             })
                 for (int i = 0; i < count; i++)
-                    Tree(new Vector3(cx + Jit(7f), 0, cz + Jit(7f)),
+                    Tree(new Vector3(cx + Jit(8f), 0, cz + Jit(8f)),
                         4.2f + (float)rnd.NextDouble() * 2.6f);
+
+            // Highlands backdrop: a ring of oversized crags just past the playable edge,
+            // so every horizon ends in mountains against the sky haze instead of empty
+            // ground — the framing every reference vista has. Pure decoration: outside
+            // the ±60 play space, collider-free, well inside the >95-unit remote sites.
+            for (int i = 0; i < 26; i++)
+            {
+                float ang = (i * (360f / 26f) + Jit(5f)) * Mathf.Deg2Rad;
+                float r = 64f + (float)rnd.NextDouble() * 8f;
+                var peak = new Vector3(Mathf.Sin(ang) * r, 0f, Mathf.Cos(ang) * r);
+                Rock(peak, 9f + (float)rnd.NextDouble() * 7f, big: true);
+                if (i % 2 == 0)   // conifers at the foot of the crags soften the join
+                    Tree(peak + new Vector3(Jit(6f), 0f, Jit(6f)),
+                        5.5f + (float)rnd.NextDouble() * 2.5f);
+            }
 
             // Mid-map accent trees along the roads between quarters.
             foreach (var (x, z) in new (float, float)[]
@@ -538,22 +557,26 @@ namespace RadiantPool.EditorTools
         {
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-            // Lighting: bright sunny day — saturated, cheerful open-world palette.
+            // Lighting: high-key painted-fantasy daylight (the Warcraft look) — a bright
+            // golden near-white sun, luminous sky-blue ambient fill so shadows stay
+            // colourful instead of black, and a light warm haze for aerial perspective.
+            // The old values here were a murky dusk (0.35 sun, near-black ambient).
             var lightGo = new GameObject("Directional Light");
             var light = lightGo.AddComponent<Light>();
             light.type = LightType.Directional;
-            light.intensity = 0.35f;
-            light.color = new Color(1f, 0.55f, 0.34f);
+            light.intensity = 1.25f;
+            light.color = new Color(1f, 0.956f, 0.87f);
             light.shadows = LightShadows.Soft;
-            lightGo.transform.rotation = Quaternion.Euler(52f, -35f, 0f);
+            light.shadowStrength = 0.75f;   // readable shadows, never pitch black
+            lightGo.transform.rotation = Quaternion.Euler(48f, -35f, 0f);
             RenderSettings.ambientMode = AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.12f, 0.14f, 0.19f);
-            RenderSettings.ambientEquatorColor = new Color(0.09f, 0.09f, 0.10f);
-            RenderSettings.ambientGroundColor = new Color(0.035f, 0.035f, 0.04f);
+            RenderSettings.ambientSkyColor = new Color(0.46f, 0.58f, 0.82f);
+            RenderSettings.ambientEquatorColor = new Color(0.42f, 0.40f, 0.34f);
+            RenderSettings.ambientGroundColor = new Color(0.22f, 0.20f, 0.16f);
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Exponential;
-            RenderSettings.fogColor = new Color(0.09f, 0.075f, 0.085f);
-            RenderSettings.fogDensity = 0.022f;
+            RenderSettings.fogColor = new Color(0.62f, 0.72f, 0.86f);
+            RenderSettings.fogDensity = 0.009f;
 
             // A procedural sky gives the bright stylized world a real horizon and sun
             // disc. It is generated as an asset so player builds retain the shader.
@@ -564,12 +587,12 @@ namespace RadiantPool.EditorTools
                 sky = new Material(Shader.Find("Skybox/Procedural"));
                 AssetDatabase.CreateAsset(sky, skyPath);
             }
-            sky.SetFloat("_SunSize", 0.045f);
+            sky.SetFloat("_SunSize", 0.05f);
             sky.SetFloat("_SunSizeConvergence", 5f);
-            sky.SetFloat("_AtmosphereThickness", 0.85f);
-            sky.SetColor("_SkyTint", new Color(0.075f, 0.085f, 0.14f));
-            sky.SetColor("_GroundColor", new Color(0.035f, 0.03f, 0.04f));
-            sky.SetFloat("_Exposure", 0.62f);
+            sky.SetFloat("_AtmosphereThickness", 1.05f);
+            sky.SetColor("_SkyTint", new Color(0.42f, 0.55f, 0.78f));
+            sky.SetColor("_GroundColor", new Color(0.40f, 0.44f, 0.50f));
+            sky.SetFloat("_Exposure", 1.25f);
             RenderSettings.skybox = sky;
 
             // Camera with URP post-processing (bloom + vignette + slight warmth).
@@ -604,30 +627,34 @@ namespace RadiantPool.EditorTools
                 return effect;
             }
 
+            // Grade: punchy, saturated, warm — glow on lamps/magic, colour pushed the
+            // way painted-fantasy MMOs push it, zero grain. ACES keeps the highlights
+            // filmic so the saturation boost never clips to neon.
             var bloom = ProfileEffect<Bloom>();
             bloom.active = true;
-            bloom.intensity.Override(0.42f);
-            bloom.threshold.Override(0.86f);
-            bloom.scatter.Override(0.72f);
+            bloom.intensity.Override(0.6f);
+            bloom.threshold.Override(0.9f);
+            bloom.scatter.Override(0.65f);
+            bloom.tint.Override(new Color(1f, 0.97f, 0.88f));
             var vignette = ProfileEffect<Vignette>();
             vignette.active = true;
-            vignette.intensity.Override(0.28f);
-            vignette.smoothness.Override(0.72f);
+            vignette.intensity.Override(0.17f);
+            vignette.smoothness.Override(0.8f);
             var colors = ProfileEffect<ColorAdjustments>();
             colors.active = true;
-            colors.postExposure.Override(-0.22f);
-            colors.contrast.Override(18f);
-            colors.saturation.Override(-14f);
+            colors.postExposure.Override(0.05f);
+            colors.contrast.Override(22f);
+            colors.saturation.Override(20f);
             var tonemapping = ProfileEffect<Tonemapping>();
             tonemapping.active = true;
             tonemapping.mode.Override(TonemappingMode.ACES);
             var whiteBalance = ProfileEffect<WhiteBalance>();
             whiteBalance.active = true;
-            whiteBalance.temperature.Override(-8f);
-            whiteBalance.tint.Override(-4f);
+            whiteBalance.temperature.Override(8f);
+            whiteBalance.tint.Override(0f);
             var grain = ProfileEffect<FilmGrain>();
-            grain.active = true;
-            grain.intensity.Override(0.14f);
+            grain.active = false;               // painted worlds are clean, not filmic
+            grain.intensity.Override(0f);
             grain.response.Override(0.72f);
             EditorUtility.SetDirty(profile);
             AssetDatabase.SaveAssets();
@@ -710,7 +737,7 @@ namespace RadiantPool.EditorTools
             var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.name = "Ground";
             ground.transform.localScale = new Vector3(12f, 1f, 12f); // 120x120 m
-            var groundMat = Mat("M_Ground", new Color(0.24f, 0.31f, 0.22f));
+            var groundMat = Mat("M_Ground", new Color(0.97f, 1f, 0.93f));
             groundMat.mainTexture = GroundTexture();
             groundMat.mainTextureScale = new Vector2(48f, 48f);
             ground.GetComponent<Renderer>().sharedMaterial = groundMat;

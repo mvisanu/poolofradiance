@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using RadiantPool.Rules;
 using Xunit;
@@ -89,6 +90,41 @@ namespace RadiantPool.Rules.Tests
             Assert.True(f.IsDead);
             Rest.LongRest(f);
             Assert.True(f.IsDead);
+        }
+
+        // ---- Out-of-combat regeneration (pins the house rule's current values) ----
+
+        [Fact]
+        public void Regen_TownOutpacesField_AndFloorsProtectLowLevels()
+        {
+            // Level-1 scale: percentages floor to 0, so the integer floors carry it.
+            Assert.Equal(1, Rest.RegenPerTick(10, inTown: false));
+            Assert.Equal(2, Rest.RegenPerTick(10, inTown: true));
+            // Level-20 scale: percentages dominate (2% / 6% of max).
+            Assert.Equal(4, Rest.RegenPerTick(200, inTown: false));
+            Assert.Equal(12, Rest.RegenPerTick(200, inTown: true));
+            // Town always at least matches the field for any max HP.
+            for (int hp = 1; hp <= 300; hp += 7)
+                Assert.True(Rest.RegenPerTick(hp, true) > Rest.RegenPerTick(hp, false));
+        }
+
+        [Fact]
+        public void RegenTick_HealsLivingCapsAtMax_AndNeverRaisesTheDead()
+        {
+            var f = Fighter(3);
+            f.TakeDamage(3, DamageType.Slashing);
+            int healed = Rest.RegenTick(f, inTown: true);
+            Assert.Equal(Math.Min(3, Rest.RegenPerTick(f.MaxHp, true)), healed);
+            Assert.True(f.CurrentHp <= f.MaxHp);
+
+            Rest.RegenTick(f, inTown: true);           // near/at full: overheal is capped
+            Assert.True(f.CurrentHp <= f.MaxHp);
+
+            var dead = Fighter(1);
+            dead.TakeDamage(100, DamageType.Fire);
+            Assert.True(dead.IsDead);
+            Assert.Equal(0, Rest.RegenTick(dead, inTown: true));
+            Assert.True(dead.IsDead);
         }
     }
 

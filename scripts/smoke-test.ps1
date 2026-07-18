@@ -163,6 +163,20 @@ Stop-Process -Id $scalingProc.Id -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 $scalingText = Get-Content $scalingLog -Raw
 
+# -regentest wounds the hero and warps it between the field and Council Hall, so it gets
+# its own instance: nothing else may move the character or read its HP mid-measurement.
+Write-Host "Starting regeneration instance (-regentest)..."
+$regenLog = Join-Path $logDir "regen.log"
+Remove-Item $regenLog -ErrorAction SilentlyContinue
+$regenSave = Join-Path $logDir "regensave"
+Remove-Item -Recurse -Force $regenSave -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $regenSave | Out-Null
+$regenProc = Start-Process $exe -ArgumentList "-batchmode","-nographics","-name","Hale","-class","Fighter","-autohost","-regentest","-savedir",$regenSave,"-logFile",$regenLog -PassThru
+Start-Sleep -Seconds 32
+Stop-Process -Id $regenProc.Id -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+$regenText = Get-Content $regenLog -Raw
+
 # -attacktest gets its OWN host: it starts a real encounter, and a fight running underneath
 # the sell/level checks would fight them for the turn clock. One click on the FURTHEST enemy
 # must both close the distance and land the blow.
@@ -255,6 +269,10 @@ $checks = @(
     @{ Name = "realistic weapon sounds are used"; Ok = $fightText -match "\[CombatAudioTest\] PASS.+licensed weapon SFX played" },
     @{ Name = "spell cast and impact sounds are used"; Ok = $fightText -match "\[SpellAudioTest\] PASS.+fire cast \+ impact" },
     @{ Name = "combat light covers every living unit"; Ok = $fightText -match "\[CombatLightTest\] PASS" },
+    @{ Name = "combat opens with the camera facing the enemies"; Ok = $fightText -match "\[CombatCameraTest\] PASS" },
+    @{ Name = "no failed combat camera assertion"; Ok = $fightText -notmatch "\[CombatCameraTest\] FAIL" },
+    @{ Name = "out-of-combat regen heals afield and faster in town"; Ok = $regenText -match "\[RegenTest\] PASS" },
+    @{ Name = "no failed regen assertion"; Ok = $regenText -notmatch "\[RegenTest\] FAIL" },
     @{ Name = "no NullReference in combat log";    Ok = $fightText -notmatch "NullReferenceException" }
     @{ Name = "full direct attack, enemy, magic, victory, defeat, and retry flow"; Ok = $combatFlowText -match "\[CombatFlowTest\] PASS" },
     @{ Name = "full combat flow has no failed assertion or runtime exception"; Ok = $combatFlowText -notmatch "\[CombatFlowTest\] FAIL|Exception" }

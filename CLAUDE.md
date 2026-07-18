@@ -44,7 +44,9 @@ Build output: `game/Builds/Win64/RadiantPool.exe`. Installer output:
 `-name <n> [-class Fighter|Wizard|Cleric|Rogue] -autohost` /
 `-name <n> -autojoin localhost`; **self-tests** `-selltest`
 (bag → trader → purse), `-leveltest` (XP → level → point spent), `-attacktest` (one click on
-a distant enemy → walk → blow → automatic turn end + monster HUD), `-combatflowtest` (direct world attack → enemy round →
+a distant enemy → walk → blow → automatic turn end + monster HUD + combat-start camera
+facing the enemies), `-regentest` (out-of-combat HP regen: field trickle < town rate),
+`-combatflowtest` (direct world attack → enemy round →
 slotted magic → victory modal → defeat modal → retry), `-warpsmith` (park at the smithy so a shop panel can be
 LOOKED at), `-questmarkertest` (yellow ! → gray ? → yellow ? → hidden),
 `-waystonehighlighttest` (tracked active quest → green route; turn-in → no outbound route);
@@ -114,6 +116,11 @@ mouse and the self-test drive the very same code.
   **leave tier 4 alone**: `LootProgressionTests.RequiredFightCache` pins its weights (total
   100, `runed_staff` last so `FixedRng(70,100)` lands on it). New items go in BOTH
   `GameItems.cs` and `content/items/items.json` (tables reference the json) + `SellValue`.
+  **Out-of-combat regen lives in `Rest.cs`** (house rule like the ability-point grant):
+  every `Rest.RegenTickSeconds` the server heals living PCs+companions 2 % of max HP
+  (min 1) afield, 6 % (min 2) within `GameDirector.TownRegenRadius` of Council Hall;
+  combat pauses it and the dead never trickle back. `RestTests` pins the values,
+  `GameDirector.ServerRegenTick` is the only caller, `-regentest` proves town > field.
   **Party roles live in `PartyComposition.cs`**: the sellswords Veresk musters are picked
   by ROLE, never by class order — a healer first, then damage dealers of two *different*
   classes, counting whoever is already being played (so nobody is handed a second cleric
@@ -462,6 +469,16 @@ mouse and the self-test drive the very same code.
 - **Camera assists must be one-shot, not per-frame.** The combat "tactical assist" ran every
   frame and hauled pitch/zoom back the moment the mouse was released — the camera would not
   stay where the player put it. It now fires once per fight and any camera input cancels it.
+  It also swings the YAW to face the enemy centroid (`OrbitCamera.CombatFacingBearing`, the
+  one definition the `-attacktest` assertion shares) — and it must track the LIVE bearing
+  while easing, because units glide to their grid cells for the first second of a fight and
+  a bearing captured at combat start points at where the pack USED to be.
+- **QA flags do not self-quit** (`-attacktest`, `-regentest`, sometimes `-sitecapture` after
+  writing its frame). Launching one with `Start-Process -Wait` waits forever — always the
+  smoke-test pattern: launch, `Start-Sleep` a bounded budget, `Stop-Process -Force`, then
+  read the copied log. A `-savedir` fresh save also lacks late-campaign zones, so
+  `-sitecapture`/`-questmarkercapture` of remote zones must run against the REAL campaign
+  (back up `campaign.json` first; restore after).
 - **Read the save, not just the code**, when the user reports a stuck quest:
   `%USERPROFILE%\Saved Games\RadiantPool\campaign.json` holds `ZoneStates`,
   `ZoneClearedCounts` and `ConsumedEncounters` — it pinpointed the counter bug in one look.

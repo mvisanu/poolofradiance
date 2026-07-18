@@ -193,6 +193,8 @@ namespace RadiantPool.Game
                 StartCoroutine(ServerWarpToSmith());
             if (System.Array.IndexOf(args, "-attacktest") >= 0)
                 StartCoroutine(AttackSelfTest());
+            if (System.Array.IndexOf(args, "-regentest") >= 0)
+                StartCoroutine(RegenSelfTest());
             if (System.Array.IndexOf(args, "-combatflowtest") >= 0)
                 StartCoroutine(CombatFlowSelfTest());
             if (System.Array.IndexOf(args, "-weapontest") >= 0)
@@ -1032,6 +1034,35 @@ namespace RadiantPool.Game
         /// the client's by a tick or two, and a legitimate sale must not bounce.</summary>
         public const float ServerRangeSlack = 1.5f;
 
+        /// <summary>How close to Council Hall counts as "in town" for regeneration —
+        /// covers the civic centre (hall, market stalls, smithy), not the fight quarters.</summary>
+        public const float TownRegenRadius = 32f;
+
+        private float _nextRegenTick;
+        private Transform _townAnchor;   // Council Hall, the town's civic heart
+
+        /// <summary>Out-of-combat recovery: every <see cref="Rest.RegenTickSeconds"/> the
+        /// party slowly heals (rules-lib house rule, pinned by RestTests) — a trickle on
+        /// friendly ground, notably faster inside town. Entirely server-side; clients see
+        /// the bar rise through the existing CurrentHpSynced stat poll. Combat pauses all
+        /// of it, and the dead stay dead (revival is victory or the shrine).</summary>
+        private void ServerRegenTick()
+        {
+            if (CombatManager.Instance != null && CombatManager.Instance.InCombat.Value)
+                return;
+            if (_townAnchor == null)
+                _townAnchor = GameObject.Find("Council Hall")?.transform;
+
+            foreach (var holder in FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None))
+            {
+                var sheet = holder.Sheet;
+                if (sheet == null || sheet.IsDead || sheet.CurrentHp >= sheet.MaxHp) continue;
+                bool inTown = _townAnchor != null && Vector3.Distance(
+                    holder.transform.position, _townAnchor.position) <= TownRegenRadius;
+                Rest.RegenTick(sheet, inTown);
+            }
+        }
+
         public static bool TraderNear(Vector3 pos, out string traderName, float slack = 0f)
         {
             foreach (var v in FindObjectsByType<VendorInteract>(FindObjectsSortMode.None))
@@ -1515,6 +1546,42 @@ namespace RadiantPool.Game
                       $"defeat modal {defeatModal}, retry {retried}");
         }
 
+        /// <summary>Proof for out-of-combat recovery (`-regentest`): wound the hero, then
+        /// measure healing over identical windows far afield and beside Council Hall. The
+        /// town rate must beat the field rate, which must itself be positive. It waits on
+        /// the very server tick the campaign runs on — no test-only healing path.</summary>
+        private System.Collections.IEnumerator RegenSelfTest()
+        {
+            yield return new WaitForSeconds(9f);
+            var holder = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                .FirstOrDefault(p => !p.IsCompanion && p.Owner != null && p.Owner.IsValid);
+            var hall = GameObject.Find("Council Hall");
+            if (holder == null || holder.Sheet == null || hall == null)
+            {
+                Debug.Log("[RegenTest] FAIL - no character or no Council Hall");
+                yield break;
+            }
+            var sheet = holder.Sheet;
+
+            Warp(holder.transform, new Vector3(0f, 0f, 55f));   // far outside town radius
+            yield return null;
+            sheet.TakeDamage(Mathf.Max(0, sheet.CurrentHp - 1), DamageType.Bludgeoning);
+            int fieldStart = sheet.CurrentHp;
+            yield return new WaitForSeconds(7f);
+            int fieldGain = sheet.CurrentHp - fieldStart;
+
+            Warp(holder.transform, hall.transform.position + new Vector3(2f, 0f, 2f));
+            yield return null;
+            int townStart = sheet.CurrentHp;
+            yield return new WaitForSeconds(7f);
+            int townGain = sheet.CurrentHp - townStart;
+
+            bool pass = fieldGain > 0 && townGain > fieldGain;
+            Debug.Log($"[RegenTest] {(pass ? "PASS" : "FAIL")} - field +{fieldGain} HP, " +
+                      $"town +{townGain} HP over equal 7s windows " +
+                      $"(tick {Rest.RegenTickSeconds:0}s, town radius {TownRegenRadius:0}m)");
+        }
+
         /// <summary>Unattended combat check (`RadiantPool.exe -autohost -attacktest`, asserted
         /// by scripts/smoke-test.ps1): start a real encounter, then drive ONE left-click on the
         /// enemy standing FURTHEST away and prove the fighter closes the distance and swings —
@@ -1568,6 +1635,24 @@ namespace RadiantPool.Game
                 Debug.Log("[AttackTest] FAIL - no enemy on the board");
                 yield break;
             }
+
+            // The camera must OPEN the fight facing the enemies (start-of-fight yaw
+            // assist), not wherever the walk-in left it pointed. Wait out the one-shot
+            // ease, then judge the yaw against OrbitCamera.CombatFacingBearing — the very
+            // bearing definition the assist eases to. Runs before the blocked-approach
+            // fixture below, which moves a monster and would shift the true centroid.
+            var orbit = Camera.main != null ? Camera.main.GetComponent<OrbitCamera>() : null;
+            float camDeadline = Time.time + 4f;
+            while (orbit != null && orbit.TacticalAssistActive && Time.time < camDeadline)
+                yield return null;
+            bool facingKnown = OrbitCamera.CombatFacingBearing(out float wantYaw);
+            float yawError = orbit != null && facingKnown
+                ? Mathf.Abs(Mathf.DeltaAngle(orbit.Yaw, wantYaw)) : 0f;
+            bool cameraFacing = orbit == null || (facingKnown && yawError <= 5f);
+            Debug.Log($"[CombatCameraTest] {(cameraFacing ? "PASS" : "FAIL")} - " +
+                      $"combat-start yaw {(orbit != null ? orbit.Yaw : 0f):0.0} vs enemy " +
+                      $"bearing {wantYaw:0.0} (error {yawError:0.0} deg, bearing " +
+                      $"{(facingKnown ? "known" : "unknown")})");
 
             bool blockedApproach = combat.ServerArrangeBlockedApproachForTest(mine.Id, enemy.Id);
             yield return new WaitForSeconds(0.2f); // board view + tactical light settle
@@ -2500,6 +2585,11 @@ namespace RadiantPool.Game
                 {
                     _nextWorldTimeSync = Time.unscaledTime + 0.25f;
                     WorldHour.Value = _serverWorldHour;
+                }
+                if (Time.unscaledTime >= _nextRegenTick)
+                {
+                    _nextRegenTick = Time.unscaledTime + Rest.RegenTickSeconds;
+                    ServerRegenTick();
                 }
             }
             if (Input.GetKeyDown(KeyCode.J) && !Ui.Typing) Ui.Toggle(Ui.Panel.Journal);

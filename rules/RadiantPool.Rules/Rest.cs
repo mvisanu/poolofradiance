@@ -24,6 +24,36 @@ namespace RadiantPool.Rules
             return sheet.Heal(healed);
         }
 
+        // ---- Out-of-combat recovery (house rule, like Progression's ability points) ----
+        // The party slowly knits wounds on safe ground and heals notably faster inside
+        // town. Percent-of-max so it stays meaningful from level 1 to 20; integer floors
+        // keep level-1 characters (10 HP) from stalling at zero-per-tick.
+
+        /// <summary>Seconds between server regen ticks.</summary>
+        public const float RegenTickSeconds = 3f;
+        /// <summary>Fraction of max HP recovered per tick on friendly ground.</summary>
+        public const double FieldRegenFraction = 0.02;
+        /// <summary>Fraction of max HP recovered per tick inside town.</summary>
+        public const double TownRegenFraction = 0.06;
+
+        /// <summary>HP restored by one out-of-combat tick: 2% of max (min 1) in the
+        /// field, 6% of max (min 2) in town — full recovery in roughly 2.5 field
+        /// minutes or under a town minute.</summary>
+        public static int RegenPerTick(int maxHp, bool inTown)
+        {
+            double fraction = inTown ? TownRegenFraction : FieldRegenFraction;
+            int floor = inTown ? 2 : 1;
+            return Math.Max(floor, (int)Math.Floor(maxHp * fraction));
+        }
+
+        /// <summary>Apply one regen tick. Dead characters never regenerate (revival is
+        /// combat victory / the shrine, never a trickle). Returns HP actually healed.</summary>
+        public static int RegenTick(CharacterSheet sheet, bool inTown)
+        {
+            if (sheet.IsDead) return 0;
+            return sheet.Heal(RegenPerTick(sheet.MaxHp, inTown));
+        }
+
         /// <summary>Long rest: full HP, all spell slots, conditions cleared (v1: all
         /// non-death conditions).</summary>
         public static void LongRest(CharacterSheet sheet)

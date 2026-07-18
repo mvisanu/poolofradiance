@@ -21,7 +21,7 @@ namespace RadiantPool.EditorTools
             string textureName;
             switch (theme)
             {
-                case CampaignSiteTheme.Wilds: textureName = "Grass_darked_up"; break;
+                case CampaignSiteTheme.Wilds: textureName = "Grass_normal_up"; break;
                 case CampaignSiteTheme.Marsh: textureName = "Grass_swamp_dark_up"; break;
                 case CampaignSiteTheme.Camp: textureName = "Grass_normal_up"; break;
                 case CampaignSiteTheme.Observatory: textureName = "Grass_bluetint_up"; break;
