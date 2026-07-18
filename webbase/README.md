@@ -42,7 +42,7 @@ the JS decompression fallback (faster first load).
 | Multiplayer | Host + invite codes (Tugboat/UDP) | **Solo campaign only.** Browsers cannot open or accept UDP/TCP sockets; the build swaps in an in-process loopback transport (`LoopbackTransport`). The title screen says so. True web multiplayer would need a WebSocket relay server (Bayou + hosted WSS) — flagged as future work. |
 | Saves | `%USERPROFILE%\Saved Games\RadiantPool\campaign.json` | Browser storage (IndexedDB via PlayerPrefs), same JSON, per-browser/per-site. Clearing site data deletes the campaign. |
 | Self-test flags (`-attacktest`, …) | Command line | Not available (browsers pass no args). QA rides the desktop build. |
-| Graphics tier | Full: MSAA 4x, HDR, SSAO, 4 shadow cascades | Tuned web profile applied at runtime: MSAA 2x, no HDR, 0.85 render scale, 2 cascades, FXAA, no film grain. |
+| Graphics tier | Full: MSAA 4x, HDR, SSAO, 4 shadow cascades | Web profile **baked in at build time** (never a runtime pipeline swap — see CLAUDE.md gotcha): MSAA 2x, HDR on, full render scale, 1024 shadowmap / 2 cascades, FXAA, no film grain, no SSAO, URP compatibility mode (Render Graph off). |
 
 Everything else — rules, campaign, content, UI, saves format — is the same code
 and the same assets.

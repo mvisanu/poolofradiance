@@ -82,8 +82,11 @@ namespace RadiantPool.EditorTools
                 msaa: 4, hdr: true, renderScale: 1f, shadowDistance: 70f,
                 mainShadowmapResolution: 2048, cascadeCount: 4,
                 maxAdditionalLights: 8, additionalLightShadows: true, ssao: true);
+            // HDR stays ON for web: bloom/ACES fall apart in LDR and modern desktop
+            // browsers handle RGBA16F targets fine. Full render scale — the shell
+            // already caps devicePixelRatio at 1.5, so the real pixel count is sane.
             PipelineVariant("URP_Web",
-                msaa: 2, hdr: false, renderScale: 0.85f, shadowDistance: 40f,
+                msaa: 2, hdr: true, renderScale: 1f, shadowDistance: 40f,
                 mainShadowmapResolution: 1024, cascadeCount: 2,
                 maxAdditionalLights: 4, additionalLightShadows: false, ssao: false);
 

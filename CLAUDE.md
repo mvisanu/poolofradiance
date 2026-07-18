@@ -275,8 +275,12 @@ mouse and the self-test drive the very same code.
   custom template (`Assets/WebGLTemplates/RadiantPool/index.html`, Academia palette,
   charter + pool-ring loader); `HeadlessBuild.WebGL` selects it + Brotli with
   decompression fallback (loads from any static host, no header config).
-  `WebQuality.cs` applies the runtime web graphics tier (see below). The Unity WebGL
-  module is installed for 6000.0.79f1 (Hub headless `install-modules -m webgl`).
+  `HeadlessBuild.WebGL` bakes `URP_Web` in as the ACTIVE pipeline while building
+  (restores desktop after) and forces URP compatibility mode (Render Graph off — its
+  CoreCopy blit is unsupported on WebGL2); `WebQuality.cs` only trims camera AA and
+  film grain at runtime. `RP_WEBGL_DEV=1` env var → development web player with
+  readable console errors. The Unity WebGL module is installed for 6000.0.79f1
+  (Hub headless `install-modules -m webgl`).
 - `theme/` — Stitch design mockups, **gitignored**: they contain WotC placeholder
   names. Copy visuals only, never text.
 - Asset Store packs can't be fetched headlessly (editor sign-in). Drop-in slots instead:
@@ -462,6 +466,15 @@ mouse and the self-test drive the very same code.
   `%USERPROFILE%\Saved Games\RadiantPool\campaign.json` holds `ZoneStates`,
   `ZoneClearedCounts` and `ConsumedEncounters` — it pinpointed the counter bug in one look.
   Back it up before running the game against it (the load path rewrites it).
+
+- **Never swap URP pipeline assets at RUNTIME in a player build.** Shader-variant
+  stripping prefilters against the pipeline assets registered in Graphics/Quality
+  settings at BUILD time; a runtime `QualitySettings.renderPipeline = other` asks for
+  variants the build no longer contains and every affected mesh draws NOTHING — no
+  error, no magenta, just invisible characters/NPCs/buildings (ground, text, and UI
+  survived, which made it look like a mesh bug). The web build lost every imported
+  model this way. Per-platform pipelines are a BUILD-time decision:
+  `HeadlessBuild.WebGL` assigns `URP_Web` before `BuildPlayer` and restores after.
 
 ## IP rule (non-negotiable)
 

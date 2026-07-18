@@ -18,7 +18,9 @@ ROOT = Path(__file__).parent
 class UnityHandler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
         path = self.path.split("?")[0]
-        if path.endswith(".br"):
+        # .unityweb = Brotli under decompression-fallback naming; the header lets the
+        # browser decompress natively instead of the loader's JS fallback.
+        if path.endswith((".br", ".unityweb")):
             self.send_header("Content-Encoding", "br")
         elif path.endswith(".gz"):
             self.send_header("Content-Encoding", "gzip")
