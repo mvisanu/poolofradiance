@@ -1644,10 +1644,6 @@ namespace RadiantPool.Game
             // distance to a board view (the old tactical assist). Sample the view now,
             // let a full second pass with no synthetic input (this test only ever drives
             // CombatClientUI.ClickCell, never the camera), then confirm nothing drifted.
-            // "Building in the way" is answered by the x-ray fade alone now — a blocker
-            // gets ghosted, the camera never pulls in or swings to dodge one — so this
-            // also asserts every renderer the x-ray currently judges as blocking has
-            // actually had its see-through material swapped in.
             var orbit = Camera.main != null ? Camera.main.GetComponent<OrbitCamera>() : null;
             float yawStart = orbit != null ? orbit.Yaw : 0f;
             float pitchStart = orbit != null ? orbit.Pitch : 0f;
@@ -1659,13 +1655,37 @@ namespace RadiantPool.Game
             float distDrift = orbit != null ? Mathf.Abs(orbit.Distance - distStart) : 0f;
             bool cameraStill = orbit == null
                 || (yawDrift < 0.05f && pitchDrift < 0.05f && distDrift < 0.01f);
-            bool xrayConsistent = orbit == null || orbit.AllBlockersGhosted;
+
+            // "Building in the way" is answered by the x-ray fade alone now — a blocker
+            // gets ghosted, the camera never pulls in or swings to dodge one. Nothing
+            // in enc_docks_01 is guaranteed to occlude the default view, so plant a
+            // synthetic occluder directly over the target enemy's sight point (the
+            // same "unit buried inside a building" case RecomputeBlockers' bounds-
+            // Contains check exists for) and force an immediate rescan — otherwise this
+            // half of the assertion would pass vacuously whenever BlockingCount is 0.
+            GameObject occluder = null;
+            if (orbit != null)
+            {
+                Vector3 sightPoint = (enemy.Visual != null ? enemy.Visual.position
+                    : mine.Visual.position) + Vector3.up * 1.0f;
+                occluder = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                occluder.name = "AttackTestCameraOccluder";
+                occluder.transform.position = sightPoint;
+                occluder.transform.localScale = Vector3.one * 3f;   // well over the 1.5m floor
+                var occCollider = occluder.GetComponent<Collider>();
+                if (occCollider != null) Destroy(occCollider);      // never a gameplay obstacle
+                orbit.ForceOcclusionRescanForTest();
+            }
+            yield return new WaitForSeconds(0.15f); // one forced env + blocker scan, plus fade-in
+            bool xrayConsistent = orbit == null
+                || (orbit.BlockingCount > 0 && orbit.AllBlockersGhosted);
             bool cameraNeverMoved = cameraStill && xrayConsistent;
             Debug.Log($"[CombatCameraTest] {(cameraNeverMoved ? "PASS" : "FAIL")} - " +
                       $"camera held still at combat start (yaw drift {yawDrift:0.000}, " +
                       $"pitch drift {pitchDrift:0.000}, distance drift {distDrift:0.000}); " +
-                      $"x-ray fading {(orbit != null ? orbit.BlockingCount : 0)} blocker(s), " +
-                      $"all ghosted {xrayConsistent}");
+                      $"x-ray fading {(orbit != null ? orbit.BlockingCount : 0)} forced " +
+                      $"blocker(s), all ghosted {xrayConsistent}");
+            if (occluder != null) Destroy(occluder);
 
             bool blockedApproach = combat.ServerArrangeBlockedApproachForTest(mine.Id, enemy.Id);
             yield return new WaitForSeconds(0.2f); // board view + tactical light settle

@@ -252,6 +252,20 @@ namespace RadiantPool.Game
             }
         }
 
+        /// <summary>Test-only: makes the next frame run both the environment cache
+        /// refresh and the blocker recompute immediately instead of waiting out their
+        /// normal 5s/0.05s intervals. AttackSelfTest plants a synthetic occluder and
+        /// calls this so the x-ray half of `[CombatCameraTest]` observes a real,
+        /// deterministic fade rather than whatever happened to be in view. Guarded by
+        /// the same -attacktest flag as other self-test-only fixtures.</summary>
+        public void ForceOcclusionRescanForTest()
+        {
+            if (System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "-attacktest") < 0)
+                return;
+            _envScanAt = 0f;
+            _blockScanAt = 0f;
+        }
+
         /// <summary>Static environment renderers tall enough to block the view (houses,
         /// walls, pillars). Ground/roads (flat bounds) and anything belonging to a
         /// networked unit or combat visual are excluded.</summary>

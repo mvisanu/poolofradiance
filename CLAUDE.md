@@ -474,10 +474,6 @@ mouse and the self-test drive the very same code.
   camera and its target fades to see-through (`OrbitCamera`'s x-ray) instead of the camera
   moving. `-attacktest`'s `[CombatCameraTest]` now asserts the view holds still across combat
   start and that every occluder the x-ray flags actually got ghosted.
-  It also swings the YAW to face the enemy centroid (`OrbitCamera.CombatFacingBearing`, the
-  one definition the `-attacktest` assertion shares) — and it must track the LIVE bearing
-  while easing, because units glide to their grid cells for the first second of a fight and
-  a bearing captured at combat start points at where the pack USED to be.
 - **QA flags do not self-quit** (`-attacktest`, `-regentest`, sometimes `-sitecapture` after
   writing its frame). Launching one with `Start-Process -Wait` waits forever — always the
   smoke-test pattern: launch, `Start-Sleep` a bounded budget, `Stop-Process -Force`, then
