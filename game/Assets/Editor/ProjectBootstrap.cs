@@ -70,25 +70,137 @@ namespace RadiantPool.EditorTools
 
         private static void SetupUrp()
         {
-            var pipelinePath = SettingsDir + "/URP_Asset.asset";
-            var existing = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(pipelinePath);
-            if (existing == null)
+            // Two pipeline variants live under Resources so the WebGL player can swap
+            // itself onto the lighter one at startup (WebQuality.cs). Desktop stays the
+            // project default: stable 4x MSAA, HDR colour, four shadow cascades and SSAO.
+            if (!AssetDatabase.IsValidFolder("Assets/Resources"))
+                AssetDatabase.CreateFolder("Assets", "Resources");
+            if (!AssetDatabase.IsValidFolder("Assets/Resources/URP"))
+                AssetDatabase.CreateFolder("Assets/Resources", "URP");
+
+            var desktop = PipelineVariant("URP_Desktop",
+                msaa: 4, hdr: true, renderScale: 1f, shadowDistance: 70f,
+                mainShadowmapResolution: 2048, cascadeCount: 4,
+                maxAdditionalLights: 8, additionalLightShadows: true, ssao: true);
+            PipelineVariant("URP_Web",
+                msaa: 2, hdr: false, renderScale: 0.85f, shadowDistance: 40f,
+                mainShadowmapResolution: 1024, cascadeCount: 2,
+                maxAdditionalLights: 4, additionalLightShadows: false, ssao: false);
+
+            GraphicsSettings.defaultRenderPipeline = desktop;
+            // EVERY quality level gets the pipeline, not just the active one — a level
+            // without a pipeline silently falls back to Built-in the moment
+            // SettingsMenu switches quality, and nothing renders through URP anymore.
+            int activeLevel = QualitySettings.GetQualityLevel();
+            for (int i = 0; i < QualitySettings.names.Length; i++)
             {
-                var rendererData = ScriptableObject.CreateInstance<UniversalRendererData>();
-                AssetDatabase.CreateAsset(rendererData, SettingsDir + "/URP_Renderer.asset");
-                var pipeline = UniversalRenderPipelineAsset.Create(rendererData);
-                AssetDatabase.CreateAsset(pipeline, pipelinePath);
-                existing = pipeline;
+                QualitySettings.SetQualityLevel(i, false);
+                QualitySettings.renderPipeline = desktop;
             }
-            GraphicsSettings.defaultRenderPipeline = existing;
-            QualitySettings.renderPipeline = existing;
-            // Desktop-first MMORPG presentation: stable 4x MSAA, HDR colour and enough
-            // shadow reach that the district silhouettes do not visibly pop in.
-            existing.msaaSampleCount = 4;
-            existing.renderScale = 1f;
-            existing.supportsHDR = true;
-            existing.shadowDistance = 70f;
-            EditorUtility.SetDirty(existing);
+            QualitySettings.SetQualityLevel(activeLevel, false);
+
+            // The old single pre-variant asset pair is superseded; stale copies would
+            // just confuse anyone diffing Assets/Settings.
+            AssetDatabase.DeleteAsset(SettingsDir + "/URP_Asset.asset");
+            AssetDatabase.DeleteAsset(SettingsDir + "/URP_Renderer.asset");
+        }
+
+        /// <summary>Creates or retunes one URP pipeline asset + its own renderer data
+        /// under Assets/Resources/URP (idempotent — re-runs reuse the existing assets).
+        /// Public URP 17 setters are used where they exist; the remaining fields are
+        /// internal-set-only, so they are written through SerializedObject using the
+        /// serialized names verified against the package source
+        /// (Library/PackageCache/com.unity.render-pipelines.universal@*/Runtime/Data/
+        /// UniversalRenderPipelineAsset.cs).</summary>
+        private static UniversalRenderPipelineAsset PipelineVariant(string name,
+            int msaa, bool hdr, float renderScale, float shadowDistance,
+            int mainShadowmapResolution, int cascadeCount, int maxAdditionalLights,
+            bool additionalLightShadows, bool ssao)
+        {
+            string rendererPath = $"Assets/Resources/URP/{name}_Renderer.asset";
+            string pipelinePath = $"Assets/Resources/URP/{name}.asset";
+            var rendererData = AssetDatabase.LoadAssetAtPath<UniversalRendererData>(rendererPath);
+            if (rendererData == null)
+            {
+                rendererData = ScriptableObject.CreateInstance<UniversalRendererData>();
+                AssetDatabase.CreateAsset(rendererData, rendererPath);
+            }
+            var pipeline = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(pipelinePath);
+            if (pipeline == null)
+            {
+                pipeline = UniversalRenderPipelineAsset.Create(rendererData);
+                AssetDatabase.CreateAsset(pipeline, pipelinePath);
+            }
+
+            pipeline.msaaSampleCount = msaa;
+            pipeline.supportsHDR = hdr;
+            pipeline.renderScale = renderScale;
+            pipeline.shadowDistance = shadowDistance;
+            pipeline.mainLightShadowmapResolution = mainShadowmapResolution;
+            pipeline.shadowCascadeCount = cascadeCount;
+            pipeline.maxAdditionalLightsCount = maxAdditionalLights;
+            pipeline.supportsCameraDepthTexture = true;   // SSAO reads depth
+
+            var so = new SerializedObject(pipeline);
+            so.FindProperty("m_MainLightShadowsSupported").boolValue = true;
+            so.FindProperty("m_SoftShadowsSupported").boolValue = true;
+            so.FindProperty("m_AdditionalLightsRenderingMode").intValue =
+                (int)LightRenderingMode.PerPixel;
+            so.FindProperty("m_AdditionalLightShadowsSupported").boolValue =
+                additionalLightShadows;
+            // Editor-only aggregate the internal setters normally maintain; without it
+            // the shader keyword filter could strip the soft-shadow variants.
+            var anyShadows = so.FindProperty("m_AnyShadowsSupported");
+            if (anyShadows != null) anyShadows.boolValue = true;
+            // If the pipeline asset survived a deleted/recreated renderer asset, its
+            // renderer slot 0 is a dead reference — relink it every run.
+            var rendererList = so.FindProperty("m_RendererDataList");
+            if (rendererList != null && rendererList.arraySize > 0)
+                rendererList.GetArrayElementAtIndex(0).objectReferenceValue = rendererData;
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            if (ssao) EnsureSsaoFeature(rendererData);
+
+            EditorUtility.SetDirty(rendererData);
+            EditorUtility.SetDirty(pipeline);
+            return pipeline;
+        }
+
+        /// <summary>Adds (or retunes, on re-runs) the Screen Space Ambient Occlusion
+        /// renderer feature as a sub-asset of the renderer data, registering it in
+        /// m_RendererFeatures + m_RendererFeatureMap exactly the way the package's
+        /// ScriptableRendererDataEditor.AddComponent does. The settings class is
+        /// internal, so values go through SerializedObject too (field names verified in
+        /// Runtime/RendererFeatures/ScreenSpaceAmbientOcclusion.cs).</summary>
+        private static void EnsureSsaoFeature(UniversalRendererData rendererData)
+        {
+            ScreenSpaceAmbientOcclusion feature = null;
+            foreach (var f in rendererData.rendererFeatures)
+                if (f is ScreenSpaceAmbientOcclusion existing) { feature = existing; break; }
+            if (feature == null)
+            {
+                feature = ScriptableObject.CreateInstance<ScreenSpaceAmbientOcclusion>();
+                feature.name = "ScreenSpaceAmbientOcclusion";
+                AssetDatabase.AddObjectToAsset(feature, rendererData);
+                AssetDatabase.TryGetGUIDAndLocalFileIdentifier(feature, out _, out long localId);
+                var dataSo = new SerializedObject(rendererData);
+                var features = dataSo.FindProperty("m_RendererFeatures");
+                var map = dataSo.FindProperty("m_RendererFeatureMap");
+                features.arraySize++;
+                features.GetArrayElementAtIndex(features.arraySize - 1)
+                    .objectReferenceValue = feature;
+                map.arraySize++;
+                map.GetArrayElementAtIndex(map.arraySize - 1).longValue = localId;
+                dataSo.ApplyModifiedPropertiesWithoutUndo();
+            }
+
+            var featureSo = new SerializedObject(feature);
+            featureSo.FindProperty("m_Settings.Downsample").boolValue = true; // half-res AO
+            featureSo.FindProperty("m_Settings.Intensity").floatValue = 0.6f;
+            featureSo.FindProperty("m_Settings.Radius").floatValue = 0.3f;
+            featureSo.FindProperty("m_Settings.DirectLightingStrength").floatValue = 0.25f;
+            featureSo.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(feature);
         }
 
         /// <summary>Procedural cobblestone-ish tile so the ground reads as a surface,

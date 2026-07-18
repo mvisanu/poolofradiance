@@ -86,6 +86,30 @@ namespace RadiantPool.Game
             }
         }
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+        // A browser has no "Saved Games" folder, and raw IndexedDB file writes are only
+        // flushed on an explicit syncfs the engine does not guarantee. PlayerPrefs IS
+        // guaranteed (flushed on PlayerPrefs.Save), so the campaign JSON rides in it,
+        // byte-identical to the desktop file.
+        private const string WebSaveKey = "campaign.json";
+
+        public static bool Exists => PlayerPrefs.HasKey(WebSaveKey);
+
+        public static void Write(CampaignSave save)
+        {
+            save.SavedAtUtc = DateTime.UtcNow.ToString("o");
+            PlayerPrefs.SetString(WebSaveKey, JsonConvert.SerializeObject(save, Formatting.Indented));
+            PlayerPrefs.Save();
+            Debug.Log("[Save] Campaign written to browser storage");
+        }
+
+        public static CampaignSave Read()
+        {
+            try
+            {
+                var save = JsonConvert.DeserializeObject<CampaignSave>(
+                    PlayerPrefs.GetString(WebSaveKey, ""));
+#else
         public static bool Exists => File.Exists(SavePath);
 
         public static void Write(CampaignSave save)
@@ -100,6 +124,7 @@ namespace RadiantPool.Game
             try
             {
                 var save = JsonConvert.DeserializeObject<CampaignSave>(File.ReadAllText(SavePath));
+#endif
                 if (save == null || save.SchemaVersion != 1)
                 {
                     Debug.LogWarning("[Save] Unreadable or newer-schema save; starting fresh.");

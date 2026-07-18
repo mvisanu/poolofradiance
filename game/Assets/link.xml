@@ -1,0 +1,10 @@
+<!-- IL2CPP stripping shield for the WebGL build (harmless elsewhere).
+     SaveSystem round-trips CampaignSave/SavedCharacter/SavedCompanion through
+     Newtonsoft reflection; stripped members deserialize to empty objects with no
+     compile-time error, so the whole game assembly, the rules library, and
+     Newtonsoft are pinned. -->
+<linker>
+  <assembly fullname="Assembly-CSharp" preserve="all" />
+  <assembly fullname="RadiantPool.Rules" preserve="all" />
+  <assembly fullname="Newtonsoft.Json" preserve="all" />
+</linker>

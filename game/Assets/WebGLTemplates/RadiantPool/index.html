@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{{ PRODUCT_NAME }}}</title>
+  <meta name="description" content="Radiant Pool — a 2-4 player co-op tactical CRPG. SRD 5.1 rules, an original campaign, playable in your browser.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=MedievalSharp&family=Source+Serif+4:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* ------------------------------------------------------------------ */
+    /* Radiant Pool web shell — tokens straight from the game's Theme.cs  */
+    /* ------------------------------------------------------------------ */
+    :root {
+      --surface:        #1c1714;  /* mahogany */
+      --surface-deep:   #120e0b;
+      --panel:          #241e19;  /* oak */
+      --panel-high:     #2e2721;
+      --leather:        #3d332b;
+      --on-surface:     #e8e2d8;
+      --on-surface-mut: #cbbb9c;
+      --gold:           #f2ca50;  /* active/emphasis only */
+      --brass:          #c9a962;
+      --parchment:      #e8dfd4;
+      --parchment-edge: #c4b69e;
+      --ink:            #2a241e;
+      --ink-muted:      #6b6257;
+      --crimson:        #8b2635;
+      --green-deep:     #1b5e20;
+      --green:          #2e7d32;
+      --green-high:     #43a047;
+      --well:           #0e0e0e;
+      --font-display: "MedievalSharp", "Georgia", serif;
+      --font-serif:   "Source Serif 4", "Georgia", serif;
+      --font-body:    "Inter", system-ui, sans-serif;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      background: var(--surface);
+      color: var(--on-surface);
+      font-family: var(--font-body);
+      font-size: 16px;
+      line-height: 1.5;
+      overflow: hidden;
+    }
+
+    /* ---------------------------- game canvas ------------------------- */
+    #stage { position: fixed; inset: 0; background: var(--surface-deep); }
+    #unity-canvas {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      display: block;
+      background: var(--surface-deep);
+    }
+
+    /* --------------------------- the charter -------------------------- */
+    #charter {
+      position: fixed; inset: 0;
+      /* flex-start + card margin:auto = centered when it fits, scrollable (not
+         top-clipped) when the viewport is shorter than the card */
+      display: flex; align-items: flex-start; justify-content: center;
+      padding: 24px;
+      background:
+        radial-gradient(120% 90% at 50% 30%, rgba(61, 51, 43, 0.55) 0%, rgba(18, 14, 11, 0) 60%),
+        linear-gradient(180deg, #241e19 0%, #16110d 70%, #120e0b 100%);
+      overflow-y: auto;
+      z-index: 10;
+      transition: opacity 320ms ease-in;
+    }
+    #charter.dismissed { opacity: 0; pointer-events: none; }
+
+    .card {
+      width: 100%; max-width: 620px;
+      margin: auto;
+      background:
+        linear-gradient(160deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 30%),
+        var(--parchment);
+      border: 1px solid var(--parchment-edge);
+      outline: 2px solid var(--brass);
+      outline-offset: -7px;
+      border-radius: 4px;
+      box-shadow:
+        0 1px 0 rgba(255,255,255,0.06),
+        0 24px 60px rgba(0, 0, 0, 0.55);
+      color: var(--ink);
+      padding: 44px 44px 32px;
+      text-align: center;
+    }
+
+    .eyebrow {
+      font-family: var(--font-body);
+      font-size: 12px; font-weight: 600;
+      letter-spacing: 0.22em;
+      color: var(--ink-muted);
+      text-transform: uppercase;
+    }
+    h1 {
+      font-family: var(--font-display);
+      font-weight: 400;
+      font-size: clamp(40px, 8vw, 58px);
+      line-height: 1.05;
+      color: var(--ink);
+      margin: 10px 0 6px;
+    }
+    .subtitle {
+      font-family: var(--font-serif);
+      font-size: 17px;
+      color: var(--ink-muted);
+      margin-bottom: 26px;
+    }
+    .rule {
+      height: 2px; border: 0; margin: 0 auto 30px; width: 180px;
+      background: linear-gradient(90deg, transparent, var(--brass) 20%, var(--brass) 80%, transparent);
+    }
+
+    /* ------------------- the pool: signature loader -------------------- */
+    /* A dark pool ringed by gold light; the ring fills as the game        */
+    /* streams in, and the lit pool becomes the way in.                    */
+    #pool {
+      position: relative;
+      width: 208px; height: 208px;
+      margin: 0 auto 14px;
+      border: 0; padding: 0;
+      background: transparent;
+      cursor: default;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #pool:disabled { cursor: default; }
+    #pool.ready { cursor: pointer; }
+    #pool svg { display: block; width: 100%; height: 100%; }
+    #pool .track   { fill: none; stroke: var(--leather); stroke-width: 10; stroke-dasharray: 6 5; }
+    #pool .fill    {
+      fill: none; stroke: var(--gold); stroke-width: 10;
+      stroke-linecap: butt;
+      filter: drop-shadow(0 0 6px rgba(242, 202, 80, 0.55));
+      transition: stroke-dasharray 200ms linear;
+    }
+    #pool .water   { fill: url(#poolDepth); }
+    #pool-label {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      pointer-events: none;
+      color: var(--parchment);
+      font-family: var(--font-serif);
+    }
+    #pool-pct { font-size: 38px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    #pool-sub { font-size: 12px; font-family: var(--font-body); font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; color: var(--on-surface-mut); margin-top: 2px; }
+    #pool.ready #pool-pct { color: var(--gold); }
+    #pool.ready:hover .fill, #pool.ready:focus-visible .fill { stroke-width: 12; }
+    #pool.ready:focus-visible { outline: 3px solid var(--green); outline-offset: 4px; border-radius: 50%; }
+    @media (prefers-reduced-motion: no-preference) {
+      #pool.ready svg { animation: poolBreath 2.6s ease-in-out infinite; }
+      @keyframes poolBreath {
+        0%, 100% { filter: none; }
+        50% { filter: drop-shadow(0 0 14px rgba(242, 202, 80, 0.35)); }
+      }
+    }
+
+    #status {
+      min-height: 24px;
+      font-family: var(--font-serif);
+      font-size: 16px; font-weight: 600;
+      color: var(--ink);
+    }
+    #tip {
+      min-height: 44px;
+      font-size: 14px;
+      color: var(--ink-muted);
+      max-width: 420px;
+      margin: 6px auto 24px;
+    }
+
+    #begin {
+      display: none;
+      font-family: var(--font-serif);
+      font-size: 18px; font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--parchment);
+      background: var(--green-deep);
+      border: 1px solid var(--green-high);
+      border-radius: 6px;
+      padding: 14px 46px;
+      margin: 0 auto 26px;
+      cursor: pointer;
+      min-height: 52px;
+      transition: background 150ms ease-out;
+    }
+    #begin.shown { display: inline-block; }
+    #begin:hover, #begin:focus-visible { background: var(--green); }
+    #begin:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+
+    /* --------------------------- field notes --------------------------- */
+    #notes {
+      text-align: left;
+      border-top: 1px solid var(--parchment-edge);
+      padding-top: 20px;
+    }
+    #notes h2 {
+      font-family: var(--font-body);
+      font-size: 12px; font-weight: 600;
+      letter-spacing: 0.22em; text-transform: uppercase;
+      color: var(--ink-muted);
+      text-align: center;
+      margin-bottom: 14px;
+    }
+    .keys {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 28px;
+      font-size: 14px;
+      color: var(--ink);
+      list-style: none;
+    }
+    .keys li {
+      display: grid;
+      grid-template-columns: 56px 1fr;   /* hanging indent: wraps align under text */
+      gap: 0 10px;
+    }
+    .keys b {
+      font-weight: 600;
+      font-family: var(--font-serif);
+      color: var(--crimson);
+    }
+    .footer {
+      margin-top: 24px;
+      font-size: 12px;
+      color: var(--ink-muted);
+      text-align: center;
+    }
+    #mobile-note, #error-note {
+      display: none;
+      margin: 0 0 18px;
+      padding: 10px 14px;
+      border: 1px solid var(--parchment-edge);
+      border-left: 3px solid var(--crimson);
+      border-radius: 3px;
+      background: rgba(139, 38, 53, 0.06);
+      color: var(--crimson);
+      font-size: 14px;
+      text-align: left;
+    }
+    #mobile-note.shown, #error-note.shown { display: block; }
+
+    /* ------------------------ in-game chrome --------------------------- */
+    #chrome {
+      position: fixed; right: 16px; bottom: 16px;
+      display: none; gap: 8px;
+      z-index: 5;
+      transition: opacity 250ms ease-out;
+    }
+    #chrome.shown { display: flex; }
+    #chrome.faded { opacity: 0; }
+    #chrome button {
+      width: 44px; height: 44px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--panel);
+      border: 1px solid var(--brass);
+      border-radius: 6px;
+      color: var(--brass);
+      cursor: pointer;
+    }
+    #chrome button:hover, #chrome button:focus-visible { color: var(--gold); border-color: var(--gold); }
+    #chrome button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+    #chrome svg { width: 22px; height: 22px; }
+
+    @media (max-width: 560px) {
+      .card { padding: 30px 22px 22px; }
+      .keys { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #charter { transition: none; }
+      #pool .fill { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <canvas id="unity-canvas" tabindex="-1"></canvas>
+  </div>
+
+  <div id="chrome" aria-hidden="true">
+    <button id="btn-fullscreen" type="button" aria-label="Enter fullscreen" title="Fullscreen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M8 3H5a2 2 0 0 0-2 2v3"></path><path d="M21 8V5a2 2 0 0 0-2-2h-3"></path>
+        <path d="M3 16v3a2 2 0 0 0 2 2h3"></path><path d="M16 21h3a2 2 0 0 0 2-2v-3"></path>
+      </svg>
+    </button>
+  </div>
+
+  <div id="charter">
+    <main class="card">
+      <p class="eyebrow">A campaign charter</p>
+      <h1>Radiant Pool</h1>
+      <p class="subtitle">Two to four heroes &middot; tactical SRD 5.1 combat &middot; an original campaign</p>
+      <hr class="rule">
+
+      <div id="error-note" role="alert"></div>
+      <div id="mobile-note">Radiant Pool is played with a mouse and keyboard &mdash; combat is click-driven. It will load here, but a desktop browser is the intended table.</div>
+
+      <button id="pool" type="button" disabled aria-label="Loading Radiant Pool">
+        <svg viewBox="0 0 208 208" aria-hidden="true">
+          <defs>
+            <radialGradient id="poolDepth" cx="50%" cy="42%" r="65%">
+              <stop offset="0%" stop-color="#2e2721"/>
+              <stop offset="70%" stop-color="#16110d"/>
+              <stop offset="100%" stop-color="#0e0e0e"/>
+            </radialGradient>
+          </defs>
+          <circle class="water" cx="104" cy="104" r="86"></circle>
+          <circle class="track" cx="104" cy="104" r="93"></circle>
+          <circle class="fill" cx="104" cy="104" r="93" transform="rotate(-90 104 104)" stroke-dasharray="0 585"></circle>
+        </svg>
+        <span id="pool-label">
+          <span id="pool-pct">0%</span>
+          <span id="pool-sub">loading</span>
+        </span>
+      </button>
+
+      <p id="status" aria-live="polite">Unsealing the charter&hellip;</p>
+      <p id="tip"></p>
+      <button id="begin" type="button">Enter the Pool</button>
+
+      <section id="notes">
+        <h2>Field notes</h2>
+        <ul class="keys">
+          <li><b>Click</b> move &mdash; or strike an enemy, however far</li>
+          <li><b>WASD</b> pan the field &middot; F recentres</li>
+          <li><b>Space</b> end your turn</li>
+          <li><b>A</b> open the attack picker</li>
+          <li><b>I</b> pack &amp; character sheet</li>
+          <li><b>L</b> spend ability points</li>
+          <li><b>M</b> map &mdash; tactical, then the atlas</li>
+          <li><b>Esc</b> back, then settings</li>
+        </ul>
+        <p class="footer">{{{ PRODUCT_NAME }}} {{{ PRODUCT_VERSION }}} &middot; best seated at a desktop in Chrome or Firefox &middot; your campaign saves in this browser</p>
+      </section>
+    </main>
+  </div>
+
+  <script src="Build/{{{ LOADER_FILENAME }}}"></script>
+  <script>
+    (function () {
+      var canvas = document.querySelector("#unity-canvas");
+      var charter = document.querySelector("#charter");
+      var pool = document.querySelector("#pool");
+      var fillArc = pool.querySelector(".fill");
+      var pct = document.querySelector("#pool-pct");
+      var poolSub = document.querySelector("#pool-sub");
+      var statusEl = document.querySelector("#status");
+      var tipEl = document.querySelector("#tip");
+      var beginBtn = document.querySelector("#begin");
+      var chromeBar = document.querySelector("#chrome");
+      var errNote = document.querySelector("#error-note");
+      var CIRC = 2 * Math.PI * 93;
+
+      var TIPS = [
+        "One click is one order: your hero closes the distance and lands the blow.",
+        "Veresk musters sellswords by role — a healer first, never two of a kind.",
+        "Follow the green route: the waystone network always knows the way.",
+        "The quest card top-left never goes dark — there is always a next commission.",
+        "A completed weapon attack ends your turn on its own. Spend the walk wisely."
+      ];
+      var tipIndex = Math.floor(Math.random() * TIPS.length);
+      tipEl.textContent = TIPS[tipIndex];
+      var tipTimer = setInterval(function () {
+        tipIndex = (tipIndex + 1) % TIPS.length;
+        tipEl.textContent = TIPS[tipIndex];
+      }, 5000);
+
+      function stageText(p) {
+        if (p < 0.3) return "Unsealing the charter…";
+        if (p < 0.6) return "Raising the districts…";
+        if (p < 0.9) return "Mustering the party…";
+        return "Kindling the waystones…";
+      }
+
+      var isTouch = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      if (isTouch) document.querySelector("#mobile-note").classList.add("shown");
+
+      function fail(html) {
+        clearInterval(tipTimer);
+        errNote.innerHTML = html;
+        errNote.classList.add("shown");
+        statusEl.textContent = "The charter could not be unsealed.";
+        pool.setAttribute("aria-label", "Loading failed");
+      }
+
+      var testCanvas = document.createElement("canvas");
+      if (!(testCanvas.getContext("webgl2"))) {
+        fail("This browser cannot open a WebGL2 canvas, which Radiant Pool needs. Use a current version of Chrome, Edge, Firefox, or Safari — and check that hardware acceleration is switched on in the browser settings.");
+        return;
+      }
+
+      var buildUrl = "Build";
+      var config = {
+        dataUrl: buildUrl + "/{{{ DATA_FILENAME }}}",
+        frameworkUrl: buildUrl + "/{{{ FRAMEWORK_FILENAME }}}",
+#if USE_THREADS
+        workerUrl: buildUrl + "/{{{ WORKER_FILENAME }}}",
+#endif
+#if USE_WASM
+        codeUrl: buildUrl + "/{{{ CODE_FILENAME }}}",
+#endif
+#if MEMORY_FILENAME
+        memoryUrl: buildUrl + "/{{{ MEMORY_FILENAME }}}",
+#endif
+#if SYMBOLS_FILENAME
+        symbolsUrl: buildUrl + "/{{{ SYMBOLS_FILENAME }}}",
+#endif
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
+        productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
+        productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
+        // Cap DPR: 4K laptops otherwise render 2x pixels the GPU budget can't afford.
+        devicePixelRatio: Math.min(window.devicePixelRatio || 1, 1.5)
+      };
+
+      var unityInstance = null;
+
+      createUnityInstance(canvas, config, function (progress) {
+        var p = Math.max(0, Math.min(1, progress));
+        fillArc.setAttribute("stroke-dasharray", (CIRC * p) + " " + CIRC);
+        pct.textContent = Math.round(p * 100) + "%";
+        statusEl.textContent = stageText(p);
+      }).then(function (instance) {
+        unityInstance = instance;
+        clearInterval(tipTimer);
+        fillArc.setAttribute("stroke-dasharray", CIRC + " 0");
+        pct.textContent = "Ready";
+        pct.style.fontSize = "26px";
+        poolSub.textContent = "the pool is lit";
+        statusEl.textContent = "The charter is sealed. Your party awaits.";
+        tipEl.textContent = "";
+        pool.disabled = false;
+        pool.classList.add("ready");
+        pool.setAttribute("aria-label", "Enter the Pool — start the game");
+        beginBtn.classList.add("shown");
+        beginBtn.focus();
+      }).catch(function (message) {
+        fail("The game failed to load: <br><code>" + String(message).replace(/</g, "&lt;") + "</code><br>Reload the page to try again.");
+      });
+
+      function enterGame() {
+        if (!unityInstance) return;
+        charter.classList.add("dismissed");
+        chromeBar.classList.add("shown");
+        chromeBar.setAttribute("aria-hidden", "false");
+        canvas.focus();
+        setTimeout(function () { charter.remove(); }, 400);
+      }
+      pool.addEventListener("click", enterGame);
+      beginBtn.addEventListener("click", enterGame);
+
+      document.querySelector("#btn-fullscreen").addEventListener("click", function () {
+        if (unityInstance) unityInstance.SetFullscreen(1);
+      });
+
+      // Chrome fades while the mouse rests so it never sits over the hotbar.
+      var fadeTimer = null;
+      document.addEventListener("mousemove", function () {
+        if (!chromeBar.classList.contains("shown")) return;
+        chromeBar.classList.remove("faded");
+        clearTimeout(fadeTimer);
+        fadeTimer = setTimeout(function () { chromeBar.classList.add("faded"); }, 3000);
+      });
+    })();
+  </script>
+</body>
+</html>

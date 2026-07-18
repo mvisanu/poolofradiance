@@ -60,7 +60,7 @@ namespace RadiantPool.EditorTools
                 AssetDatabase.CreateAsset(mat, matPath);
             }
             mat.color = colour;
-            mat.SetFloat("_Smoothness", 0.05f);
+            mat.SetFloat("_Smoothness", 0.18f);
             EditorUtility.SetDirty(mat);
 
             var importer = (ModelImporter)AssetImporter.GetAtPath(path);

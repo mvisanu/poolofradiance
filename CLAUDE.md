@@ -19,6 +19,10 @@ scripts/compile-check.ps1
   -executeMethod RadiantPool.EditorTools.HeadlessBuild.Win64 -logFile build.log
 # (scripts/build-all.ps1 chains tests → bootstrap → build)
 
+# Browser edition: bootstrap → WebGL player → webbase/game (first run adds a long
+# target-switch reimport). Test with webbase/serve.ps1; ship per webbase/README.md:
+scripts/build-web.ps1
+
 # Two-instance netplay verification (host + join on loopback, asserts via logs):
 scripts/smoke-test.ps1
 
@@ -258,6 +262,21 @@ mouse and the self-test drive the very same code.
   bag row need a buyer in reach: `GameDirector.TraderNear` is the ONE definition (UI greys the
   button, ServerRpc re-checks with slack). `-selltest` drives a real sale (bag → trader →
   purse); `smoke-test.ps1` asserts it. Every `RpcNotice` also writes to Player.log.
+- **`webbase/` — the browser edition.** `scripts/build-web.ps1` → WebGL player in
+  `webbase/game/` (gitignored artifact; README + `serve.py`/`serve.ps1` are source).
+  Platform rules, all `#if UNITY_WEBGL && !UNITY_EDITOR`: browsers have **no sockets**,
+  so the build-time scene processor (`Editor/WebGLBuildSupport.cs`) swaps Tugboat for
+  `Net/LoopbackTransport.cs` (in-process queue transport — FishNet's free Yak is a
+  non-functional stub, don't reach for it) ⇒ **web = solo campaign**, Join hidden with an
+  honest note; saves ride PlayerPrefs (IndexedDB) as the same campaign JSON; command-line
+  flags never fire (browsers pass no args), so all `-*test` QA stays on desktop.
+  `Assets/link.xml` pins Assembly-CSharp/Rules/Newtonsoft against IL2CPP stripping —
+  stripped save models deserialize to EMPTY objects with no error. The web shell is a
+  custom template (`Assets/WebGLTemplates/RadiantPool/index.html`, Academia palette,
+  charter + pool-ring loader); `HeadlessBuild.WebGL` selects it + Brotli with
+  decompression fallback (loads from any static host, no header config).
+  `WebQuality.cs` applies the runtime web graphics tier (see below). The Unity WebGL
+  module is installed for 6000.0.79f1 (Hub headless `install-modules -m webgl`).
 - `theme/` — Stitch design mockups, **gitignored**: they contain WotC placeholder
   names. Copy visuals only, never text.
 - Asset Store packs can't be fetched headlessly (editor sign-in). Drop-in slots instead:
@@ -302,6 +321,17 @@ mouse and the self-test drive the very same code.
   signs. `KenneyArt`/`KayKitArt`/`QuaterniusArt` integrate the CC0 packs under
   `game/Assets/Art` (Quaternius orcs + spider are animated FBX — the spider comes from
   the Easy Animated Enemy Pack via blend2fbx).
+  **Graphics tiers**: `SetupUrp()` bakes TWO pipeline assets into `Resources/URP/` —
+  `URP_Desktop` (MSAA 4x, HDR, SSAO renderer feature, 2048 shadowmap/4 cascades,
+  8 per-pixel additional lights with shadows) and `URP_Web` (MSAA 2x, no HDR/SSAO,
+  0.85 render scale, 1024/2 cascades, 4 lights, no additional shadows). Desktop is
+  assigned to EVERY quality level (Settings' LOW..ULTRA used to point at levels with
+  no pipeline at all); `WebQuality.cs` swaps in `URP_Web` at runtime on WebGL only,
+  plus FXAA-for-SMAA, HDR off, film grain off. Retune the variants in
+  `PipelineVariant()`/`EnsureSsaoFeature()` — serialized URP field names there were
+  verified against the package source; don't guess new ones. Flat-color pack materials
+  carry `_Smoothness 0.18` (retuned outside the creation guards so re-bootstrap
+  reaches already-baked .mat files); PolyPack/Graveyard keep their own PBR maps.
 - **Beasts we make ourselves** — the CC0 packs ship no bear and no rat, so
   `scripts/make_beasts.py` builds them in headless Blender
   (`blender -b -P scripts/make_beasts.py` → `Art/Generated/*.fbx` + a preview PNG to

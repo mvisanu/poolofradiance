@@ -74,9 +74,10 @@ namespace RadiantPool.EditorTools
                     {
                         mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
                         if (tex != null) mat.SetTexture("_BaseMap", tex);
-                        mat.SetFloat("_Smoothness", 0.05f);
                         AssetDatabase.CreateAsset(mat, matPath);
                     }
+                    // Outside the creation guard so a retune reaches already-baked mats.
+                    mat.SetFloat("_Smoothness", 0.18f);
 
                     var importer = (ModelImporter)AssetImporter.GetAtPath(path);
                     bool changed = false;

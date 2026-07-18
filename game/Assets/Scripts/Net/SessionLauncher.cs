@@ -86,8 +86,11 @@ namespace RadiantPool.Game
                     if (code.Equals("localhost", StringComparison.OrdinalIgnoreCase))
                     {
                         LocalDisplayName = Sanitize(_displayName);
-                        _tugboat.SetClientAddress("127.0.0.1");
-                        _tugboat.SetPort(DefaultPort);
+                        if (_tugboat != null)
+                        {
+                            _tugboat.SetClientAddress("127.0.0.1");
+                            _tugboat.SetPort(DefaultPort);
+                        }
                         _network.ClientManager.StartConnection();
                     }
                     else
@@ -152,10 +155,17 @@ namespace RadiantPool.Game
         {
             if (args.ConnectionState == LocalConnectionState.Started)
             {
+#if UNITY_WEBGL && !UNITY_EDITOR
+                // No LAN address exists inside a browser; the campaign is solo by design.
+                HostCode = "";
+                Status = "Hosting — solo campaign (saves stay in this browser)";
+                Debug.Log("[RadiantPool] server started (web solo host)");
+#else
                 var ip = InviteCode.LocalAddress();
                 HostCode = InviteCode.Encode(ip, _hostPort);
                 Status = $"Hosting — invite code: {HostCode}";
                 Debug.Log($"[RadiantPool] server started, invite code {HostCode}");
+#endif
             }
             else if (args.ConnectionState == LocalConnectionState.Stopped)
             {
@@ -194,6 +204,10 @@ namespace RadiantPool.Game
         /// The invite code carries the port, so joiners never notice.</summary>
         private static ushort FirstFreePort()
         {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // No sockets in a browser: the loopback transport ignores ports entirely.
+            return DefaultPort;
+#else
             var inUse = System.Net.NetworkInformation.IPGlobalProperties
                 .GetIPGlobalProperties().GetActiveUdpListeners();
             for (ushort port = DefaultPort; port < DefaultPort + 10; port++)
@@ -204,6 +218,7 @@ namespace RadiantPool.Game
                 if (!taken) return port;
             }
             return DefaultPort;
+#endif
         }
 
         public void Host()
@@ -212,18 +227,27 @@ namespace RadiantPool.Game
             PlayerPrefs.SetString("displayName", LocalDisplayName);
             _error = "";
             _hostPort = FirstFreePort();
-            _tugboat.SetPort(_hostPort);
+            // The WebGL build carries LoopbackTransport instead of Tugboat (swapped at
+            // build time by WebGLBuildSupport) — it has no port or address to configure.
+            if (_tugboat != null) _tugboat.SetPort(_hostPort);
             if (!_network.ServerManager.StartConnection())
             {
                 _error = "Failed to start server (is another host using the port?).";
                 return;
             }
-            _tugboat.SetClientAddress("127.0.0.1");   // explicit IPv4: "localhost" can hit ::1
+            if (_tugboat != null)
+                _tugboat.SetClientAddress("127.0.0.1");   // explicit IPv4: "localhost" can hit ::1
             _network.ClientManager.StartConnection();
         }
 
         public void Join(string code)
         {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // A browser tab cannot reach a friend's desktop socket. Say so instead of
+            // spinning on a connection that can never open.
+            _error = "Joining needs the Windows build - a browser cannot reach a host directly. " +
+                     "You can host a solo campaign right here instead.";
+#else
             LocalDisplayName = Sanitize(_displayName);
             PlayerPrefs.SetString("displayName", LocalDisplayName);
             _error = "";
@@ -235,6 +259,7 @@ namespace RadiantPool.Game
             _tugboat.SetClientAddress(address);
             _tugboat.SetPort(port);
             _network.ClientManager.StartConnection();
+#endif
         }
 
         private static string Sanitize(string name)
@@ -296,12 +321,19 @@ namespace RadiantPool.Game
                 GUILayout.Label($"<color=#f2ca50>{buildError}</color>", Theme.Body);
             GUI.enabled = valid;
             var big = new GUIStyle(Theme.BtnPrimary) { fontSize = 16, fixedHeight = 42 };
+#if UNITY_WEBGL && !UNITY_EDITOR
+            if (GUILayout.Button("BEGIN A SOLO CAMPAIGN", big))
+                Host();
+            GUILayout.Label("<color=#d0c5af>Playing with friends needs the Windows build - " +
+                "a browser cannot host for others.</color>", Theme.Body);
+#else
             if (GUILayout.Button("HOST A CAMPAIGN  (solo or with friends)", big))
                 Host();
             GUILayout.BeginHorizontal();
             _joinCode = GUILayout.TextField(_joinCode, 12);
             if (GUILayout.Button("Join with invite code", GUILayout.Width(170))) Join(_joinCode);
             GUILayout.EndHorizontal();
+#endif
             GUI.enabled = true;
 
             GUILayout.EndVertical();

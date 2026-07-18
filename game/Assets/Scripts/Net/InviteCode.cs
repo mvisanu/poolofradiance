@@ -58,6 +58,11 @@ namespace RadiantPool.Game
         /// <summary>Best-guess LAN IPv4 of this machine for hosting.</summary>
         public static IPAddress LocalAddress()
         {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // Browsers expose no sockets and no LAN identity; callers never show the
+            // invite code on web, this only keeps the API total.
+            return IPAddress.Loopback;
+#else
             try
             {
                 // Doesn't send traffic; just forces the OS to pick the outbound interface.
@@ -71,6 +76,7 @@ namespace RadiantPool.Game
                 return host.AddressList.FirstOrDefault(
                     a => a.AddressFamily == AddressFamily.InterNetwork) ?? IPAddress.Loopback;
             }
+#endif
         }
     }
 }

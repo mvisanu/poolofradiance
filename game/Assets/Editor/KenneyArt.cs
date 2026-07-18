@@ -35,9 +35,10 @@ namespace RadiantPool.EditorTools
                     {
                         atlasMat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
                         atlasMat.SetTexture("_BaseMap", atlasTex);
-                        atlasMat.SetFloat("_Smoothness", 0.05f);
                         AssetDatabase.CreateAsset(atlasMat, matPath);
                     }
+                    // Outside the creation guard so a retune reaches already-baked mats.
+                    atlasMat.SetFloat("_Smoothness", 0.18f);
                 }
                 else if (!AssetDatabase.IsValidFolder($"{kitPath}/Mats"))
                 {
@@ -75,13 +76,17 @@ namespace RadiantPool.EditorTools
             string safe = string.Concat(source.name.Split(System.IO.Path.GetInvalidFileNameChars()));
             string matPath = $"{kitPath}/Mats/M_{safe}.mat";
             var mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
-            if (mat != null) return mat;
+            if (mat != null)
+            {
+                mat.SetFloat("_Smoothness", 0.18f);   // retune reaches baked mats too
+                return mat;
+            }
             Color color = Color.white;
             if (source.HasProperty("_BaseColor")) color = source.GetColor("_BaseColor");
             else if (source.HasProperty("_Color")) color = source.GetColor("_Color");
             mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
             mat.SetColor("_BaseColor", color);
-            mat.SetFloat("_Smoothness", 0.05f);
+            mat.SetFloat("_Smoothness", 0.18f);
             AssetDatabase.CreateAsset(mat, matPath);
             return mat;
         }
