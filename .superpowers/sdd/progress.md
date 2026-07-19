@@ -1,5 +1,79 @@
 # SDD Progress — mcp-blender.md (graphics realism + MCP setup)
 
+## NEW GOAL (Jul 19 ~8am): OPEN WORLD
+User goal: build an open world — walk overland from town to town; take down walls/fences
+where appropriate; environment more wooded and open; DO NOT break existing functionality
+(waystones, quests, encounters, saves, smoke gate must stay green).
+Pipeline: /handoff (Claude researches/designs, Codex implements, controller verifies).
+- Phase 1 Research: two Explore agents dispatched (world layout/barriers; travel/zone-gating runtime).
+- Research report A (travel/zone runtime) COMPLETE. Key facts: world = isolated 48x48 arena cells
+  on ~50u grid, coords (-150..-150) to (100,260); town = 120x120 slab walled at +-60
+  (ProjectBootstrap.cs:915-918); every remote site fenced by invisible SiteEdgeN/S/E/W colliders
+  (PB:1682-1688); VOID between cells (no ground). No current-zone concept — everything is radius
+  checks (TownRegenRadius 32 around Council Hall, TraderNear, minimap nearest-destination-45m).
+  ZoneGate physical walls only for town zones 1/3/4. Remote zone locks enforced ONLY by CmdTravelTo
+  refusal (GameDirector.cs:799-808). EncounterTrigger ignores zone lock state (deliberate:
+  fight-before-accept supported, GameDirector.cs:488-505). NO kill-Z/fall recovery
+  (PlayerMotor.cs:61-88, unbounded fall). Defeat respawn = town shrine (-9,0.15,-14). Save stores
+  NO player position (safe). CmdTravelTo teleports the whole party (party-split risk if mixed
+  walk/teleport). Risks list: connective ground needed, edge colliders removal, kill-plane needed,
+  locked-zone overworld access = overleveled fights, wayfinding points across void (cosmetic).
+- Research report B (world gen) COMPLETE: hub ground 120x120 plane +-60; site Centers are
+  HAND-AUTHORED literals in CampaignExpansionContent.Sites (not derived) so relayout = edit
+  the Vector3s; walls built by Box() helper keep colliders; necropolis ring + all fences are
+  collider-free decoration; DressWorld is hub-centric (bands +-52, highlands 64-72, horizon
+  cliffs 78-86); no NavMesh; PlayerMotor WASD speed 6/8.5 gravity -20.
+- DESIGN v1 presented; user chose REWORK: bigger/more organic world, remove MORE walls
+  (town dividers + ZoneGates too), organic winding roads/forests. Danger zones: OPEN DANGER
+  approved (no trigger gating).
+- DESIGN v2 APPROVED by user: "the atlas is the world" — site centers projected from
+  MiniMap atlas coords (scale 900, Council Hall origin, atlas-north=+Z); rolling Perlin
+  terrain flattened at town/sites/roads (flat y=-0.04 vs slabs at 0 to avoid z-fighting);
+  fully open town (hub walls, market/temple dividers, all 3 ZoneGates, all SiteEdge cages
+  removed); winding roads per region MST + town spur; world rim cliffs + invisible
+  WorldEdge colliders as only barrier; kill-Z warp to town shrine; [OpenWorld] PASS
+  bootstrap validator. Waystones/rules/saves untouched.
+- Task A (geography/terrain/demolition/safety) brief: codex/codex-openworld-a-brief.md.
+  Coordinate table computed from atlas (min pair 70+, nearest site 193 from origin,
+  extent X -315..468 Z -392..324; winter_crown_vault nudged to 432,168). DISPATCHED to
+  Codex (background, workspace-write, no-commit). Task B (visual roads + region-flavored
+  wilderness dressing + rim cliffs + hub backdrop rework) briefed AFTER A returns.
+- Task A RETURNED (report codex/codex-openworld-a-report.md): spec-faithful, no constraint
+  violations. NOTE: a PARALLEL session is working this tree concurrently (TargetFrameTest in
+  GameDirector/CombatClientUI/QuestTracker/smoke-test + regenerated scene/controllers) —
+  Codex preserved it; MY COMMITS MUST SCOPE to open-world files only.
+  Controller gates: compile-check 0 errors, rules 166/166. Bootstrap run 1: exit 0 but
+  [OpenWorld] FAIL 1242/1244 — town roads started at Euclidean radius 58 = inside the town
+  square; Stormglass road crossed an Ashen Ward rooftop at (52.2,46.4). Controller applied
+  the allowed micro-fix (town road start = Chebyshev-66 boundary projection in
+  OpenWorld.RoadPolylines). Bootstrap run 2 in flight (logs/boot-openworld2.log).
+- Task A bootstrap run 2: [OpenWorld] PASS walkable samples 1207/1207, sites 34. Win64 build
+  dispatched (logs/build-openworld.log). Task B DISPATCHED to Codex concurrently (source-only,
+  no Unity lock conflict; logs/codex-openworld-b.log).
+- Task A ACCEPTED: build exit 0 (Assembly-CSharp.dll 8:42:54). Interim visual check
+  codex/openworld_a_necropolis.png vs baseline necropolis_after.png: site renders
+  identically (violet corrupted theme is INTENDED); background now open green wilderness
+  (undressed until Task B). NOTE: new capture's player frame shows only hp bar (no
+  level/100% text) — likely the PARALLEL session's in-flight CombatClientUI edits, not
+  open-world scope; do not touch.
+- Task B RETURNED (codex/codex-openworld-b-report.md): OpenWorldDressing.cs (roads/scatter/
+  rim), ProjectBootstrap hook + ring removals, OpenWorld.Regions made public (permitted +
+  reported). Controller diff review clean; determinism verified (RNG draws before exclusion
+  checks). Codex sandbox blocked its Unity run (licensing IPC) — bootstrap gate is the
+  controller's (boot-openworld3.log, in flight). Then: build, 3x sitecapture review, smoke.
+- Task B GATES: bootstrap exit 0 with [OpenWorldDressing] PASS props 1522 (trees 925,
+  scatter 596, graves 1; cap raised threshold 0.56->0.65 from 2659) AND [OpenWorld] PASS
+  1207/1207 post-dressing. Build exit 0 (level0 refreshed 8:58:29; Assembly-CSharp
+  unchanged = editor-only diff, expected). Sitecaptures reviewed: spire = burnt sparse +
+  visible dirt roads; blackbriar = lush woods horizon + road + ambush encounter fires
+  correctly; necropolis unregressed. Smoke gate running (logs/smoke-openworld.log).
+  NOTE smoke-test.ps1 carries the parallel session's +2 lines (TargetFrameTest?) — if smoke
+  fails ONLY on that assertion it is the parallel workstream's, not open-world's.
+- Task B brief written: codex/codex-openworld-b-brief.md (road ribbon meshes y=-0.02 +
+  M_WildRoad dirt mat, Perlin forest/meadow scatter with region flavor + collider stripping,
+  1600 prop cap + [OpenWorldDressing] PASS log, rim mountains, remove old horizon/highlands
+  rings from DressWorld). Dispatch after Task A bootstrap+build pass.
+
 Goal: complete mcp-blender.md via subagents (goal hook active, autonomous run).
 
 Plan tasks:
@@ -27,6 +101,7 @@ Ledger:
 - Task 8 (WoW HUD): DELEGATED TO CODEX (codex exec background, brief copied to repo root codex-task-8-brief.md, report codex-task-8-report.md, Unity verification steps reserved for controller). Task 5 dispatch waits for Task 8 (serial implementers + Unity lock).
 - WORKFLOW SWITCH (user, Jul 19): all delegation now follows .claude/commands/handoff.md — Claude researches/designs/verifies, Codex implements via /codex:rescue; /codex:review second pass after each accepted task. Plugins reloaded, /codex:* commands live.
 - Task 5: design APPROVED by user (as designed). Brief now at codex/codex-task-5-brief.md + audit codex/codex-task-4-audit.md (user goal moved codex-*.* to codex/; *.log live in logs/). Dispatch to Codex AFTER Task 8 smoke gate (serial: working-tree contamination + Unity lock).
+- FINAL STATE (Jul 19 ~5am): ALL TASKS COMPLETE. Smoke 66/66 green on the graphics build. Final whole-branch Codex review (92e5f7a..HEAD) returned 1 Important (quest card zero-height overflow — fixed c281add) + 2 Minor docs (both fixed in CLAUDE.md, c281add). Task 3 DONE: .mcp.json (uv run sparse clone at ..\unity-mcp-server, entry mcp-for-unity), bridge verified batchmode (StdioBridgeHost port 6400), commit ebf0e0f; unity-mcp tools appear after Claude Code restart. Regen assets + delegation records committed 178bc50. Final rebuild dispatched so the shipped exe matches HEAD.
 - Task 5: implemented by Codex, reviewed, committed 03f57f7 (incl. Task 6 _hd assets). REGRESSION found in capture review: salmon-pink arena grounds — ForTheme's FindAssets substring match picked the generated N_*.png normal as albedo; controller fixed (exact-name + Generated-excluded, commit 60313ff). Re-bootstrap healed the .mats (SetTexture re-binds); ember + necropolis captures verified CORRECT (authored corrupted-grass textures, PBR props, no pink/magenta). GOTCHA: -sitecapture with no -sitezone defaults to ember_crown_spire (GameDirector.cs:2305) and works on a fresh -savedir. Task 8 fixes-2 committed 07e73b8. Final smoke gate running.
 - Task 8: COMPLETE. Commits 9ab5e15/8f58f28/9f35be4. Smoke re-run 100% green (run-1 attacktest stall = 13-instance load flake). Rebuild 4:24:31 + recapture: XP strip label legible, all combat assertions PASS. Codex second-pass review dispatched (read-only, background). Task 5 DISPATCHED to Codex (background; Unity steps reserved for controller).
 - Task 8 VERIFICATION: bootstrap clean, build fresh (3:54:40), [UiSkinTest] PASS 26/26, [CombatUiTest]/[CombatCameraTest]/[MonsterHudTest]/[AttackTest] all PASS standalone; hud_combat.png + hud_title.png reviewed = WoW layout confirmed. GOTCHA: -combatuicapture requires -attacktest on the SAME command line (flag is read inside AttackSelfTest; alone the game idles forever). Smoke run 1: 12 FAILs, all one stalled -attacktest instance ('fight never reached my turn' under 13-instance load; standalone passed) — re-running to test flake. Fix batch (DOWN indicator, party-scan cache, XP label unclip) implemented by Codex, reviewed, committed 9f35be4; needs rebuild before recapture. Task 8 commits: 9ab5e15, 8f58f28, 9f35be4.

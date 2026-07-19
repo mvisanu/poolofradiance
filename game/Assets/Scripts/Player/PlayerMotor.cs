@@ -43,6 +43,16 @@ namespace RadiantPool.Game
         {
             if (!IsOwner || _controller == null) return;
 
+            if (transform.position.y < -25f)
+            {
+                _controller.enabled = false;
+                transform.position = new Vector3(-9f, 0.5f, -14f);
+                _controller.enabled = true;
+                _planarVelocity = Vector3.zero;
+                _verticalVelocity = 0f;
+                _lastGroundedAt = Time.time;
+            }
+
             // Combat freezes free movement for everyone; the grid takes over
             // (server-driven mode flag — ARCHITECTURE §4).
             if (CombatManager.Instance != null && CombatManager.Instance.InCombat.Value) return;

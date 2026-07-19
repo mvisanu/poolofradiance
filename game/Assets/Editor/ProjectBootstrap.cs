@@ -511,21 +511,6 @@ namespace RadiantPool.EditorTools
                     Tree(new Vector3(cx + Jit(8f), 0, cz + Jit(8f)),
                         4.2f + (float)rnd.NextDouble() * 2.6f);
 
-            // Highlands backdrop: a ring of oversized crags just past the playable edge,
-            // so every horizon ends in mountains against the sky haze instead of empty
-            // ground — the framing every reference vista has. Pure decoration: outside
-            // the ±60 play space, collider-free, well inside the >95-unit remote sites.
-            for (int i = 0; i < 26; i++)
-            {
-                float ang = (i * (360f / 26f) + Jit(5f)) * Mathf.Deg2Rad;
-                float r = 64f + (float)rnd.NextDouble() * 8f;
-                var peak = new Vector3(Mathf.Sin(ang) * r, 0f, Mathf.Cos(ang) * r);
-                Rock(peak, 9f + (float)rnd.NextDouble() * 7f, big: true);
-                if (i % 2 == 0)   // conifers at the foot of the crags soften the join
-                    Tree(peak + new Vector3(Jit(6f), 0f, Jit(6f)),
-                        5.5f + (float)rnd.NextDouble() * 2.5f);
-            }
-
             // Mid-map accent trees along the roads between quarters.
             foreach (var (x, z) in new (float, float)[]
             {
@@ -605,17 +590,6 @@ namespace RadiantPool.EditorTools
             Road(new Vector3(0, 0, 2), new Vector3(0, 0, 24));        // north, the Market gate
             Road(new Vector3(3, 0, -12), new Vector3(12, 0, -30));    // south, the warcamp
             Road(new Vector3(8, 0, -6), new Vector3(34, 0, 0));       // east, the Temple
-
-            // Horizon: hills and a mountain OUTSIDE the perimeter walls. The map is a
-            // 120 m box with a hard edge; a ring of big silhouettes past the wall gives it
-            // a beyond, and gives the eye something to measure the world against.
-            foreach (var (x, z, size) in new (float, float, float)[]
-            {
-                (-78, 40, 26f), (-72, -30, 22f), (0, 84, 30f), (70, 60, 24f),
-                (86, -10, 34f), (30, -84, 26f), (-40, -80, 22f), (78, 30, 20f),
-            })
-                PolyPackArt.Place(PolyPackArt.Kind.Cliff, pick++,
-                    new Vector3(x, -1f, z), (x * 53f) % 360f, size, byHeight: false);
 
             // Lived-in detail: the pack's well, wagon, benches, crates and sacks, placed
             // where people would actually put them — around the hub, along the docks, in
@@ -756,6 +730,7 @@ namespace RadiantPool.EditorTools
             camData.antialiasing = AntialiasingMode.SubpixelMorphologicalAntiAliasing;
             camData.antialiasingQuality = AntialiasingQuality.High;
             cam.allowHDR = true;
+            cam.farClipPlane = 800f;
 
             var profilePath = SettingsDir + "/PostFX.asset";
             var profile = AssetDatabase.LoadAssetAtPath<VolumeProfile>(profilePath);
@@ -906,60 +881,10 @@ namespace RadiantPool.EditorTools
                 return b;
             }
 
-            var wall = Mat("M_Wall", new Color(0.32f, 0.31f, 0.32f));
             var crate = Mat("M_Crate", new Color(0.35f, 0.25f, 0.18f));
             var water = Mat("M_Water", new Color(0.07f, 0.15f, 0.20f));
-            var gateMat = Mat("M_Gate", new Color(0.15f, 0.14f, 0.18f));
-
-            // Perimeter walls.
-            Box("Wall_N", new Vector3(0, 1.5f, 60), new Vector3(120, 3, 1), wall);
-            Box("Wall_S", new Vector3(0, 1.5f, -60), new Vector3(120, 3, 1), wall);
-            Box("Wall_E", new Vector3(60, 1.5f, 0), new Vector3(1, 3, 120), wall);
-            Box("Wall_W", new Vector3(-60, 1.5f, 0), new Vector3(1, 3, 120), wall);
             // Waterfront along the west edge (docks fiction, visual only).
             Box("Water", new Vector3(-56, 0.05f, 0), new Vector3(7, 0.1f, 118), water);
-
-            // Market divider (z=25) with a 6 m gate gap at x=0.
-            Box("MarketWall_W", new Vector3(-31.5f, 1.5f, 25), new Vector3(57, 3, 1), wall);
-            // Leave a second postern at x=48. It stays sealed until the appended
-            // Lightwell commission is active, then opens into the Ashen Ward.
-            Box("MarketWall_E_A", new Vector3(24f, 1.5f, 25), new Vector3(42, 3, 1), wall);
-            Box("MarketWall_E_B", new Vector3(55.5f, 1.5f, 25), new Vector3(9, 3, 1), wall);
-            var gateMarket = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            gateMarket.name = "Gate_DrownedMarket";
-            gateMarket.transform.position = new Vector3(0, 1.5f, 25);
-            gateMarket.transform.localScale = new Vector3(6, 3, 1.2f);
-            gateMarket.GetComponent<Renderer>().enabled = false;   // collider only
-            gateMarket.AddComponent<ZoneGate>().ZoneIndex = 1;
-            var gateMarketVisual = KenneyArt.Place("Pirate", "castle-gate",
-                new Vector3(0, 0, 25), 0, 7f);
-            if (gateMarketVisual != null)
-                gateMarketVisual.transform.SetParent(gateMarket.transform, true);
-
-            var gateAshen = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            gateAshen.name = "Gate_AshenWard";
-            gateAshen.transform.position = new Vector3(48, 1.5f, 25);
-            gateAshen.transform.localScale = new Vector3(6, 3, 1.2f);
-            gateAshen.GetComponent<Renderer>().enabled = false;
-            gateAshen.AddComponent<ZoneGate>().ZoneIndex = 4;
-            var gateAshenVisual = KenneyArt.Place("Pirate", "castle-gate",
-                new Vector3(48, 0, 25), 0f, 7f);
-            if (gateAshenVisual != null)
-                gateAshenVisual.transform.SetParent(gateAshen.transform, true);
-
-            // Temple divider (x=35, south of the market wall) with a 6 m gate gap at z=0.
-            Box("TempleWall_S", new Vector3(35, 1.5f, -31.5f), new Vector3(1, 3, 57), wall);
-            Box("TempleWall_N", new Vector3(35, 1.5f, 14), new Vector3(1, 3, 22), wall);
-            var gateTemple = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            gateTemple.name = "Gate_GlasslitTemple";
-            gateTemple.transform.position = new Vector3(35, 1.5f, 0);
-            gateTemple.transform.localScale = new Vector3(1.2f, 3, 6);
-            gateTemple.GetComponent<Renderer>().enabled = false;   // collider only
-            gateTemple.AddComponent<ZoneGate>().ZoneIndex = 3;
-            var gateTempleVisual = KenneyArt.Place("Pirate", "castle-gate",
-                new Vector3(35, 0, 0), 90f, 7f);
-            if (gateTempleVisual != null)
-                gateTempleVisual.transform.SetParent(gateTemple.transform, true);
 
             // Zone dressing — Albion-style district color zoning: each quarter has its
             // own saturated palette so you always know where you are at a glance.
@@ -1212,7 +1137,6 @@ namespace RadiantPool.EditorTools
 
             // Nature + survival dressing (Kenney Nature/Survival kits, CC0): forests,
             // scatter, dressed wilds encounter sites, and the orc warcamp.
-            DressWorld();
             var lightwell = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             lightwell.name = "The Lightwell";
             lightwell.transform.position = new Vector3(52, 0.3f, 20);
@@ -1643,7 +1567,6 @@ namespace RadiantPool.EditorTools
                 // Palette sharing keeps these repeated modular cells in the same render
                 // batches instead of manufacturing three materials per destination.
                 var groundSite = Mat($"M_Site_{palette}", baseColor);
-                var edgeSite = Mat($"M_SiteEdge_{palette}", Color.Lerp(baseColor, Color.black, 0.35f));
                 var glowSite = Mat($"M_SiteGlow_{palette}", accent * 0.45f);
                 glowSite.EnableKeyword("_EMISSION");
                 glowSite.SetColor("_EmissionColor", accent * 1.7f);
@@ -1676,16 +1599,6 @@ namespace RadiantPool.EditorTools
                 groundTag.SourcePack = paintedMaterial != null ? "HandpaintedGrass" : "Fallback";
                 groundTag.Role = "Ground";
                 groundTag.ZoneId = site.ZoneId;
-
-                // Invisible boundary colliders retain the old safe cell dimensions. Low-poly
-                // walls, rocks, trees and fences now carry the visible silhouette.
-                foreach (var edge in new[]
-                {
-                    Box($"SiteEdgeN_{site.ZoneId}", site.Center + new Vector3(0f, 0.55f, ArenaHalf), new Vector3(ArenaSize, 1.1f, 0.8f), edgeSite),
-                    Box($"SiteEdgeS_{site.ZoneId}", site.Center + new Vector3(0f, 0.55f, -ArenaHalf), new Vector3(ArenaSize, 1.1f, 0.8f), edgeSite),
-                    Box($"SiteEdgeE_{site.ZoneId}", site.Center + new Vector3(ArenaHalf, 0.55f, 0f), new Vector3(0.8f, 1.1f, ArenaSize), edgeSite),
-                    Box($"SiteEdgeW_{site.ZoneId}", site.Center + new Vector3(-ArenaHalf, 0.55f, 0f), new Vector3(0.8f, 1.1f, ArenaSize), edgeSite)
-                }) edge.GetComponent<Renderer>().enabled = false;
 
                 var titleGo = new GameObject($"SiteLabel_{site.ZoneId}");
                 titleGo.transform.position = site.Center + new Vector3(0f, 4.2f, 19f * S);
@@ -2016,6 +1929,11 @@ namespace RadiantPool.EditorTools
             for (int i = 0; i < CampaignExpansionContent.Sites.Length; i++)
                 RemoteSite(CampaignExpansionContent.Sites[i], 5 + i, i);
 
+            var worldRoot = new GameObject("World").transform;
+            OpenWorld.Build(worldRoot, groundMat);
+            DressWorld();
+            OpenWorldDressing.Dress();
+
             // The market's second commission is an event rather than another map. Fold
             // its Brass Auction decision into the reclaimed plaza after the hauntings.
             var auction = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
@@ -2200,6 +2118,7 @@ namespace RadiantPool.EditorTools
                     "run Tools > Fish-Networking > Utility > Reserialize NetworkObjects manually.");
             }
 
+            OpenWorld.Validate();
             EditorSceneManager.SaveScene(scene, ScenePath);
             Debug.Log($"[Bootstrap] Scene saved to {ScenePath}");
         }

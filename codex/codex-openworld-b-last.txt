@@ -1,0 +1,18 @@
+Implemented Open World Task B and did not commit.
+
+Key results:
+
+- Added [OpenWorldDressing.cs](C:/Users/Bruce/source/repo/poolofradiance/game/Assets/Editor/OpenWorldDressing.cs).
+- Added road ribbons, deterministic regional wilderness scatter, 1,600-prop cap, collider stripping, terrain grounding, and world-rim mountains.
+- Removed only the obsolete highlands and horizon rings from `DressWorld`.
+- Preserved the Chebyshev-66 road endpoints.
+- Exposed `OpenWorld.Regions` publicly; no other Task A logic changed.
+- Preserved unrelated working-tree changes.
+
+Verification:
+
+- Normal compile check was blocked reading the sandboxed NuGet.Config.
+- `dotnet build scripts/compile-check/CompileCheck.csproj --no-restore` passed with 0 warnings and 0 errors.
+- Unity bootstrap was attempted but blocked by Unity Licensing Client IPC before the execute method ran. This prevented generated prop counts and PASS-marker verification here.
+
+Full details are in [codex-openworld-b-report.md](C:/Users/Bruce/source/repo/poolofradiance/codex/codex-openworld-b-report.md).
