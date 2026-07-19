@@ -29,6 +29,8 @@ namespace RadiantPool.Game
         private float _nextPartyScan;
         private readonly List<PlayerCharacterHolder> _cachedPartyHolders =
             new List<PlayerCharacterHolder>();
+        private GUIStyle _playerReadoutStyle;
+        private GUIStyle _targetReadoutStyle;
 
         private void Awake() => Instance = this;
         private void OnDestroy() { if (Instance == this) Instance = null; }
@@ -715,12 +717,14 @@ namespace RadiantPool.Game
                     _cachedPartyHolders.Clear();
                     _cachedPartyHolders.AddRange(
                         FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None));
+                    _cachedPartyHolders.RemoveAll(p => p == null || p == holder);
+                    _cachedPartyHolders.Sort((a, b) => string.Compare(
+                        a.CharacterName.Value, b.CharacterName.Value,
+                        System.StringComparison.Ordinal));
+                    if (_cachedPartyHolders.Count > 3)
+                        _cachedPartyHolders.RemoveRange(3, _cachedPartyHolders.Count - 3);
                 }
-                // Unity objects can be destroyed between slow scans. Use an explicit
-                // fake-null check while assembling the rows drawn this pass.
-                var party = _cachedPartyHolders.Where(p => p != null && p != holder)
-                    .OrderBy(p => p.CharacterName.Value).Take(3).ToList();
-                DrawWorldPartyFrames(party);
+                DrawWorldPartyFrames(_cachedPartyHolders);
                 TargetFrameRect = default;
                 _hudTarget = "";
             }
@@ -748,36 +752,34 @@ namespace RadiantPool.Game
             const float hpReadout = 88f;
             var hpRect = new Rect(x, rect.y + 33f, Mathf.Max(42f, w - hpReadout), 10f);
             Theme.Bar(hpRect, fraction, Theme.HpGreen);
-            var centered = new GUIStyle(Theme.Caps)
-                { alignment = TextAnchor.MiddleRight, wordWrap = false };
-            centered.normal.textColor = down ? Theme.Crimson : Theme.OnSurface;
+            if (_playerReadoutStyle == null)
+                _playerReadoutStyle = new GUIStyle(Theme.Caps)
+                    { alignment = TextAnchor.MiddleRight, wordWrap = false };
+            _playerReadoutStyle.fontSize = Theme.Caps.fontSize;
+            _playerReadoutStyle.normal.textColor = down ? Theme.Crimson : Theme.OnSurface;
             int percent = max > 0 ? Mathf.RoundToInt(fraction * 100f) : 0;
             string hpText = down
                 ? (inCombat ? "DOWN - death saves" : "DOWN")
                 : (max > 0 ? $"{hp}/{max}  {percent}%" : "HP syncing");
             GUI.Label(new Rect(hpRect.xMax + 4f, rect.y + 29f, hpReadout - 4f, 18f),
-                hpText, centered);
+                hpText, _playerReadoutStyle);
 
             var cls = (CharacterClass)classIndex;
-            if (ClassData.SpellcastingAbility(cls) != null)
+            int capacity = ClassData.SpellSlots(cls, level).Sum();
+            if (capacity > 0)
             {
-                int[] cap = ClassData.SpellSlots(cls, level);
-                int slotLevel = System.Array.FindIndex(cap, n => n > 0);
-                if (slotLevel >= 0)
-                {
-                    var combat = CombatManager.Instance;
-                    int remaining = combat != null && combat.InCombat.Value
-                        && slotLevel < combat.MySlots.Length ? combat.MySlots[slotLevel] : cap[slotLevel];
-                    const float slotReadout = 76f;
-                    var resource = new Rect(x, rect.y + 52f,
-                        Mathf.Max(42f, w - slotReadout), 8f);
-                    Theme.Bar(resource, cap[slotLevel] > 0
-                        ? (float)remaining / cap[slotLevel] : 0f, Theme.MpBlue);
-                    centered.fontSize = 8;
-                    GUI.Label(new Rect(resource.xMax + 4f, rect.y + 48f,
-                            slotReadout - 4f, 16f),
-                        $"slots L{slotLevel + 1} {remaining}/{cap[slotLevel]}", centered);
-                }
+                var combat = CombatManager.Instance;
+                int remaining = combat != null && combat.InCombat.Value
+                    ? combat.MySlots.Sum() : holder.SlotsRemainingTotalSynced.Value;
+                remaining = Mathf.Clamp(remaining, 0, capacity);
+                const float slotReadout = 76f;
+                var resource = new Rect(x, rect.y + 52f,
+                    Mathf.Max(42f, w - slotReadout), 8f);
+                Theme.Bar(resource, (float)remaining / capacity, Theme.MpBlue);
+                _playerReadoutStyle.fontSize = 8;
+                GUI.Label(new Rect(resource.xMax + 4f, rect.y + 48f,
+                        slotReadout - 4f, 16f),
+                    $"slots {remaining}/{capacity}", _playerReadoutStyle);
             }
         }
 
@@ -794,14 +796,22 @@ namespace RadiantPool.Game
 
         private static void DrawWorldPartyFrames(IReadOnlyList<PlayerCharacterHolder> party)
         {
-            if (party.Count == 0) { PartyFramesRect = default; return; }
-            PartyFramesRect = new Rect(PlayerFrameRect.x, PlayerFrameRect.yMax + 6f,
-                PlayerFrameRect.width, party.Count * 36f + 8f);
-            GUI.Box(PartyFramesRect, GUIContent.none, Theme.PanelStyle);
+            int liveCount = 0;
             for (int i = 0; i < party.Count; i++)
-                DrawCompactPartyRow(PartyFramesRect, i, party[i].CharacterName.Value,
-                    party[i].CurrentHpSynced.Value, party[i].MaxHpSynced.Value,
-                    party[i].CurrentHpSynced.Value <= 0);
+                if (party[i] != null) liveCount++;
+            if (liveCount == 0) { PartyFramesRect = default; return; }
+            PartyFramesRect = new Rect(PlayerFrameRect.x, PlayerFrameRect.yMax + 6f,
+                PlayerFrameRect.width, liveCount * 36f + 8f);
+            GUI.Box(PartyFramesRect, GUIContent.none, Theme.PanelStyle);
+            int row = 0;
+            for (int i = 0; i < party.Count; i++)
+            {
+                var member = party[i];
+                if (member == null) continue;
+                DrawCompactPartyRow(PartyFramesRect, row++, member.CharacterName.Value,
+                    member.CurrentHpSynced.Value, member.MaxHpSynced.Value,
+                    member.CurrentHpSynced.Value <= 0);
+            }
         }
 
         private static void DrawCompactPartyRow(Rect group, int index, string name,
@@ -815,7 +825,7 @@ namespace RadiantPool.Game
             Theme.Bar(bar, max > 0 ? (float)Mathf.Clamp(hp, 0, max) / max : 0f, Theme.HpGreen);
         }
 
-        private static void DrawTargetFrame(CombatManager.UnitView target)
+        private void DrawTargetFrame(CombatManager.UnitView target)
         {
             if (target == null) { TargetFrameRect = default; return; }
             float w = Mathf.Clamp(Ui.W * 0.23f, 210f, 270f);
@@ -827,11 +837,13 @@ namespace RadiantPool.Game
                 w - 90f, 10f);
             Theme.Bar(hpRect, target.MaxHp > 0 ? target.DisplayHp / target.MaxHp : 0f,
                 Theme.HpRed);
-            var centered = new GUIStyle(Theme.Caps)
-                { alignment = TextAnchor.MiddleRight, wordWrap = false };
-            centered.normal.textColor = Theme.OnSurface;
+            if (_targetReadoutStyle == null)
+                _targetReadoutStyle = new GUIStyle(Theme.Caps)
+                    { alignment = TextAnchor.MiddleRight, wordWrap = false };
+            _targetReadoutStyle.fontSize = Theme.Caps.fontSize;
+            _targetReadoutStyle.normal.textColor = Theme.OnSurface;
             GUI.Label(new Rect(hpRect.xMax + 4f, hpRect.y - 3f, 66f, 16f),
-                $"{target.Hp}/{target.MaxHp}", centered);
+                $"{target.Hp}/{target.MaxHp}", _targetReadoutStyle);
         }
 
         private static Texture2D ClassEmblem(int classIndex)

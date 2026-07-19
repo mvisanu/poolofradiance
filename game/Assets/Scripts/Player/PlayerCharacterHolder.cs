@@ -1,6 +1,7 @@
 using FishNet.Object;
 using FishNet.Object.Synchronizing;
 using RadiantPool.Rules;
+using System.Linq;
 using UnityEngine;
 
 namespace RadiantPool.Game
@@ -34,6 +35,7 @@ namespace RadiantPool.Game
         // carry their own Hp (RpcHpSync, instantly), but between fights nothing told the
         // client how hurt it was — the bar would have read full all the way to the next fight.
         public readonly SyncVar<int> CurrentHpSynced = new SyncVar<int>(0);
+        public readonly SyncVar<int> SlotsRemainingTotalSynced = new SyncVar<int>(0);
         public readonly SyncVar<int> ArmorClassSynced = new SyncVar<int>(10);
         public readonly SyncVar<int> ProficiencySynced = new SyncVar<int>(2);
         public readonly SyncVar<int> StrModSynced = new SyncVar<int>(0);
@@ -80,6 +82,8 @@ namespace RadiantPool.Game
             LevelSynced.Value = Sheet.Level;
             MaxHpSynced.Value = Sheet.MaxHp;
             CurrentHpSynced.Value = Sheet.CurrentHp;
+            SlotsRemainingTotalSynced.Value = Sheet.SlotsRemaining == null
+                ? 0 : Sheet.SlotsRemaining.Sum();
             ArmorClassSynced.Value = Sheet.ArmorClass;
             ProficiencySynced.Value = Sheet.ProficiencyBonus;
             StrModSynced.Value = Sheet.Abilities.Modifier(Ability.Str);

@@ -386,9 +386,16 @@ namespace RadiantPool.Game
                     padding = new RectOffset(2, 2, 2, 2), clipping = TextClipping.Overflow };
 
             // Collapsed: one slim bar with the quest's name, and the way back.
+            float cardTop = CardTop;
+            // BarRect is authoritative once HotBar has published it. The first OnGUI frame
+            // falls back to the logical-canvas edge, matching the combat log's pattern.
+            float cardBottom = HotBar.BarRect.height > 0f
+                ? HotBar.BarRect.yMin - 8f : Ui.H - 12f;
+            float availableHeight = Mathf.Max(0f, cardBottom - cardTop);
             if (Collapsed)
             {
-                var pill = new Rect(Ui.W - w - 12f, CardTop, w, 30f);
+                var pill = new Rect(Ui.W - w - 12f, cardTop, w,
+                    Mathf.Min(30f, availableHeight));
                 CardRect = pill;
                 GUI.Box(pill, GUIContent.none, Theme.PanelStyle);
                 var nameStyle = new GUIStyle(Theme.Body) { fontSize = 12, wordWrap = false,
@@ -405,8 +412,8 @@ namespace RadiantPool.Game
             foreach (var (text, _) in steps)
                 h += _stepStyle.CalcHeight(new GUIContent(text), w - pad * 2f - 18f) + 2f;
 
-            var panel = new Rect(Ui.W - w - 12f, CardTop, w,
-                Mathf.Min(h, Mathf.Max(64f, Ui.H - CardTop - 12f)));
+            var panel = new Rect(Ui.W - w - 12f, cardTop, w,
+                Mathf.Min(h, availableHeight));
             CardRect = panel;
             GUI.Box(panel, GUIContent.none, Theme.PanelStyle);
 

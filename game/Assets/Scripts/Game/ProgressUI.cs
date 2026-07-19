@@ -18,6 +18,7 @@ namespace RadiantPool.Game
     {
         private static readonly Ability[] Order =
             { Ability.Str, Ability.Dex, Ability.Con, Ability.Int, Ability.Wis, Ability.Cha };
+        private static GUIStyle _compactLabel;
 
         private PlayerCharacterHolder Me() =>
             FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
@@ -90,26 +91,30 @@ namespace RadiantPool.Game
             Theme.XpBar(rect, progress.capped ? 1f : progress.fraction);
             if (!compact) return;
 
-            var label = new GUIStyle(Theme.Caps)
+            if (_compactLabel == null)
             {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 8,
-                wordWrap = false,
-                clipping = TextClipping.Overflow
-            };
-            label.normal.textColor = Theme.OnSurface;
+                _compactLabel = new GUIStyle(Theme.Caps)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    wordWrap = false,
+                    clipping = TextClipping.Overflow
+                };
+            }
+            _compactLabel.fontSize = 8;
+            _compactLabel.normal.textColor = Theme.OnSurface;
             string text = progress.capped
                 ? $"LEVEL {progress.level}  MAX"
                 : $"LEVEL {progress.level}  {progress.into}/{progress.span} XP";
             var labelRect = new Rect(rect.x, rect.center.y - 7f, rect.width, 14f);
-            Vector2 textSize = label.CalcSize(new GUIContent(text));
+            Vector2 textSize = _compactLabel.CalcSize(new GUIContent(text));
+            if (textSize.x + 10f > rect.width) return;
             var chipRect = new Rect(rect.center.x - (textSize.x + 10f) * 0.5f,
                 labelRect.y, textSize.x + 10f, labelRect.height);
             Color old = GUI.color;
             GUI.color = new Color(0.04f, 0.03f, 0.02f, 0.58f);
             GUI.DrawTexture(chipRect, Texture2D.whiteTexture);
             GUI.color = old;
-            GUI.Label(labelRect, text, label);
+            GUI.Label(labelRect, text, _compactLabel);
         }
 
         private void DrawLevelUpPanel(PlayerCharacterHolder me)
