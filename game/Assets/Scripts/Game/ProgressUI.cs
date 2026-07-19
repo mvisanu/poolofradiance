@@ -95,18 +95,21 @@ namespace RadiantPool.Game
                 alignment = TextAnchor.MiddleCenter,
                 fontSize = 8,
                 wordWrap = false,
-                clipping = TextClipping.Clip
+                clipping = TextClipping.Overflow
             };
             label.normal.textColor = Theme.OnSurface;
-            Color old = GUI.color;
-            GUI.color = new Color(0.04f, 0.03f, 0.02f, 0.58f);
-            GUI.DrawTexture(new Rect(rect.center.x - rect.width * 0.24f, rect.y,
-                rect.width * 0.48f, rect.height), Texture2D.whiteTexture);
-            GUI.color = old;
             string text = progress.capped
                 ? $"LEVEL {progress.level}  MAX"
                 : $"LEVEL {progress.level}  {progress.into}/{progress.span} XP";
-            GUI.Label(rect, text, label);
+            var labelRect = new Rect(rect.x, rect.center.y - 7f, rect.width, 14f);
+            Vector2 textSize = label.CalcSize(new GUIContent(text));
+            var chipRect = new Rect(rect.center.x - (textSize.x + 10f) * 0.5f,
+                labelRect.y, textSize.x + 10f, labelRect.height);
+            Color old = GUI.color;
+            GUI.color = new Color(0.04f, 0.03f, 0.02f, 0.58f);
+            GUI.DrawTexture(chipRect, Texture2D.whiteTexture);
+            GUI.color = old;
+            GUI.Label(labelRect, text, label);
         }
 
         private void DrawLevelUpPanel(PlayerCharacterHolder me)

@@ -26,6 +26,9 @@ namespace RadiantPool.Game
         private string _hudTarget = "";
         private Vector2Int _autoFrom;    // where we stood when the walk was ordered
         private float _autoUntil;        // give up if the walk never resolves (blocked path)
+        private float _nextPartyScan;
+        private readonly List<PlayerCharacterHolder> _cachedPartyHolders =
+            new List<PlayerCharacterHolder>();
 
         private void Awake() => Instance = this;
         private void OnDestroy() { if (Instance == this) Instance = null; }
@@ -692,7 +695,9 @@ namespace RadiantPool.Game
             int max = mine != null ? mine.MaxHp : holder.MaxHpSynced.Value;
             int hp = Mathf.Clamp(mine != null ? mine.Hp : holder.CurrentHpSynced.Value,
                 0, Mathf.Max(0, max));
-            DrawPlayerFrame(holder, mine != null ? mine.Name : holder.CharacterName.Value, hp, max);
+            bool inCombat = mine != null;
+            DrawPlayerFrame(holder, inCombat ? mine.Name : holder.CharacterName.Value,
+                hp, max, inCombat ? mine.Down : hp <= 0, inCombat);
 
             if (combat != null && combat.InCombat.Value && combat.ClientUnits.Count > 0)
             {
@@ -704,15 +709,25 @@ namespace RadiantPool.Game
             }
             else
             {
-                var party = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
-                    .Where(p => p != holder).OrderBy(p => p.CharacterName.Value).Take(3).ToList();
+                if (Time.time >= _nextPartyScan)
+                {
+                    _nextPartyScan = Time.time + 1f;
+                    _cachedPartyHolders.Clear();
+                    _cachedPartyHolders.AddRange(
+                        FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None));
+                }
+                // Unity objects can be destroyed between slow scans. Use an explicit
+                // fake-null check while assembling the rows drawn this pass.
+                var party = _cachedPartyHolders.Where(p => p != null && p != holder)
+                    .OrderBy(p => p.CharacterName.Value).Take(3).ToList();
                 DrawWorldPartyFrames(party);
                 TargetFrameRect = default;
                 _hudTarget = "";
             }
         }
 
-        private void DrawPlayerFrame(PlayerCharacterHolder holder, string name, int hp, int max)
+        private void DrawPlayerFrame(PlayerCharacterHolder holder, string name, int hp, int max,
+            bool down, bool inCombat)
         {
             var rect = PlayerFrameRect;
             GUI.Box(rect, GUIContent.none, Theme.PanelStyle);
@@ -735,10 +750,13 @@ namespace RadiantPool.Game
             Theme.Bar(hpRect, fraction, Theme.HpGreen);
             var centered = new GUIStyle(Theme.Caps)
                 { alignment = TextAnchor.MiddleRight, wordWrap = false };
-            centered.normal.textColor = Theme.OnSurface;
+            centered.normal.textColor = down ? Theme.Crimson : Theme.OnSurface;
             int percent = max > 0 ? Mathf.RoundToInt(fraction * 100f) : 0;
+            string hpText = down
+                ? (inCombat ? "DOWN - death saves" : "DOWN")
+                : (max > 0 ? $"{hp}/{max}  {percent}%" : "HP syncing");
             GUI.Label(new Rect(hpRect.xMax + 4f, rect.y + 29f, hpReadout - 4f, 18f),
-                max > 0 ? $"{hp}/{max}  {percent}%" : "HP syncing", centered);
+                hpText, centered);
 
             var cls = (CharacterClass)classIndex;
             if (ClassData.SpellcastingAbility(cls) != null)
