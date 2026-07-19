@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using RadiantPool.Game;
 using UnityEditor;
 using UnityEngine;
@@ -34,9 +35,15 @@ namespace RadiantPool.EditorTools
                 default: textureName = "Grass_corrupted_up"; break;
             }
 
-            string[] found = AssetDatabase.FindAssets(textureName + " t:Texture2D", new[] { Root });
-            if (found.Length == 0) return null;
-            string texturePath = AssetDatabase.GUIDToAssetPath(found[0]);
+            // FindAssets matches by substring, so the derived N_<name>.png normals in the
+            // Generated folder also match — and once one sorted first, the normal map became
+            // the "albedo" and every themed arena rendered swizzled salmon pink. Exact-name
+            // match outside Generated only.
+            string texturePath = AssetDatabase.FindAssets(textureName + " t:Texture2D", new[] { Root })
+                .Select(AssetDatabase.GUIDToAssetPath)
+                .FirstOrDefault(p => !p.StartsWith(Generated)
+                    && Path.GetFileNameWithoutExtension(p) == textureName);
+            if (texturePath == null) return null;
             var importer = AssetImporter.GetAtPath(texturePath) as TextureImporter;
             if (importer != null && importer.wrapMode != TextureWrapMode.Repeat)
             {
