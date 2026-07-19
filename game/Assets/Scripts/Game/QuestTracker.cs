@@ -392,6 +392,7 @@ namespace RadiantPool.Game
             float cardBottom = HotBar.BarRect.height > 0f
                 ? HotBar.BarRect.yMin - 8f : Ui.H - 12f;
             float availableHeight = Mathf.Max(0f, cardBottom - cardTop);
+            if (availableHeight < 30f) { CardRect = default; return; }
             if (Collapsed)
             {
                 var pill = new Rect(Ui.W - w - 12f, cardTop, w,

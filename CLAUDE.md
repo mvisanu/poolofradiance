@@ -112,6 +112,15 @@ python scripts/install-warrior-animations.py
 
 # Rebuild the self-made beast models (bear, rat) — writes FBX + preview PNGs:
 & "C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" -b -P scripts/make_beasts.py
+
+# MCP for Unity (com.coplaydev.unity-mcp): .mcp.json spawns the Python server from a
+# sparse clone at C:\Users\Bruce\source\repo\unity-mcp-server (absolute path — on a new
+# machine, recreate it; uvx-from-git fails on Windows long paths in the repo's TestProjects):
+#   git -c core.longpaths=true clone --depth 1 --filter=blob:none --sparse https://github.com/CoplayDev/unity-mcp.git ..\unity-mcp-server
+#   git -C ..\unity-mcp-server sparse-checkout set Server
+# Live tools need an editor hosting the bridge (port 6400). Headless (holds the project
+# lock — close it before bootstrap/build): $env:UNITY_MCP_ALLOW_BATCH='1'; Unity.exe
+# -batchmode -nographics -projectPath <abs>\game -executeMethod MCPForUnity.Editor.McpCiBoot.StartStdioForCi
 ```
 
 Build output: `game/Builds/Win64/RadiantPool.exe`. Installer output:
@@ -413,16 +422,27 @@ mouse and the self-test drive the very same code.
   `game/Assets/Art` (Quaternius orcs + spider are animated FBX — the spider comes from
   the Easy Animated Enemy Pack via blend2fbx).
   **Graphics tiers**: `SetupUrp()` bakes TWO pipeline assets into `Resources/URP/` —
-  `URP_Desktop` (MSAA 4x, HDR, SSAO renderer feature, 2048 shadowmap/4 cascades,
-  8 per-pixel additional lights with shadows) and `URP_Web` (MSAA 2x, no HDR/SSAO,
-  0.85 render scale, 1024/2 cascades, 4 lights, no additional shadows). Desktop is
-  assigned to EVERY quality level (Settings' LOW..ULTRA used to point at levels with
-  no pipeline at all); `WebQuality.cs` swaps in `URP_Web` at runtime on WebGL only,
-  plus FXAA-for-SMAA, HDR off, film grain off. Retune the variants in
+  `URP_Desktop` (MSAA 4x, HDR, SSAO 0.6/0.3, high soft shadows, 2048 shadowmap/4
+  cascades, 8 per-pixel additional lights with shadows) and `URP_Web` (MSAA 2x, HDR
+  kept ON — bloom/ACES fall apart in LDR — full render scale, cheap downsampled SSAO
+  0.4/0.25, low soft shadows, 1024/2 cascades, 4 lights, no additional shadows).
+  Desktop is assigned to EVERY quality level (Settings' LOW..ULTRA used to point at
+  levels with no pipeline at all); `HeadlessBuild.WebGL` assigns `URP_Web` at BUILD
+  time (never at runtime — see the pipeline-swap gotcha); `WebQuality.cs` only trims
+  camera AA and film grain at runtime. Retune the variants in
   `PipelineVariant()`/`EnsureSsaoFeature()` — serialized URP field names there were
-  verified against the package source; don't guess new ones. Flat-color pack materials
-  carry `_Smoothness 0.18` (retuned outside the creation guards so re-bootstrap
-  reaches already-baked .mat files); PolyPack/Graveyard keep their own PBR maps.
+  verified against the package source; don't guess new ones. Kit material smoothness
+  is per-surface-kind by name words (metal ~0.58, cloth ~0.11, skin/fur ~0.25,
+  wood/stone ~0.20; tables in each importer, retuned outside the creation guards so
+  re-bootstrap reaches already-baked .mat files); PolyPack/Graveyard preserve their
+  authored smoothness clamped to 0.08–0.65. A box-projected hub ReflectionProbe
+  renders ONCE at scene load (`WorldAtmosphere.RenderReflectionProbeOnce`); ground
+  and water carry derived normal maps (water scrolls two layers, Reduced Motion
+  gated) and a generated cloud plane tints with time of day.
+  **`HandpaintedGroundArt.ForTheme` must resolve albedos by EXACT name outside its
+  Generated folder** — `FindAssets` matches substrings, and the derived `N_<name>.png`
+  normals otherwise shadow the albedo on re-runs, binding a swizzled normal into
+  `_BaseMap` (every themed arena rendered salmon pink).
 - **Beasts we make ourselves** — the CC0 packs ship no bear and no rat, so
   `scripts/make_beasts.py` builds them in headless Blender
   (`blender -b -P scripts/make_beasts.py` → `Art/Generated/*.fbx` + a preview PNG to
