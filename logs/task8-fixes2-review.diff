@@ -1,0 +1,309 @@
+﻿diff --git a/game/Assets/Scripts/Combat/CombatClientUI.cs b/game/Assets/Scripts/Combat/CombatClientUI.cs
+index a4550f9..c9d4b02 100644
+--- a/game/Assets/Scripts/Combat/CombatClientUI.cs
++++ b/game/Assets/Scripts/Combat/CombatClientUI.cs
+@@ -27,10 +27,12 @@ namespace RadiantPool.Game
+         private Vector2Int _autoFrom;    // where we stood when the walk was ordered
+         private float _autoUntil;        // give up if the walk never resolves (blocked path)
+         private float _nextPartyScan;
+         private readonly List<PlayerCharacterHolder> _cachedPartyHolders =
+             new List<PlayerCharacterHolder>();
++        private GUIStyle _playerReadoutStyle;
++        private GUIStyle _targetReadoutStyle;
+ 
+         private void Awake() => Instance = this;
+         private void OnDestroy() { if (Instance == this) Instance = null; }
+ 
+         /// <summary>HotBar hooks: Attack and individual spells open target pickers.</summary>
+@@ -713,16 +715,18 @@ namespace RadiantPool.Game
+                 {
+                     _nextPartyScan = Time.time + 1f;
+                     _cachedPartyHolders.Clear();
+                     _cachedPartyHolders.AddRange(
+                         FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None));
++                    _cachedPartyHolders.RemoveAll(p => p == null || p == holder);
++                    _cachedPartyHolders.Sort((a, b) => string.Compare(
++                        a.CharacterName.Value, b.CharacterName.Value,
++                        System.StringComparison.Ordinal));
++                    if (_cachedPartyHolders.Count > 3)
++                        _cachedPartyHolders.RemoveRange(3, _cachedPartyHolders.Count - 3);
+                 }
+-                // Unity objects can be destroyed between slow scans. Use an explicit
+-                // fake-null check while assembling the rows drawn this pass.
+-                var party = _cachedPartyHolders.Where(p => p != null && p != holder)
+-                    .OrderBy(p => p.CharacterName.Value).Take(3).ToList();
+-                DrawWorldPartyFrames(party);
++                DrawWorldPartyFrames(_cachedPartyHolders);
+                 TargetFrameRect = default;
+                 _hudTarget = "";
+             }
+         }
+ 
+@@ -746,40 +750,38 @@ namespace RadiantPool.Game
+                 $"<b>{safeName}</b>  <color=#cbbb9c>level {level}</color>", Theme.Body);
+             float fraction = max > 0 ? (float)hp / max : 0f;
+             const float hpReadout = 88f;
+             var hpRect = new Rect(x, rect.y + 33f, Mathf.Max(42f, w - hpReadout), 10f);
+             Theme.Bar(hpRect, fraction, Theme.HpGreen);
+-            var centered = new GUIStyle(Theme.Caps)
+-                { alignment = TextAnchor.MiddleRight, wordWrap = false };
+-            centered.normal.textColor = down ? Theme.Crimson : Theme.OnSurface;
++            if (_playerReadoutStyle == null)
++                _playerReadoutStyle = new GUIStyle(Theme.Caps)
++                    { alignment = TextAnchor.MiddleRight, wordWrap = false };
++            _playerReadoutStyle.fontSize = Theme.Caps.fontSize;
++            _playerReadoutStyle.normal.textColor = down ? Theme.Crimson : Theme.OnSurface;
+             int percent = max > 0 ? Mathf.RoundToInt(fraction * 100f) : 0;
+             string hpText = down
+                 ? (inCombat ? "DOWN - death saves" : "DOWN")
+                 : (max > 0 ? $"{hp}/{max}  {percent}%" : "HP syncing");
+             GUI.Label(new Rect(hpRect.xMax + 4f, rect.y + 29f, hpReadout - 4f, 18f),
+-                hpText, centered);
++                hpText, _playerReadoutStyle);
+ 
+             var cls = (CharacterClass)classIndex;
+-            if (ClassData.SpellcastingAbility(cls) != null)
++            int capacity = ClassData.SpellSlots(cls, level).Sum();
++            if (capacity > 0)
+             {
+-                int[] cap = ClassData.SpellSlots(cls, level);
+-                int slotLevel = System.Array.FindIndex(cap, n => n > 0);
+-                if (slotLevel >= 0)
+-                {
+-                    var combat = CombatManager.Instance;
+-                    int remaining = combat != null && combat.InCombat.Value
+-                        && slotLevel < combat.MySlots.Length ? combat.MySlots[slotLevel] : cap[slotLevel];
+-                    const float slotReadout = 76f;
+-                    var resource = new Rect(x, rect.y + 52f,
+-                        Mathf.Max(42f, w - slotReadout), 8f);
+-                    Theme.Bar(resource, cap[slotLevel] > 0
+-                        ? (float)remaining / cap[slotLevel] : 0f, Theme.MpBlue);
+-                    centered.fontSize = 8;
+-                    GUI.Label(new Rect(resource.xMax + 4f, rect.y + 48f,
+-                            slotReadout - 4f, 16f),
+-                        $"slots L{slotLevel + 1} {remaining}/{cap[slotLevel]}", centered);
+-                }
++                var combat = CombatManager.Instance;
++                int remaining = combat != null && combat.InCombat.Value
++                    ? combat.MySlots.Sum() : holder.SlotsRemainingTotalSynced.Value;
++                remaining = Mathf.Clamp(remaining, 0, capacity);
++                const float slotReadout = 76f;
++                var resource = new Rect(x, rect.y + 52f,
++                    Mathf.Max(42f, w - slotReadout), 8f);
++                Theme.Bar(resource, (float)remaining / capacity, Theme.MpBlue);
++                _playerReadoutStyle.fontSize = 8;
++                GUI.Label(new Rect(resource.xMax + 4f, rect.y + 48f,
++                        slotReadout - 4f, 16f),
++                    $"slots {remaining}/{capacity}", _playerReadoutStyle);
+             }
+         }
+ 
+         private static void DrawCombatPartyFrames(IReadOnlyList<CombatManager.UnitView> party)
+         {
+@@ -792,18 +794,26 @@ namespace RadiantPool.Game
+                     party[i].MaxHp, party[i].Down || party[i].Dead);
+         }
+ 
+         private static void DrawWorldPartyFrames(IReadOnlyList<PlayerCharacterHolder> party)
+         {
+-            if (party.Count == 0) { PartyFramesRect = default; return; }
++            int liveCount = 0;
++            for (int i = 0; i < party.Count; i++)
++                if (party[i] != null) liveCount++;
++            if (liveCount == 0) { PartyFramesRect = default; return; }
+             PartyFramesRect = new Rect(PlayerFrameRect.x, PlayerFrameRect.yMax + 6f,
+-                PlayerFrameRect.width, party.Count * 36f + 8f);
++                PlayerFrameRect.width, liveCount * 36f + 8f);
+             GUI.Box(PartyFramesRect, GUIContent.none, Theme.PanelStyle);
++            int row = 0;
+             for (int i = 0; i < party.Count; i++)
+-                DrawCompactPartyRow(PartyFramesRect, i, party[i].CharacterName.Value,
+-                    party[i].CurrentHpSynced.Value, party[i].MaxHpSynced.Value,
+-                    party[i].CurrentHpSynced.Value <= 0);
++            {
++                var member = party[i];
++                if (member == null) continue;
++                DrawCompactPartyRow(PartyFramesRect, row++, member.CharacterName.Value,
++                    member.CurrentHpSynced.Value, member.MaxHpSynced.Value,
++                    member.CurrentHpSynced.Value <= 0);
++            }
+         }
+ 
+         private static void DrawCompactPartyRow(Rect group, int index, string name,
+             int hp, int max, bool down)
+         {
+@@ -813,11 +823,11 @@ namespace RadiantPool.Game
+                 down ? $"{label}  <color=#ff9e9e>down</color>" : label, Theme.Body);
+             var bar = new Rect(group.x + 8f, y + 18f, group.width - 16f, 9f);
+             Theme.Bar(bar, max > 0 ? (float)Mathf.Clamp(hp, 0, max) / max : 0f, Theme.HpGreen);
+         }
+ 
+-        private static void DrawTargetFrame(CombatManager.UnitView target)
++        private void DrawTargetFrame(CombatManager.UnitView target)
+         {
+             if (target == null) { TargetFrameRect = default; return; }
+             float w = Mathf.Clamp(Ui.W * 0.23f, 210f, 270f);
+             TargetFrameRect = new Rect(PlayerFrameRect.xMax + 24f, 12f, w, 54f);
+             GUI.Box(TargetFrameRect, GUIContent.none, Theme.PanelStyle);
+@@ -825,15 +835,17 @@ namespace RadiantPool.Game
+                 w - 20f, 18f), target.Name, Theme.Header);
+             var hpRect = new Rect(TargetFrameRect.x + 10f, TargetFrameRect.y + 31f,
+                 w - 90f, 10f);
+             Theme.Bar(hpRect, target.MaxHp > 0 ? target.DisplayHp / target.MaxHp : 0f,
+                 Theme.HpRed);
+-            var centered = new GUIStyle(Theme.Caps)
+-                { alignment = TextAnchor.MiddleRight, wordWrap = false };
+-            centered.normal.textColor = Theme.OnSurface;
++            if (_targetReadoutStyle == null)
++                _targetReadoutStyle = new GUIStyle(Theme.Caps)
++                    { alignment = TextAnchor.MiddleRight, wordWrap = false };
++            _targetReadoutStyle.fontSize = Theme.Caps.fontSize;
++            _targetReadoutStyle.normal.textColor = Theme.OnSurface;
+             GUI.Label(new Rect(hpRect.xMax + 4f, hpRect.y - 3f, 66f, 16f),
+-                $"{target.Hp}/{target.MaxHp}", centered);
++                $"{target.Hp}/{target.MaxHp}", _targetReadoutStyle);
+         }
+ 
+         private static Texture2D ClassEmblem(int classIndex)
+         {
+             classIndex = Mathf.Clamp(classIndex, 0, ClassEmblems.Length - 1);
+diff --git a/game/Assets/Scripts/Game/ProgressUI.cs b/game/Assets/Scripts/Game/ProgressUI.cs
+index 0ea9862..7fbacc3 100644
+--- a/game/Assets/Scripts/Game/ProgressUI.cs
++++ b/game/Assets/Scripts/Game/ProgressUI.cs
+@@ -16,10 +16,11 @@ namespace RadiantPool.Game
+     /// deciding. The client only asks — CmdSpendAbilityPoint and the rules lib decide.</summary>
+     public class ProgressUI : MonoBehaviour
+     {
+         private static readonly Ability[] Order =
+             { Ability.Str, Ability.Dex, Ability.Con, Ability.Int, Ability.Wis, Ability.Cha };
++        private static GUIStyle _compactLabel;
+ 
+         private PlayerCharacterHolder Me() =>
+             FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                 .FirstOrDefault(p => p.IsOwner);
+ 
+@@ -88,30 +89,34 @@ namespace RadiantPool.Game
+         {
+             var progress = XpProgress(me);
+             Theme.XpBar(rect, progress.capped ? 1f : progress.fraction);
+             if (!compact) return;
+ 
+-            var label = new GUIStyle(Theme.Caps)
++            if (_compactLabel == null)
+             {
+-                alignment = TextAnchor.MiddleCenter,
+-                fontSize = 8,
+-                wordWrap = false,
+-                clipping = TextClipping.Overflow
+-            };
+-            label.normal.textColor = Theme.OnSurface;
++                _compactLabel = new GUIStyle(Theme.Caps)
++                {
++                    alignment = TextAnchor.MiddleCenter,
++                    wordWrap = false,
++                    clipping = TextClipping.Overflow
++                };
++            }
++            _compactLabel.fontSize = 8;
++            _compactLabel.normal.textColor = Theme.OnSurface;
+             string text = progress.capped
+                 ? $"LEVEL {progress.level}  MAX"
+                 : $"LEVEL {progress.level}  {progress.into}/{progress.span} XP";
+             var labelRect = new Rect(rect.x, rect.center.y - 7f, rect.width, 14f);
+-            Vector2 textSize = label.CalcSize(new GUIContent(text));
++            Vector2 textSize = _compactLabel.CalcSize(new GUIContent(text));
++            if (textSize.x + 10f > rect.width) return;
+             var chipRect = new Rect(rect.center.x - (textSize.x + 10f) * 0.5f,
+                 labelRect.y, textSize.x + 10f, labelRect.height);
+             Color old = GUI.color;
+             GUI.color = new Color(0.04f, 0.03f, 0.02f, 0.58f);
+             GUI.DrawTexture(chipRect, Texture2D.whiteTexture);
+             GUI.color = old;
+-            GUI.Label(labelRect, text, label);
++            GUI.Label(labelRect, text, _compactLabel);
+         }
+ 
+         private void DrawLevelUpPanel(PlayerCharacterHolder me)
+         {
+             var director = GameDirector.Instance;
+diff --git a/game/Assets/Scripts/Game/QuestTracker.cs b/game/Assets/Scripts/Game/QuestTracker.cs
+index b74091d..3fbe76a 100644
+--- a/game/Assets/Scripts/Game/QuestTracker.cs
++++ b/game/Assets/Scripts/Game/QuestTracker.cs
+@@ -384,13 +384,20 @@ namespace RadiantPool.Game
+             if (_cardBtn == null)
+                 _cardBtn = new GUIStyle(GUI.skin.button) { fontSize = 11, wordWrap = false,
+                     padding = new RectOffset(2, 2, 2, 2), clipping = TextClipping.Overflow };
+ 
+             // Collapsed: one slim bar with the quest's name, and the way back.
++            float cardTop = CardTop;
++            // BarRect is authoritative once HotBar has published it. The first OnGUI frame
++            // falls back to the logical-canvas edge, matching the combat log's pattern.
++            float cardBottom = HotBar.BarRect.height > 0f
++                ? HotBar.BarRect.yMin - 8f : Ui.H - 12f;
++            float availableHeight = Mathf.Max(0f, cardBottom - cardTop);
+             if (Collapsed)
+             {
+-                var pill = new Rect(Ui.W - w - 12f, CardTop, w, 30f);
++                var pill = new Rect(Ui.W - w - 12f, cardTop, w,
++                    Mathf.Min(30f, availableHeight));
+                 CardRect = pill;
+                 GUI.Box(pill, GUIContent.none, Theme.PanelStyle);
+                 var nameStyle = new GUIStyle(Theme.Body) { fontSize = 12, wordWrap = false,
+                     clipping = TextClipping.Clip };
+                 GUI.Label(new Rect(pill.x + 8f, pill.y + 6f, w - btn - 14f, 18f), title, nameStyle);
+@@ -403,12 +410,12 @@ namespace RadiantPool.Game
+             float titleW = w - pad * 2f - btn;
+             float h = pad * 2f + _questTitle.CalcHeight(new GUIContent(title), titleW) + 4f;
+             foreach (var (text, _) in steps)
+                 h += _stepStyle.CalcHeight(new GUIContent(text), w - pad * 2f - 18f) + 2f;
+ 
+-            var panel = new Rect(Ui.W - w - 12f, CardTop, w,
+-                Mathf.Min(h, Mathf.Max(64f, Ui.H - CardTop - 12f)));
++            var panel = new Rect(Ui.W - w - 12f, cardTop, w,
++                Mathf.Min(h, availableHeight));
+             CardRect = panel;
+             GUI.Box(panel, GUIContent.none, Theme.PanelStyle);
+ 
+             float y = panel.y + pad;
+             float tH = _questTitle.CalcHeight(new GUIContent(title), titleW);
+diff --git a/game/Assets/Scripts/Player/PlayerCharacterHolder.cs b/game/Assets/Scripts/Player/PlayerCharacterHolder.cs
+index 2cec49a..73e0e5a 100644
+--- a/game/Assets/Scripts/Player/PlayerCharacterHolder.cs
++++ b/game/Assets/Scripts/Player/PlayerCharacterHolder.cs
+@@ -1,8 +1,9 @@
+ using FishNet.Object;
+ using FishNet.Object.Synchronizing;
+ using RadiantPool.Rules;
++using System.Linq;
+ using UnityEngine;
+ 
+ namespace RadiantPool.Game
+ {
+     /// <summary>Server-owned character sheet for a connected player. The owning client
+@@ -32,10 +33,11 @@ namespace RadiantPool.Game
+         public readonly SyncVar<int> MaxHpSynced = new SyncVar<int>(0);
+         // Current HP, so the HUD can show a health bar OUT of combat too: the combat units
+         // carry their own Hp (RpcHpSync, instantly), but between fights nothing told the
+         // client how hurt it was — the bar would have read full all the way to the next fight.
+         public readonly SyncVar<int> CurrentHpSynced = new SyncVar<int>(0);
++        public readonly SyncVar<int> SlotsRemainingTotalSynced = new SyncVar<int>(0);
+         public readonly SyncVar<int> ArmorClassSynced = new SyncVar<int>(10);
+         public readonly SyncVar<int> ProficiencySynced = new SyncVar<int>(2);
+         public readonly SyncVar<int> StrModSynced = new SyncVar<int>(0);
+         public readonly SyncVar<int> DexModSynced = new SyncVar<int>(0);
+ 
+@@ -78,10 +80,12 @@ namespace RadiantPool.Game
+             if (!IsServerStarted || Sheet == null || Time.time < _nextStatSync) return;
+             _nextStatSync = Time.time + 0.5f;
+             LevelSynced.Value = Sheet.Level;
+             MaxHpSynced.Value = Sheet.MaxHp;
+             CurrentHpSynced.Value = Sheet.CurrentHp;
++            SlotsRemainingTotalSynced.Value = Sheet.SlotsRemaining == null
++                ? 0 : Sheet.SlotsRemaining.Sum();
+             ArmorClassSynced.Value = Sheet.ArmorClass;
+             ProficiencySynced.Value = Sheet.ProficiencyBonus;
+             StrModSynced.Value = Sheet.Abilities.Modifier(Ability.Str);
+             DexModSynced.Value = Sheet.Abilities.Modifier(Ability.Dex);
+             XpSynced.Value = Sheet.Xp;

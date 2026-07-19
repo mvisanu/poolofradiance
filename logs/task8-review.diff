@@ -1,0 +1,1117 @@
+﻿diff --git a/CLAUDE.md b/CLAUDE.md
+index ced14d5..e5cfd01 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -1,11 +1,86 @@
+ # CLAUDE.md — Radiant Pool
+ 
+ 3D co-op party CRPG (2–4 players, SRD 5.1 rules, Pool of Radiance structure, original IP).
+ Read `goal.md` for the spec, `ARCHITECTURE.md` for design, `IP-CHECKLIST.md` before naming anything.
+ 
++
++# Division of Labor: Claude Plans, Codex Codes
++
++You (Claude Fable 5) are the architect, researcher, and reviewer on this project.
++You do NOT write implementation code yourself. All coding work is delegated to
++OpenAI Codex (GPT 5.6) via the /handoff workflow, which wraps the /codex plugin.
++Your job is everything around the code: understanding, planning, specifying,
++verifying.
++
++## The /handoff workflow (default path for ALL coding work)
++When I invoke /handoff <task>, follow its four phases: Research → Design (wait
++for my approval) → Delegate → Verify.
++
++When I request coding work WITHOUT invoking /handoff — e.g. "fix that bug",
++"add a field to this model", "refactor this" — do not write the code yourself.
++Instead, treat the request as if I had run /handoff with it and enter the same
++four-phase workflow: research, present the design for approval, then delegate.
++There is no direct-implementation path; /handoff phases are the only route from
++request to code.
++
++## Your responsibilities (do these yourself)
++- **Research & investigation**: Read the codebase, trace logic, search docs,
++  understand the problem space fully before anything is delegated.
++- **Design & planning**: Produce the architecture, file-level plan, interface
++  definitions, data models, and sequencing of work. Decide *what* gets built
++  and *how it should be structured* — Codex decides only the line-level details.
++- **Task decomposition**: Break work into small, independently verifiable tasks.
++  One task = one delegation. Never hand Codex a multi-feature blob.
++- **Specification writing**: For each task, write a precise implementation spec
++  (see handoff spec format below).
++- **Review & verification**: When Codex returns work, read the full diff, run
++  the acceptance commands yourself, and either accept, or send it back with
++  specific corrections. You are the quality gate.
++- **Integration & commit hygiene**: You decide what gets committed, in what
++  order, with what messages.
++
++## Codex's responsibilities (always delegated, never done by you)
++- Writing new code, modifying existing code, writing tests, fixing bugs,
++  refactors — ANY change to source files.
++- Delegation happens in Phase 3 of /handoff via: /codex:rescue <spec>
++- For long tasks, use --background, monitor with /codex:status, and continue
++  planning the next subtask while it runs. Fetch with /codex:result.
++
++## Handoff spec format (required for every /codex:rescue delegation)
++1. **Goal** — one sentence describing the outcome.
++2. **Design decisions already made** — the structure Codex must follow:
++   file paths to create/modify, function/class signatures, naming, patterns
++   to mirror from existing code (cite the exact files).
++3. **Context** — relevant files, branch, existing behavior, prior attempts.
++4. **Constraints** — do-not-touch files, API compatibility, no new deps
++   without approval, style/lint rules.
++5. **Acceptance criteria** — exact commands that must pass
++   (tests, build, lint). No spec ships without these.
++
++If you cannot write sections 2 and 5 concretely, your planning is not done —
++stay in the Research phase until you can.
++
++## Review loop (Phase 4 of every /handoff)
++- Treat every Codex result as a proposal. Verify acceptance criteria yourself.
++- If it fails or deviates from the spec, re-delegate via a new /codex:rescue
++  with the specific defects listed — do not fix the code yourself unless the
++  fix is a one-line correction and re-delegation would be wasteful.
++- After each accepted task, run /codex:review (or --base main at milestones)
++  as an independent second-pass review, and reconcile findings.
++
++## Exceptions (you may edit code directly ONLY for)
++- One-line fixes to a returned diff (typos, imports, obvious slips).
++- Config/docs/markdown files that are part of your planning output.
++- Emergency reverts.
++Everything else goes through the /handoff workflow, no matter how small.
++
++## Reporting
++At each milestone, summarize: the plan, tasks delegated, what Codex produced,
++what you accepted/rejected and why. I always know which model did what.
++
+ ## Commands
+ 
+ ```powershell
+ # Rules library tests (fast, no Unity):
+ dotnet test rules/RadiantPool.Rules.sln
+ 
+@@ -164,21 +239,24 @@ mouse and the self-test drive the very same code.
+   inside the bags and the shops, so the purse never visibly moved and the total read like a
+   placeholder. Format gold `:N0` everywhere — "1,234", never "1234".
+   `HotBar.cs` = persistent bottom action bar. **Attack is a first-class slot**
+   (`CombatClientUI.PickAttack`, keyboard A), named spells delegate to `PickSpell`, and the
+   bar shrinks/wraps combat actions above utilities instead of overflowing (a combat cleric
+   needs 13 slots). Only a temporary responsive target picker appears above the bar (fixed-width
+-  two-line cards, columns from `Ui.W`, capped scroll). **The combat message log never owns the
++  two-line cards, columns from `Ui.W`, capped scroll). **The combat message log sits bottom-left
++  and never owns the
+   bottom edge**: `CombatClientUI.LogRect` docks at least 8 logical units above the complete
+-  `HotBar.BarRect` (including the health strip), and `_logRect` is cleared while an attack or
++  `HotBar.BarRect` (including the XP strip), and `_logRect` is cleared while an attack or
+   spell target picker is open so the temporary casting/target bar and main bar cannot be
+   covered. `IsMouseOverHud` gates clicks with the same published visible rect. **Your HEALTH
+-  rides above the bar**
+-  (`HotBar.DrawHealth`): bar + `hp/max` + percentage — the combat unit's HP in a fight
+-  (`RpcHpSync`), `PlayerCharacterHolder.CurrentHpSynced` between fights. Stays when the bar is
+-  stowed. In combat: **click enemy = close in AND attack, one click, however far away**
++  lives in the top-left player unit frame**: generated class emblem + name/level + `hp/max` +
++  percentage, using the combat unit's HP in a fight (`RpcHpSync`) and
++  `PlayerCharacterHolder.CurrentHpSynced` between fights. Caster frames add a thin spell-slot
++  resource bar; compact party frames stack below, and a picked hostile gets a top-centre-left
++  target frame. Health remains visible when the action bar is stowed. In combat: **click enemy
++  = close in AND attack, one click, however far away**
+   (`CombatClientUI.ClickCell` is the ONE definition of a board click: in reach it swings, out
+   of reach it walks and REMEMBERS the target, `TickAutoAttack` lands the blow when the body
+   settles). A completed weapon attack **auto-ends that player's turn after impact + recovery**
+   (`CmdAttack` marks its queued action for handoff). Click ground = move, Space = manual
+   end-turn, **WASD/middle-drag pans, F recentres** (the grid owns movement). The Attack slot
+   opens the same legal target path as a world click; both converge on `ClickCell`. Each spell
+@@ -210,16 +288,17 @@ mouse and the self-test drive the very same code.
+   screen (`Ui.PanelOpen`)**: hotbar, minimap, quest card, banner, arrow, combat strip, shop/NPC
+   prompts draw NOTHING while one is up — every HUD drawer checks `Ui.PanelOpen` atop its
+   `OnGUI`. **The hotbar stows** (`Ui.BarCollapsed`, H/chevron, PlayerPrefs) to a `SHOW BAR (H)`
+   handle; `BarRect` still reports the handle so combat clicks can't fall through it.
+ - `SessionPanel.cs` — status + invite code, opened/closed from a **hotbar icon** (generated
+   texture, not a font glyph). `SessionLauncher` still OWNS that state (`Status`/`HostCode`
+-  statics) and draws only the title screen; the old permanent top-left strip is gone, which
+-  is what freed the corner for the quest card.
++  statics) and draws only the title screen; the old permanent top-left strip is gone, leaving
++  that corner to the player and party unit frames.
+ - **Wayfinding** — the player must always know what to do and where. `QuestTracker` = quest
+-  card top-left, **collapsible to a title pill (Hide/Show, PlayerPrefs)** (active quest +
++  card on the right below the minimap (below initiative in combat), **collapsible to a title
++  pill (Hide/Show, PlayerPrefs)** (active quest +
+   `[x]/[ ]` checklist), centre banner, gold steering arrow above the hotbar (camera-space: up =
+   forward), world beacon. >26 m from the active quarter it aims at + names the QUARTER ("The Old
+   Docks"); inside, it switches to the next fight. Bootstrap plants a lit **district sign** per
+   quarter; `MiniMap` paints quarter names (gold = active). After the campaign ends the tracker
+   issues standing orders against any encounters still standing — never a questless state.
+   `NpcInteract` owns the quest giver's overhead marker: **yellow `!`** = opening commission
+@@ -251,14 +330,15 @@ mouse and the self-test drive the very same code.
+ - `InventoryUI.cs` (I) — left column = character sheet: **six ABILITY SCORES first** (score +
+   modifier, from `*Synced` SyncVars via `PlayerCharacterHolder.ModOf` — the level-up screen's
+   definition too), then WORN slots (weapon/armor/off hand/two rings) with each piece's stat
+   line + totals (AC breakdown, HP, attack, damage); right column = stash, each item showing
+   damage/protection compared vs equipped ("upgrade: +2 AC", `ItemCompare`). Derived stats are
+   server-only, so `PlayerCharacterHolder` mirrors them as SyncVars on a slow poll.
+-- `ProgressUI.cs` — **level and XP live on the CHARACTER SHEET (I), never the main screen**
+-  (`ProgressUI.XpBlock` drawn by `InventoryUI`: level, bar, XP, MAX at cap — one definition)
++- `ProgressUI.cs` — **level and XP have a full block on the CHARACTER SHEET (I) plus a thin
++  XP strip above the action bar** (`ProgressUI.XpBlock` and the compact strip share the same
++  progress helper: level, bar, XP, MAX at cap — one definition)
+   plus the **level-up screen (L)** that spends ability points; each row says what the ability
+   buys *this* character (odd score buys nothing until the next point completes the modifier).
+   Client asks (`CmdSpendAbilityPoint`), rules lib decides.
+ - **Item icons** — `Editor/ItemIconBaker.cs` renders each item's OWN model (`GameItem.HandModel`
+   → `Resources/Weapons`) to `Resources/ItemIcons/<id>.png` at bootstrap; armour+robes have no
+   model so they're drawn in code from the armour KIND (new gear needs no art). `ItemIcon.Get`
+@@ -414,14 +494,15 @@ mouse and the self-test drive the very same code.
+   messages free of double quotes.
+ - **`RadiantPool.exe` timestamp never changes** between builds (stock player stub).
+   To verify a build is fresh, check `RadiantPool_Data/Managed/Assembly-CSharp.dll`.
+ - **CombatClientUI HUD rects gate click-to-move**: `IsMouseOverHud` must test the exact
+   same rects the panels draw with. It used to re-declare them as hand-copied literals
+   (`new Rect(12, Ui.H - 174, ...)`), which drifted from the panels the moment either moved.
+-  They are now `Rect` PROPERTIES (`LogRect`, `MyCardRect`, `InitiativeRect`, plus
+-  `HotBar.BarRect` / `MiniMap.MapRect`) — one definition, both users. Never re-type a rect.
++  They are now `Rect` PROPERTIES (`LogRect`, player/party/target frame rects,
++  `InitiativeRect`, `QuestTracker.CardRect`, plus `HotBar.BarRect` / `MiniMap.MapRect`) — one
++  definition, both users. Never re-type a rect.
+   **Bottom HUD panels dock from `HotBar.BarRect`, never `Ui.H`**: a screen-bottom log covered
+   both wrapped hotbar rows. The combat log now ends at `BarRect.yMin - 8`; while `_mode` is an
+   attack/spell target picker it draws nothing and publishes `default`, so neither rendering
+   nor click blocking can preserve an invisible overlapping panel. Keep the rendered
+   `-combatuicapture` assertion whenever this geometry changes.
+ - **`GUI.tooltip` is GLOBAL to the frame, not to your panel.** Whatever control was hovered
+@@ -436,14 +517,14 @@ mouse and the self-test drive the very same code.
+ - **NO dingbat/arrow glyphs in UI strings** — MedievalSharp and Inter carry no
+   `✔ ✘ ⚔ ✝ ★ ● ▼ ► ↑↗→ ▶ −`, and a missing glyph renders as a **tofu box**, not the symbol
+   you meant. This has bitten the minimap buttons AND the whole combat HUD. Use ASCII
+   (`[x]`, `[ ]`, `>`), words (`Theme.Ready()` = "ready"/"spent", bearings as "ahead-right"),
+   or a **generated texture** (`QuestTracker.MakeSteerArrow`, `MiniMap.Make*`).
+ - **The initiative panel sits BELOW the minimap** (`MiniMap.MapRect.yMax`), not in the
+-  top-right corner — pinned to the corner it drew straight through the map. Any new
+-  top-right HUD must dock off the same anchor, and cap its height with a scroll view.
++  top-right corner — pinned to the corner it drew straight through the map. The quest tracker
++  docks below initiative in combat; both cap their height with scroll views.
+ - **`compile-check.ps1` does NOT compile `Assets/Editor`** — only the runtime scripts. An
+   editor-only error (a missing `using RadiantPool.Rules`) sails past it and only surfaces as
+   a failed bootstrap. After editing anything under `Assets/Editor`, run the bootstrap.
+ - **Run Unity with an ABSOLUTE `-projectPath`**: the shell's working directory persists
+   between tool calls, so a stray `cd` turns `-projectPath game` into `<cwd>/game` and Unity
+   exits 1 ("Couldn't set project path") — or worse, writes `boot.log` into `Assets/` where it
+diff --git a/game/Assets/Scripts/Combat/CombatClientUI.cs b/game/Assets/Scripts/Combat/CombatClientUI.cs
+index a0a524e..94f12ac 100644
+--- a/game/Assets/Scripts/Combat/CombatClientUI.cs
++++ b/game/Assets/Scripts/Combat/CombatClientUI.cs
+@@ -20,39 +20,44 @@ namespace RadiantPool.Game
+         // Approach and strike: one left-click on an enemy is the whole attack, however far
+         // away it stands. The click remembers the target, the walk happens, and the blow
+         // lands the moment the fighter arrives. It used to take TWO clicks — one to walk
+         // into reach, one to swing — and the second was the easiest thing in the game to
+         // forget, so a turn ended having done nothing but shuffle a square.
+         private string _autoTarget = "";
++        private string _hudTarget = "";
+         private Vector2Int _autoFrom;    // where we stood when the walk was ordered
+         private float _autoUntil;        // give up if the walk never resolves (blocked path)
+ 
+         private void Awake() => Instance = this;
+         private void OnDestroy() { if (Instance == this) Instance = null; }
+ 
+         /// <summary>HotBar hooks: Attack and individual spells open target pickers.</summary>
+         public void PickAttack()
+         {
+             _autoTarget = "";
++            _hudTarget = "";
+             _pendingSpell = "";
+             _mode = Mode.PickAttackTarget;
+         }
+ 
+         public void PickSpell(string spellId)
+         {
+             _autoTarget = "";
++            _hudTarget = "";
+             _pendingSpell = spellId;
+             _mode = Mode.PickSpellTarget;
+         }
+ 
+         /// <summary>Shared target confirmation used by target buttons and unattended
+         /// combat verification. It submits the same intent selected by the visible menu.</summary>
+         public void PickTarget(string targetId)
+         {
+             var combat = CombatManager.Instance;
+             if (combat == null || !combat.CanAcceptPlayerInput) return;
++            var picked = combat.ClientUnits.FirstOrDefault(u => u.Id == targetId);
++            _hudTarget = picked != null && !picked.IsPc ? picked.Id : "";
+             if (_mode == Mode.PickAttackTarget)
+             {
+                 var target = combat.ClientUnits.FirstOrDefault(u => u.Id == targetId);
+                 _mode = Mode.Root;
+                 if (target != null) ClickCell(target.Cell);
+                 return;
+@@ -309,12 +314,13 @@ namespace RadiantPool.Game
+             var mine = combat?.MyUnit;
+             if (combat == null || mine == null || !combat.CanAcceptPlayerInput
+                 || cell == mine.Cell) return;
+ 
+             var enemy = combat.ClientUnits.FirstOrDefault(
+                 u => !u.IsPc && !u.Dead && u.Cell == cell);
++            _hudTarget = enemy != null ? enemy.Id : "";
+ 
+             // Click an enemy in reach: swing now. Out of reach: walk in (CmdMoveTo stops
+             // adjacent to occupied cells) and REMEMBER it — TickAutoAttack lands the blow the
+             // moment the walk arrives, so one click is the whole attack.
+             if (enemy != null && combat.ActionLeft && InWeaponRange(mine.Cell, cell))
+             {
+@@ -453,13 +459,16 @@ namespace RadiantPool.Game
+         private bool IsMouseOverHud(CombatManager combat)
+         {
+             if (Ui.OpenPanel != Ui.Panel.None) return true;   // a screen is up: never move
+             var m = Ui.Mouse;
+             if (InitiativeRect(combat).Contains(m)) return true;
+             if (_logRect.Contains(m)) return true;
+-            if (MyCardRect.Contains(m)) return true;
++            if (PlayerFrameRect.Contains(m)) return true;
++            if (PartyFramesRect.Contains(m)) return true;
++            if (TargetFrameRect.Contains(m)) return true;
++            if (QuestTracker.CardRect.Contains(m)) return true;
+             if (HotBar.BarRect.Contains(m)) return true;
+             if (MiniMap.MapRect.Contains(m)) return true;
+             if (combat.IsMyTurn && _mode != Mode.Root && _actionsRect.Contains(m)) return true;
+             return false;
+         }
+ 
+@@ -582,19 +591,24 @@ namespace RadiantPool.Game
+             // still THERE — IsMouseOverHud already refuses clicks while a panel is open — it
+             // just doesn't draw through the panel.
+             if (Ui.PanelOpen)
+             {
+                 _logRect = default;
+                 _actionsRect = default;
++                PartyFramesRect = default;
++                TargetFrameRect = default;
+                 return;
+             }
++            var holder = LocalPlayerHolder();
++            if (holder != null) DrawUnitFrames(holder);
+             var combat = CombatManager.Instance;
+             if (combat == null)
+             {
+                 _logRect = default;
+                 _actionsRect = default;
++                TargetFrameRect = default;
+                 return;
+             }
+ 
+             DrawOutcomeBanner(combat);
+             if (combat.ClientUnits.Count == 0)
+             {
+@@ -608,98 +622,229 @@ namespace RadiantPool.Game
+             bool choosingTarget = combat.IsMyTurn && _mode != Mode.Root;
+             // Target selection is a short, high-priority interaction. Stow the journal until
+             // the choice is made so it can never cover either the attack/spell picker or the
+             // hotbar on narrow canvases.
+             if (choosingTarget) _logRect = default;
+             else DrawLog(combat);
+-            DrawMyCard(combat);
+             if (choosingTarget) DrawActions(combat);
+             else
+             {
+                 _actionsRect = default;
+                 if (!combat.IsMyTurn) _mode = Mode.Root;
+             }
+         }
+ 
+         // ---------- HUD geometry (one definition per panel; IsMouseOverHud reuses these) ----------
+ 
++        public static Rect PlayerFrameRect
++        {
++            get
++            {
++                float w = Mathf.Clamp(Ui.W * 0.25f, 220f, 278f);
++                return new Rect(12f, 12f, w, 76f);
++            }
++        }
++
++        public static Rect PartyFramesRect { get; private set; }
++        public static Rect TargetFrameRect { get; private set; }
++
+         /// <summary>Combat log, bottom-left but docked above the complete hotbar bounds
+-        /// (including its health strip). It used to anchor to Ui.H and physically cover the
++        /// (including its XP strip). It used to anchor to Ui.H and physically cover the
+         /// combat/spell row and utility row whenever the hotbar grew wide enough.</summary>
+         private static Rect LogRect
+         {
+             get
+             {
+-                float w = Mathf.Clamp(Ui.W * 0.32f, 240f, 384f);
++                float w = Mathf.Clamp(Ui.W * 0.40f, 250f, 460f);
+                 float wantedHeight = Mathf.Clamp(Ui.H * 0.26f, 110f, 162f);
+                 // BarRect is the one authoritative definition shared with click blocking.
+                 // The conservative fallback protects the first OnGUI frame, before HotBar
+                 // has published its layout (a wrapped bar plus health reaches ~163 units up).
+                 float barTop = HotBar.BarRect.height > 0f
+                     ? HotBar.BarRect.yMin : Ui.H - 170f;
+                 float bottom = Mathf.Min(Ui.H - 12f, barTop - 8f);
+-                // Preserve room for the 100-unit player card stacked above this panel.
+-                float h = Mathf.Min(wantedHeight, Mathf.Max(84f, bottom - 120f));
++                float h = Mathf.Min(wantedHeight, Mathf.Max(84f, bottom - 12f));
+                 return new Rect(12f, bottom - h, w, h);
+             }
+         }
+ 
+-        /// <summary>Player card, stacked directly above the log.</summary>
+-        private static Rect MyCardRect
+-        {
+-            get
+-            {
+-                float w = Mathf.Min(264f, Ui.W * 0.28f);
+-                var log = LogRect;
+-                return new Rect(12f, log.y - 8f - 100f, Mathf.Max(w, 200f), 100f);
+-            }
+-        }
+-
+         /// <summary>Initiative order, top-right — docked BELOW the minimap (it used to be
+         /// pinned to the top-right corner and drew straight through it) and capped so a
+         /// nine-unit fight scrolls instead of running off the bottom of the screen.</summary>
+-        private static Rect InitiativeRect(CombatManager combat)
++        public static Rect InitiativeRect(CombatManager combat)
+         {
+             float w = Mathf.Clamp(Ui.W * 0.22f, 190f, 250f);
+             float top = MiniMap.MapRect.yMax + 8f;
+             // Round title + two grouped section headers (PARTY / ENEMIES) + a row per unit.
+             float wanted = 44f + 40f + combat.ClientUnits.Count * 36f;
+-            float h = Mathf.Min(wanted, Ui.H - top - 12f);
++            float h = Mathf.Min(wanted,
++                Mathf.Min(Ui.H * 0.38f, Mathf.Max(80f, Ui.H - top - 130f)));
+             return new Rect(Ui.W - w - 12f, top, w, Mathf.Max(h, 80f));
+         }
+ 
+-        /// <summary>Persistent player card above the log (mock: portrait card with HP/MP
+-        /// bars): name in serif gold, red HP bar, remaining spell slots as pips.</summary>
+-        private void DrawMyCard(CombatManager combat)
++        private static readonly Texture2D[] ClassEmblems = new Texture2D[4];
++
++        /// <summary>WoW-style unit cluster: the local character owns the top-left corner,
++        /// party frames stack beneath it, and a selected hostile appears to its right.</summary>
++        private void DrawUnitFrames(PlayerCharacterHolder holder)
+         {
+-            var mine = combat.MyUnit;
+-            if (mine == null) return;
+-            var rect = MyCardRect;
+-            GUILayout.BeginArea(rect, Theme.PanelStyle);
+-            GUILayout.Label(mine.Name +
+-                (combat.IsMyTurn ? "   <size=11><color=#d0c5af>— your turn</color></size>" : ""),
+-                Theme.Header);
+-
+-            float inner = rect.width - 28f;
+-            var row = GUILayoutUtility.GetRect(inner, 14f);
+-            GUI.Label(new Rect(row.x, row.y - 2, 26, 14), "HP", Theme.Caps);
+-            float barW = Mathf.Max(60f, inner - 28f - 56f);
+-            Theme.Bar(new Rect(row.x + 28, row.y + 1, barW, 9),
+-                mine.MaxHp > 0 ? mine.DisplayHp / mine.MaxHp : 0f, Theme.HpGreen);
+-            GUI.Label(new Rect(row.x + 32 + barW, row.y - 2, 56, 14),
+-                $"{mine.Hp}/{mine.MaxHp}", Theme.Caps);
+-
+-            // Pips = spell slots still available (the client only knows what is left, not
+-            // the capacity, so every pip drawn is one you can actually spend).
+-            int slots = combat.MySlots.Sum();
+-            if (slots > 0)
+-                GUILayout.Label($"SLOTS  {Theme.Pips(slots, Mathf.Min(slots, 10))}", Theme.Caps);
+-            if (mine.Down)
+-                GUILayout.Label("<color=#ff8a80><b>DOWN — rolling death saves</b></color>",
+-                    Theme.Caps);
+-            GUILayout.EndArea();
++            var combat = CombatManager.Instance;
++            var mine = combat != null && combat.InCombat.Value ? combat.MyUnit : null;
++            int max = mine != null ? mine.MaxHp : holder.MaxHpSynced.Value;
++            int hp = Mathf.Clamp(mine != null ? mine.Hp : holder.CurrentHpSynced.Value,
++                0, Mathf.Max(0, max));
++            DrawPlayerFrame(holder, mine != null ? mine.Name : holder.CharacterName.Value, hp, max);
++
++            if (combat != null && combat.InCombat.Value && combat.ClientUnits.Count > 0)
++            {
++                var party = combat.ClientUnits.Where(u => u.IsPc && u != mine).Take(3).ToList();
++                DrawCombatPartyFrames(party);
++                var target = combat.ClientUnits.FirstOrDefault(
++                    u => u.Id == _hudTarget && !u.IsPc && !u.Dead);
++                DrawTargetFrame(target);
++            }
++            else
++            {
++                var party = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
++                    .Where(p => p != holder).OrderBy(p => p.CharacterName.Value).Take(3).ToList();
++                DrawWorldPartyFrames(party);
++                TargetFrameRect = default;
++                _hudTarget = "";
++            }
++        }
++
++        private void DrawPlayerFrame(PlayerCharacterHolder holder, string name, int hp, int max)
++        {
++            var rect = PlayerFrameRect;
++            GUI.Box(rect, GUIContent.none, Theme.PanelStyle);
++            const float portrait = 48f;
++            var portraitRect = new Rect(rect.x + 8f, rect.y + 10f, portrait, portrait);
++            GUI.Box(portraitRect, GUIContent.none, Theme.SlotStyle);
++            int classIndex = Mathf.Clamp(holder.ClassIndex.Value, 0, ClassEmblems.Length - 1);
++            GUI.DrawTexture(new Rect(portraitRect.x + 5f, portraitRect.y + 5f,
++                portrait - 10f, portrait - 10f), ClassEmblem(classIndex), ScaleMode.ScaleToFit, true);
++
++            float x = portraitRect.xMax + 8f;
++            float w = rect.xMax - x - 8f;
++            int level = Mathf.Clamp(holder.LevelSynced.Value, 1, Progression.MaxLevel);
++            string safeName = string.IsNullOrWhiteSpace(name) ? "Adventurer" : name;
++            GUI.Label(new Rect(x, rect.y + 8f, w, 18f),
++                $"<b>{safeName}</b>  <color=#cbbb9c>level {level}</color>", Theme.Body);
++            float fraction = max > 0 ? (float)hp / max : 0f;
++            const float hpReadout = 88f;
++            var hpRect = new Rect(x, rect.y + 33f, Mathf.Max(42f, w - hpReadout), 10f);
++            Theme.Bar(hpRect, fraction, Theme.HpGreen);
++            var centered = new GUIStyle(Theme.Caps)
++                { alignment = TextAnchor.MiddleRight, wordWrap = false };
++            centered.normal.textColor = Theme.OnSurface;
++            int percent = max > 0 ? Mathf.RoundToInt(fraction * 100f) : 0;
++            GUI.Label(new Rect(hpRect.xMax + 4f, rect.y + 29f, hpReadout - 4f, 18f),
++                max > 0 ? $"{hp}/{max}  {percent}%" : "HP syncing", centered);
++
++            var cls = (CharacterClass)classIndex;
++            if (ClassData.SpellcastingAbility(cls) != null)
++            {
++                int[] cap = ClassData.SpellSlots(cls, level);
++                int slotLevel = System.Array.FindIndex(cap, n => n > 0);
++                if (slotLevel >= 0)
++                {
++                    var combat = CombatManager.Instance;
++                    int remaining = combat != null && combat.InCombat.Value
++                        && slotLevel < combat.MySlots.Length ? combat.MySlots[slotLevel] : cap[slotLevel];
++                    const float slotReadout = 76f;
++                    var resource = new Rect(x, rect.y + 52f,
++                        Mathf.Max(42f, w - slotReadout), 8f);
++                    Theme.Bar(resource, cap[slotLevel] > 0
++                        ? (float)remaining / cap[slotLevel] : 0f, Theme.MpBlue);
++                    centered.fontSize = 8;
++                    GUI.Label(new Rect(resource.xMax + 4f, rect.y + 48f,
++                            slotReadout - 4f, 16f),
++                        $"slots L{slotLevel + 1} {remaining}/{cap[slotLevel]}", centered);
++                }
++            }
++        }
++
++        private static void DrawCombatPartyFrames(IReadOnlyList<CombatManager.UnitView> party)
++        {
++            if (party.Count == 0) { PartyFramesRect = default; return; }
++            PartyFramesRect = new Rect(PlayerFrameRect.x, PlayerFrameRect.yMax + 6f,
++                PlayerFrameRect.width, party.Count * 36f + 8f);
++            GUI.Box(PartyFramesRect, GUIContent.none, Theme.PanelStyle);
++            for (int i = 0; i < party.Count; i++)
++                DrawCompactPartyRow(PartyFramesRect, i, party[i].Name, party[i].Hp,
++                    party[i].MaxHp, party[i].Down || party[i].Dead);
++        }
++
++        private static void DrawWorldPartyFrames(IReadOnlyList<PlayerCharacterHolder> party)
++        {
++            if (party.Count == 0) { PartyFramesRect = default; return; }
++            PartyFramesRect = new Rect(PlayerFrameRect.x, PlayerFrameRect.yMax + 6f,
++                PlayerFrameRect.width, party.Count * 36f + 8f);
++            GUI.Box(PartyFramesRect, GUIContent.none, Theme.PanelStyle);
++            for (int i = 0; i < party.Count; i++)
++                DrawCompactPartyRow(PartyFramesRect, i, party[i].CharacterName.Value,
++                    party[i].CurrentHpSynced.Value, party[i].MaxHpSynced.Value,
++                    party[i].CurrentHpSynced.Value <= 0);
++        }
++
++        private static void DrawCompactPartyRow(Rect group, int index, string name,
++            int hp, int max, bool down)
++        {
++            float y = group.y + 5f + index * 36f;
++            string label = string.IsNullOrWhiteSpace(name) ? "Party member" : name;
++            GUI.Label(new Rect(group.x + 8f, y, group.width - 16f, 15f),
++                down ? $"{label}  <color=#ff9e9e>down</color>" : label, Theme.Body);
++            var bar = new Rect(group.x + 8f, y + 18f, group.width - 16f, 9f);
++            Theme.Bar(bar, max > 0 ? (float)Mathf.Clamp(hp, 0, max) / max : 0f, Theme.HpGreen);
++        }
++
++        private static void DrawTargetFrame(CombatManager.UnitView target)
++        {
++            if (target == null) { TargetFrameRect = default; return; }
++            float w = Mathf.Clamp(Ui.W * 0.23f, 210f, 270f);
++            TargetFrameRect = new Rect(PlayerFrameRect.xMax + 24f, 12f, w, 54f);
++            GUI.Box(TargetFrameRect, GUIContent.none, Theme.PanelStyle);
++            GUI.Label(new Rect(TargetFrameRect.x + 10f, TargetFrameRect.y + 7f,
++                w - 20f, 18f), target.Name, Theme.Header);
++            var hpRect = new Rect(TargetFrameRect.x + 10f, TargetFrameRect.y + 31f,
++                w - 90f, 10f);
++            Theme.Bar(hpRect, target.MaxHp > 0 ? target.DisplayHp / target.MaxHp : 0f,
++                Theme.HpRed);
++            var centered = new GUIStyle(Theme.Caps)
++                { alignment = TextAnchor.MiddleRight, wordWrap = false };
++            centered.normal.textColor = Theme.OnSurface;
++            GUI.Label(new Rect(hpRect.xMax + 4f, hpRect.y - 3f, 66f, 16f),
++                $"{target.Hp}/{target.MaxHp}", centered);
++        }
++
++        private static Texture2D ClassEmblem(int classIndex)
++        {
++            classIndex = Mathf.Clamp(classIndex, 0, ClassEmblems.Length - 1);
++            if (ClassEmblems[classIndex] != null) return ClassEmblems[classIndex];
++            const int size = 32;
++            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
++                { hideFlags = HideFlags.HideAndDontSave, filterMode = FilterMode.Bilinear };
++            for (int y = 0; y < size; y++)
++                for (int x = 0; x < size; x++)
++                {
++                    float cx = x - 15.5f, cy = y - 15.5f;
++                    bool ink = classIndex switch
++                    {
++                        0 => Mathf.Abs(cx - cy) < 2.2f || Mathf.Abs(cx + cy) < 2.2f,
++                        1 => cx * cx + cy * cy < 92f ||
++                             (Mathf.Abs(cx) < 2f && Mathf.Abs(cy) < 14f),
++                        2 => (Mathf.Abs(cx) < 3f && Mathf.Abs(cy) < 13f) ||
++                             (Mathf.Abs(cy) < 3f && Mathf.Abs(cx) < 13f),
++                        _ => Mathf.Abs(cx) + Mathf.Abs(cy) < 12f &&
++                             !(Mathf.Abs(cx) < 3f && cy < -2f)
++                    };
++                    tex.SetPixel(x, y, ink ? Theme.Gold : Color.clear);
++                }
++            tex.Apply(false, true);
++            ClassEmblems[classIndex] = tex;
++            return tex;
+         }
+ 
+         /// <summary>Big centered VICTORY / DEFEATED card, shown for a few seconds after
+         /// the fight resolves (fades near the end).</summary>
+         private void DrawOutcomeBanner(CombatManager combat)
+         {
+diff --git a/game/Assets/Scripts/Game/HotBar.cs b/game/Assets/Scripts/Game/HotBar.cs
+index e34968b..c1d1459 100644
+--- a/game/Assets/Scripts/Game/HotBar.cs
++++ b/game/Assets/Scripts/Game/HotBar.cs
+@@ -14,20 +14,22 @@ namespace RadiantPool.Game
+     /// than running off both edges (they never shrink below a comfortable click target).</summary>
+     public class HotBar : MonoBehaviour
+     {
+         /// <summary>This frame's bar rect in Ui space — CombatClientUI excludes it from
+         /// click-to-move.</summary>
+         public static Rect BarRect { get; private set; }
++        /// <summary>The thin XP track immediately above the action-bar chrome.</summary>
++        public static Rect XpStripRect { get; private set; }
+ 
+         private const float MaxSlot = 46f;   // design size
+         private const float MinSlot = 34f;   // still an easy click target
+         private const float HideW = 24f;     // the slim "stow the bar" button on the end
+ 
+         private float _slot = MaxSlot;
+         private Texture2D _hideIcon;
+-        private GUIStyle _hpLabel;
++        private GUIStyle _keyTag;
+ 
+         private static GUIContent IconOnly(string id, string fallback)
+         {
+             var tex = CombatClientUI.Icon(id);
+             return tex != null ? new GUIContent(tex, fallback) : new GUIContent(fallback);
+         }
+@@ -42,17 +44,18 @@ namespace RadiantPool.Game
+ 
+         private void OnGUI()
+         {
+             Ui.Begin();
+             // A screen is up (bags, journal, settings, level-up): it owns the display, and the
+             // bar is not allowed to show through it.
+-            if (Ui.PanelOpen) { BarRect = default; return; }
++            if (Ui.PanelOpen) { BarRect = default; XpStripRect = default; return; }
+ 
+             var holder = CombatClientUI.LocalPlayerHolder();
+             var director = GameDirector.Instance;
+-            if (holder == null || director == null) { BarRect = default; return; }
++            if (holder == null || director == null)
++            { BarRect = default; XpStripRect = default; return; }
+ 
+             if (Ui.BarCollapsed) { DrawHandle(holder); return; }
+ 
+             var combat = CombatManager.Instance;
+             bool inCombat = combat != null && combat.InCombat.Value;
+             bool myTurn = inCombat && combat.CanAcceptPlayerInput;
+@@ -91,13 +94,13 @@ namespace RadiantPool.Game
+             float combatWidth = combatSlots * (_slot + 4f) + 28f;
+             float utilityWidth = utilSlots * (_slot + 4f) + 28f + goldW + HideW + 6f;
+             float w = wrapCombat ? Mathf.Min(avail, Mathf.Max(combatWidth, utilityWidth))
+                 : Mathf.Min(avail, slots * (_slot + 4f) + chrome);
+             float barHeight = wrapCombat ? _slot * 2f + 24f : _slot + 16f;
+             var rect = new Rect(Ui.W / 2f - w / 2f, Ui.H - barHeight - 22f, w, barHeight);
+-            BarRect = DrawHealth(holder, rect);
++            BarRect = WithXpStrip(holder, rect);
+ 
+             GUILayout.BeginArea(rect, Theme.PanelStyle);
+             GUILayout.BeginVertical();
+             if (wrapCombat)
+             {
+                 GUILayout.BeginHorizontal();
+@@ -105,32 +108,12 @@ namespace RadiantPool.Game
+                 DrawCombatActions(combat, myTurn, spells);
+                 GUILayout.FlexibleSpace();
+                 GUILayout.EndHorizontal();
+             }
+             GUILayout.BeginHorizontal();
+ 
+-            // Coin glyph rides left of the amount (licensed art, drawn at a fixed 16 px so
+-            // the large baked source never blows up the layout); without the pack the number
+-            // keeps its "g" suffix so the purse still reads as gold.
+-            GUILayout.Label(new GUIContent(
+-                    coin != null ? $"<color=#f2ca50><b>{gold}</b></color>"
+-                                 : $"<color=#f2ca50><b>{gold}</b>g</color>",
+-                    $"{gold} gold — the party's purse"),
+-                new GUIStyle(Theme.Body)
+-                {
+-                    richText = true, fontSize = 13, wordWrap = false,
+-                    alignment = TextAnchor.MiddleCenter,
+-                    padding = coin != null ? new RectOffset(16, 0, 0, 0) : new RectOffset()
+-                },
+-                GUILayout.Width(goldW), GUILayout.Height(_slot));
+-            if (coin != null)
+-            {
+-                var gr = GUILayoutUtility.GetLastRect();
+-                Theme.CurrencyGlyph(gr.x + 2f, gr.center.y, 16f);
+-            }
+-
+             if (inCombat && !wrapCombat)
+             {
+                 DrawCombatActions(combat, myTurn, spells);
+                 GUILayout.Space(gap);
+             }
+ 
+@@ -157,21 +140,39 @@ namespace RadiantPool.Game
+             {
+                 if (inCombat) combat.CmdDrinkPotion();
+                 else director.CmdUsePotion();
+             }
+             GUI.enabled = true;
+ 
+-            if (Btn("bag", "Inventory (I)")) Ui.Toggle(Ui.Panel.Inventory);
+-            if (Btn("journal", "Journal (J)")) Ui.Toggle(Ui.Panel.Journal);
++            if (Btn("bag", "Inventory (I)", "I")) Ui.Toggle(Ui.Panel.Inventory);
++            if (Btn("journal", "Journal (J)", "J")) Ui.Toggle(Ui.Panel.Journal);
+             // Session: the invite code and who you are connected to, on demand instead of
+             // parked in the corner of the screen for the whole campaign.
+             if (GUILayout.Button(new GUIContent(SessionPanel.Icon, "Session / invite code"),
+                     Theme.SlotStyle,
+                     GUILayout.Width(_slot), GUILayout.Height(_slot)))
+                 Ui.Toggle(Ui.Panel.Session);
+-            if (Btn("settings", "Settings (Esc)")) Ui.Toggle(Ui.Panel.Settings);
++            if (Btn("settings", "Settings (Esc)", "ESC")) Ui.Toggle(Ui.Panel.Settings);
++
++            // Compact purse chip at the right end, after every action and utility slot.
++            GUILayout.Label(new GUIContent(
++                    coin != null ? $"<color=#f2ca50><b>{gold}</b></color>"
++                                 : $"<color=#f2ca50><b>{gold}</b>g</color>",
++                    $"{gold} gold — the party's purse"),
++                new GUIStyle(Theme.Body)
++                {
++                    richText = true, fontSize = 13, wordWrap = false,
++                    alignment = TextAnchor.MiddleCenter,
++                    padding = coin != null ? new RectOffset(16, 0, 0, 0) : new RectOffset()
++                },
++                GUILayout.Width(goldW), GUILayout.Height(_slot));
++            if (coin != null)
++            {
++                var gr = GUILayoutUtility.GetLastRect();
++                Theme.CurrencyGlyph(gr.x + 2f, gr.center.y, 16f);
++            }
+ 
+             // Stow the whole bar. A generated chevron, not a glyph: the body font has no "▼"
+             // and a missing glyph renders as a tofu box. The icon is DRAWN OVER the button
+             // rather than handed to it as content — the skin's padding leaves a 24 px-wide
+             // button almost no content area, and the icon came out invisible.
+             GUILayout.Space(6);
+@@ -205,13 +206,13 @@ namespace RadiantPool.Game
+             }
+         }
+ 
+         private void DrawCombatActions(CombatManager combat, bool myTurn, string[] spells)
+         {
+             GUI.enabled = myTurn && combat.ActionLeft;
+-            if (Btn("attack", "Attack (A)"))
++            if (Btn("attack", "Attack (A)", "A"))
+             {
+                 var ui = CombatClientUI.Instance;
+                 if (ui != null) ui.PickAttack();
+             }
+             if (Btn("dodge", "Dodge")) combat.CmdDodge();
+ 
+@@ -228,75 +229,66 @@ namespace RadiantPool.Game
+                     var ui = CombatClientUI.Instance;
+                     if (ui != null) ui.PickSpell(id);
+                 }
+             }
+ 
+             GUI.enabled = myTurn;
+-            if (Btn("end_turn", "End Turn (Space)")) combat.CmdEndTurn();
++            if (Btn("end_turn", "End Turn (Space)", "SPC")) combat.CmdEndTurn();
+             GUI.enabled = true;
+         }
+ 
+-        private bool Btn(string icon, string tooltip) =>
+-            GUILayout.Button(IconOnly(icon, tooltip),
+-                Theme.SlotStyle,
++        private bool Btn(string icon, string tooltip, string key = "")
++        {
++            bool pressed = GUILayout.Button(IconOnly(icon, tooltip), Theme.SlotStyle,
+                 GUILayout.Width(_slot), GUILayout.Height(_slot));
++            if (key.Length > 0) DrawKeyTag(GUILayoutUtility.GetLastRect(), key);
++            return pressed;
++        }
+ 
+-        /// <summary>Your health, right where your hands are: a slim strip directly above the
+-        /// bar — hit points and the percentage, both, because "18/28" and "64%" answer
+-        /// different questions ("can I survive that hit" vs "how close am I to the floor").
+-        /// It reads the combat unit while a fight is on (RpcHpSync updates it the instant a
+-        /// blow lands) and the character's own SyncVar between fights. Kept short and slim:
+-        /// it sits under the steering arrow and must not become a second panel.
+-        ///
+-        /// Returns the HUD rect the caller should publish as BarRect — the strip and the bar
+-        /// together, so a click on either can never fall through onto the battlefield.</summary>
+-        private Rect DrawHealth(PlayerCharacterHolder holder, Rect bar)
++        private void DrawKeyTag(Rect slot, string key)
+         {
+-            var combat = CombatManager.Instance;
+-            var unit = combat != null && combat.InCombat.Value ? combat.MyUnit : null;
+-            int max = unit != null ? unit.MaxHp : holder.MaxHpSynced.Value;
+-            if (max <= 0) return bar;   // sheet hasn't reached this client yet
+-
+-            int hp = Mathf.Clamp(unit != null ? unit.Hp : holder.CurrentHpSynced.Value, 0, max);
+-            float fraction = (float)hp / max;
+-            int percent = Mathf.RoundToInt(fraction * 100f);
+-
+-            const float h = 16f;
+-            float w = Mathf.Min(bar.width, 250f);
+-            var strip = new Rect(bar.center.x - w / 2f, bar.y - h - 6f, w, h);
+-            GUI.Box(new Rect(strip.x - 5f, strip.y - 3f, strip.width + 10f, strip.height + 6f),
+-                GUIContent.none);
+-
+-            if (_hpLabel == null)
+-                _hpLabel = new GUIStyle(Theme.Caps)
+-                    { alignment = TextAnchor.MiddleRight, wordWrap = false };
+-
+-            // Bar left, numbers right — the numbers never sit ON the bar (text over a fill is
+-            // the one place this HUD cannot hold its 4.5:1 contrast). Your own health is
+-            // green: the party side reads green everywhere, the enemy red.
+-            const float readout = 96f;
+-            Theme.Bar(new Rect(strip.x, strip.y + 4f, strip.width - readout - 6f, 9f),
+-                fraction, Theme.HpGreen);
+-            _hpLabel.normal.textColor = hp == 0 ? Theme.Crimson
+-                : fraction <= 0.34f ? Theme.Gold : Theme.OnSurface;
+-            GUI.Label(new Rect(strip.xMax - readout, strip.y, readout, h),
+-                hp == 0 ? "DOWN" : $"{hp}/{max}  {percent}%", _hpLabel);
++            if (_keyTag == null)
++            {
++                _keyTag = new GUIStyle(Theme.Caps)
++                {
++                    alignment = TextAnchor.MiddleCenter,
++                    fontSize = 8,
++                    wordWrap = false,
++                    padding = new RectOffset(2, 2, 0, 0)
++                };
++                _keyTag.normal.textColor = Theme.OnSurface;
++            }
++            float w = Mathf.Max(12f, key.Length * 6f + 4f);
++            var tag = new Rect(slot.xMax - w - 2f, slot.y + 2f, w, 11f);
++            Color old = GUI.color;
++            GUI.color = new Color(0.09f, 0.07f, 0.05f, 0.92f);
++            GUI.DrawTexture(tag, Texture2D.whiteTexture);
++            GUI.color = old;
++            GUI.Label(tag, key, _keyTag);
++        }
+ 
+-            return Rect.MinMaxRect(Mathf.Min(bar.x, strip.x - 5f), strip.y - 3f,
+-                Mathf.Max(bar.xMax, strip.xMax + 5f), bar.yMax);
++        /// <summary>Add the shared thin XP track above the bar and publish both as BarRect,
++        /// so the log, target picker, steering arrow, and battlefield hit-test all dock from
++        /// the complete bottom-centre HUD footprint.</summary>
++        private static Rect WithXpStrip(PlayerCharacterHolder holder, Rect bar)
++        {
++            const float h = 8f;
++            XpStripRect = new Rect(bar.x, bar.y - h - 4f, bar.width, h);
++            ProgressUI.DrawXpTrack(XpStripRect, holder, true);
++            return Rect.MinMaxRect(bar.x, XpStripRect.y, bar.xMax, bar.yMax);
+         }
+ 
+         /// <summary>Stowed: one slim handle where the bar was, so hiding it is never a one-way
+         /// door — the same rule the minimap's collapsed pill follows. BarRect still reports the
+         /// handle, so combat click-to-move can't fire through it, and the steering arrow keeps
+-        /// docking off the bar's top edge (it just gets more room). The health strip STAYS: the
+-        /// bar is furniture, your hit points are not.</summary>
++        /// docking off the bar's top edge (it just gets more room). The XP track remains above
++        /// the handle; health lives in the top-left player frame.</summary>
+         private void DrawHandle(PlayerCharacterHolder holder)
+         {
+             var rect = new Rect(Ui.W / 2f - 62f, Ui.H - 34f, 124f, 26f);
+-            BarRect = DrawHealth(holder, rect);
++            BarRect = WithXpStrip(holder, rect);
+             var style = new GUIStyle(GUI.skin.button)
+                 { fontSize = 11, wordWrap = false, clipping = TextClipping.Overflow };
+             if (GUI.Button(rect, "SHOW BAR (H)", style)) Ui.BarCollapsed = false;
+         }
+ 
+         /// <summary>Down chevron over a bar — "put this away". Generated, because the fonts
+diff --git a/game/Assets/Scripts/Game/ProgressUI.cs b/game/Assets/Scripts/Game/ProgressUI.cs
+index efb8593..d1c4e39 100644
+--- a/game/Assets/Scripts/Game/ProgressUI.cs
++++ b/game/Assets/Scripts/Game/ProgressUI.cs
+@@ -3,16 +3,15 @@ using RadiantPool.Rules;
+ using UnityEngine;
+ 
+ namespace RadiantPool.Game
+ {
+     /// <summary>The character's progress, in two pieces.
+     ///
+-    /// LEVEL AND XP live on the CHARACTER SHEET (I), not on the main screen: they say who you
+-    /// are, not what is happening, and the battlefield is what the main screen is for. The
+-    /// sheet's block is drawn by XpBlock below, so there is one definition of it — the level,
+-    /// the bar, the XP either side, MAX at the campaign cap.
++    /// LEVEL AND XP have a full block on the CHARACTER SHEET (I), while a thin MMO progress
++    /// track also sits above the action bar. Both call the shared progress helper below, so
++    /// level, XP, fraction, and MAX still have one definition.
+     ///
+     /// The LEVEL-UP SCREEN (L, or the button on the sheet) spends the points a level-up
+     /// granted: one per level, two at 4th (Progression's house rule). Each row says what the
+     /// ability actually does for THIS character, because "+1 CHA" means nothing to a player
+     /// deciding. The client only asks — CmdSpendAbilityPoint and the rules lib decide.</summary>
+     public class ProgressUI : MonoBehaviour
+@@ -41,30 +40,29 @@ namespace RadiantPool.Game
+ 
+         /// <summary>Level + XP, drawn wherever the character sheet wants it (InventoryUI calls
+         /// this). Kept here next to the level-up screen it feeds: one owner of what "progress"
+         /// looks like, so the sheet and the screen can never disagree about it.</summary>
+         public static void XpBlock(PlayerCharacterHolder me)
+         {
+-            int level = Mathf.Clamp(me.LevelSynced.Value, 1, Progression.MaxLevel);
++            var progress = XpProgress(me);
+             int points = me.PendingPointsSynced.Value;
+-            var (into, span, fraction) = Progression.Progress(level, me.XpSynced.Value);
+-            bool capped = level >= Progression.MaxLevel;
+ 
+             GUILayout.BeginHorizontal();
+-            GUILayout.Label($"<color=#f2ca50><b>LEVEL {level}</b></color>",
++            GUILayout.Label($"<color=#f2ca50><b>LEVEL {progress.level}</b></color>",
+                 new GUIStyle(Theme.Body) { richText = true, fontSize = 13 });
+             GUILayout.FlexibleSpace();
+-            GUILayout.Label(capped
++            GUILayout.Label(progress.capped
+                     ? "<color=#cbbb9c>MAX</color>"
+-                    : $"<color=#cbbb9c>{into}/{span} XP " +
+-                      $"({Mathf.FloorToInt(fraction * 100f)}% to {level + 1})</color>",
++                    : $"<color=#cbbb9c>{progress.into}/{progress.span} XP " +
++                      $"({Mathf.FloorToInt(progress.fraction * 100f)}% to " +
++                      $"{progress.level + 1})</color>",
+                 new GUIStyle(Theme.Body) { richText = true, fontSize = 11, wordWrap = false });
+             GUILayout.EndHorizontal();
+ 
+             var track = GUILayoutUtility.GetRect(60f, 12f, GUILayout.ExpandWidth(true));
+-            Theme.XpBar(track, capped ? 1f : fraction);
++            DrawXpTrack(track, me, false);
+ 
+             if (points > 0)
+             {
+                 GUILayout.Space(4);
+                 // 24 px cropped the label's descenders clean off at this font — the button has
+                 // to be as tall as the words it carries.
+@@ -72,12 +70,48 @@ namespace RadiantPool.Game
+                         Theme.BtnPrimary, GUILayout.Height(30)))
+                     Ui.Show(Ui.Panel.LevelUp);
+             }
+             GUILayout.Space(6);
+         }
+ 
++        /// <summary>The one XP calculation consumed by the sheet and compact HUD track.</summary>
++        private static (int level, int into, int span, float fraction, bool capped)
++            XpProgress(PlayerCharacterHolder me)
++        {
++            int level = Mathf.Clamp(me.LevelSynced.Value, 1, Progression.MaxLevel);
++            var (into, span, fraction) = Progression.Progress(level, me.XpSynced.Value);
++            return (level, into, span, fraction, level >= Progression.MaxLevel);
++        }
++
++        /// <summary>Shared XP track. Compact mode adds the terse MMO readout directly to the
++        /// strip; the sheet supplies its fuller labels above the same track.</summary>
++        public static void DrawXpTrack(Rect rect, PlayerCharacterHolder me, bool compact)
++        {
++            var progress = XpProgress(me);
++            Theme.XpBar(rect, progress.capped ? 1f : progress.fraction);
++            if (!compact) return;
++
++            var label = new GUIStyle(Theme.Caps)
++            {
++                alignment = TextAnchor.MiddleCenter,
++                fontSize = 8,
++                wordWrap = false,
++                clipping = TextClipping.Clip
++            };
++            label.normal.textColor = Theme.OnSurface;
++            Color old = GUI.color;
++            GUI.color = new Color(0.04f, 0.03f, 0.02f, 0.58f);
++            GUI.DrawTexture(new Rect(rect.center.x - rect.width * 0.24f, rect.y,
++                rect.width * 0.48f, rect.height), Texture2D.whiteTexture);
++            GUI.color = old;
++            string text = progress.capped
++                ? $"LEVEL {progress.level}  MAX"
++                : $"LEVEL {progress.level}  {progress.into}/{progress.span} XP";
++            GUI.Label(rect, text, label);
++        }
++
+         private void DrawLevelUpPanel(PlayerCharacterHolder me)
+         {
+             var director = GameDirector.Instance;
+             if (director == null) return;
+             int points = me.PendingPointsSynced.Value;
+ 
+diff --git a/game/Assets/Scripts/Game/QuestTracker.cs b/game/Assets/Scripts/Game/QuestTracker.cs
+index a729272..b74091d 100644
+--- a/game/Assets/Scripts/Game/QuestTracker.cs
++++ b/game/Assets/Scripts/Game/QuestTracker.cs
+@@ -26,12 +26,14 @@ namespace RadiantPool.Game
+         public const string CouncilHallMapZoneId = "council_hall";
+ 
+         private GameObject _beacon;
+         private float _nextScan;
+         private Texture2D _steerArrow;
+         private GUIStyle _distStyle, _questTitle, _stepStyle, _stepDone, _cardBtn;
++        private Vector2 _objectiveScroll;
++        public static Rect CardRect { get; private set; }
+         public const string TrackedQuestPreference = "questTracker.zoneId";
+ 
+         private void Awake() => Instance = this;
+         private void Start()
+         {
+             var args = System.Environment.GetCommandLineArgs();
+@@ -309,18 +311,19 @@ namespace RadiantPool.Game
+ 
+         private void OnGUI()
+         {
+             Ui.Begin();
+             // A screen is up: the card, the banner and the steering arrow all step aside —
+             // the banner used to land right on the top edge of the open panel.
+-            if (Ui.PanelOpen) return;
++            if (Ui.PanelOpen) { CardRect = default; return; }
+             var player = LocalPlayer();
+             bool inCombat = CombatManager.Instance != null && CombatManager.Instance.InCombat.Value;
+-            if (player == null || inCombat) return;
++            if (player == null) { CardRect = default; return; }
+ 
+             DrawObjectives();   // shown even with no target, so the party is never adrift
++            if (inCombat) return;
+             if (!HasTarget) return;
+ 
+             Vector3 delta = TargetPosition - player.position;
+             float dist = new Vector2(delta.x, delta.z).magnitude;
+ 
+             // Bearing relative to the camera, so screen-up always means "walk forward".
+@@ -333,31 +336,40 @@ namespace RadiantPool.Game
+                 maxW: Mathf.Min(660f, Ui.W - 40f));
+ 
+             DrawSteeringArrow(bearing, dist);
+             DrawWorldMarker(dist);
+         }
+ 
+-        /// <summary>Persistent quest card, top-left: the active quest and a checklist of
++        /// <summary>Persistent quest card, right-side: the active quest and a checklist of
+         /// what is still outstanding. It updates the instant a quest hands over, so
+         /// finishing one immediately shows the next.</summary>
+-        /// <summary>The card sits in the top-left corner itself now — the hosting strip that
+-        /// used to hold that spot moved onto the hotbar (SessionPanel), so nothing is above it.</summary>
+-        private const float CardTop = 12f;
++        /// <summary>The card docks below the minimap, or below initiative in combat, so the
++        /// top-left corner remains dedicated to player and party unit frames.</summary>
++        private static float CardTop
++        {
++            get
++            {
++                var combat = CombatManager.Instance;
++                if (combat != null && combat.InCombat.Value && combat.ClientUnits.Count > 0)
++                    return CombatClientUI.InitiativeRect(combat).yMax + 8f;
++                return MiniMap.MapRect.yMax + 8f;
++            }
++        }
+ 
+         /// <summary>Collapsed state, remembered like the minimap's size: a player who wants the
+         /// city rather than the checklist should not have to hide it again every session.</summary>
+         private static bool Collapsed
+         {
+             get => PlayerPrefs.GetInt("questCardCollapsed", 0) == 1;
+             set => PlayerPrefs.SetInt("questCardCollapsed", value ? 1 : 0);
+         }
+ 
+         private void DrawObjectives()
+         {
+             var (title, steps) = Objectives();
+-            if (string.IsNullOrEmpty(title)) return;
++            if (string.IsNullOrEmpty(title)) { CardRect = default; return; }
+ 
+             if (_questTitle == null)
+             {
+                 _questTitle = new GUIStyle(Theme.Header) { fontSize = 14, wordWrap = true };
+                 _stepStyle = new GUIStyle(Theme.Body) { fontSize = 12, wordWrap = true };
+                 _stepDone = new GUIStyle(Theme.Body) { fontSize = 12, wordWrap = true };
+@@ -373,13 +385,14 @@ namespace RadiantPool.Game
+                 _cardBtn = new GUIStyle(GUI.skin.button) { fontSize = 11, wordWrap = false,
+                     padding = new RectOffset(2, 2, 2, 2), clipping = TextClipping.Overflow };
+ 
+             // Collapsed: one slim bar with the quest's name, and the way back.
+             if (Collapsed)
+             {
+-                var pill = new Rect(12, CardTop, w, 30f);
++                var pill = new Rect(Ui.W - w - 12f, CardTop, w, 30f);
++                CardRect = pill;
+                 GUI.Box(pill, GUIContent.none, Theme.PanelStyle);
+                 var nameStyle = new GUIStyle(Theme.Body) { fontSize = 12, wordWrap = false,
+                     clipping = TextClipping.Clip };
+                 GUI.Label(new Rect(pill.x + 8f, pill.y + 6f, w - btn - 14f, 18f), title, nameStyle);
+                 if (GUI.Button(new Rect(pill.xMax - btn - 5f, pill.y + 4f, btn, 22f),
+                         "Show", _cardBtn))
+@@ -389,34 +402,45 @@ namespace RadiantPool.Game
+ 
+             float titleW = w - pad * 2f - btn;
+             float h = pad * 2f + _questTitle.CalcHeight(new GUIContent(title), titleW) + 4f;
+             foreach (var (text, _) in steps)
+                 h += _stepStyle.CalcHeight(new GUIContent(text), w - pad * 2f - 18f) + 2f;
+ 
+-            var panel = new Rect(12, CardTop, w, Mathf.Min(h, Ui.H - CardTop - 140f));
++            var panel = new Rect(Ui.W - w - 12f, CardTop, w,
++                Mathf.Min(h, Mathf.Max(64f, Ui.H - CardTop - 12f)));
++            CardRect = panel;
+             GUI.Box(panel, GUIContent.none, Theme.PanelStyle);
+ 
+             float y = panel.y + pad;
+             float tH = _questTitle.CalcHeight(new GUIContent(title), titleW);
+             GUI.Label(new Rect(panel.x + pad, y, titleW, tH), title, _questTitle);
+             if (GUI.Button(new Rect(panel.xMax - btn - 5f, panel.y + 6f, btn, 22f),
+                     "Hide", _cardBtn))
+                 Collapsed = true;
+             y += tH + 4f;
+ 
++            float contentH = 0f;
++            float textW = w - pad * 2f - 34f;
++            foreach (var (text, done) in steps)
++                contentH += (done ? _stepDone : _stepStyle)
++                    .CalcHeight(new GUIContent(text), textW) + 2f;
++            var viewport = new Rect(panel.x + pad, y, panel.width - pad * 2f,
++                Mathf.Max(1f, panel.yMax - y - pad));
++            _objectiveScroll = GUI.BeginScrollView(viewport, _objectiveScroll,
++                new Rect(0f, 0f, viewport.width - 16f, Mathf.Max(viewport.height, contentH)));
++            float rowY = 0f;
+             foreach (var (text, done) in steps)
+             {
+                 var style = done ? _stepDone : _stepStyle;
+-                float sH = style.CalcHeight(new GUIContent(text), w - pad * 2f - 18f);
+-                if (y + sH > panel.yMax - pad) break;   // never spill out of the card
+-                // ASCII markers only: the body font has no box/tick glyphs, and a missing
+-                // glyph renders as tofu. State is carried by the marker, not just colour.
+-                GUI.Label(new Rect(panel.x + pad, y, 18f, sH), Theme.Check(done), style);
+-                GUI.Label(new Rect(panel.x + pad + 18f, y, w - pad * 2f - 18f, sH), text, style);
+-                y += sH + 2f;
++                float sH = style.CalcHeight(new GUIContent(text), textW);
++                // ASCII markers only: state is carried by the marker, not just colour.
++                GUI.Label(new Rect(0f, rowY, 18f, sH), Theme.Check(done), style);
++                GUI.Label(new Rect(18f, rowY, textW, sH), text, style);
++                rowY += sH + 2f;
+             }
++            GUI.EndScrollView();
+         }
+ 
+         /// <summary>The big "go this way" arrow: a gold chevron above the hotbar, rotated
+         /// to the objective's bearing (up = walk straight ahead) and gently pulsing. It is
+         /// the primary wayfinding cue — the minimap X is the map-level confirmation.</summary>
+         private void DrawSteeringArrow(float bearing, float dist)

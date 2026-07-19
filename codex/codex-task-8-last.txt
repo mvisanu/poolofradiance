@@ -1,0 +1,4 @@
+STATUS: BLOCKED  
+Commit: NONE — `.git/index.lock` permission denied  
+Evidence: no-restore compile 0 errors; rules tests 166/166 passed  
+Concerns: Git commit blocked by read-only `.git`; Unity verification skipped as directed; restore-enabled commands were sandbox-blocked.

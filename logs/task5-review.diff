@@ -1,0 +1,861 @@
+﻿diff --git a/game/Assets/Editor/GeneratedArt.cs b/game/Assets/Editor/GeneratedArt.cs
+index db7e5cf..962007d 100644
+--- a/game/Assets/Editor/GeneratedArt.cs
++++ b/game/Assets/Editor/GeneratedArt.cs
+@@ -37,14 +37,22 @@ namespace RadiantPool.EditorTools
+             {
+                 Debug.Log("[Bootstrap] No generated beasts; skipping.");
+                 return;
+             }
+ 
+-            foreach (string guid in AssetDatabase.FindAssets("t:Model", new[] { Root }))
++            foreach (string name in Colours.Keys)
+             {
+-                string path = AssetDatabase.GUIDToAssetPath(guid);
+-                string name = System.IO.Path.GetFileNameWithoutExtension(path);
++                string hdPath = $"{Root}/{name}_hd.fbx";
++                string fallbackPath = $"{Root}/{name}.fbx";
++                string path = AssetDatabase.LoadAssetAtPath<GameObject>(hdPath) != null
++                    ? hdPath : fallbackPath;
++                if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null)
++                {
++                    Debug.LogWarning($"[Bootstrap] Missing generated beast {fallbackPath}");
++                    continue;
++                }
++                Debug.Log($"[Bootstrap] {name} source: {path}");
+                 SetupModel(path, name);
+             }
+             AssetDatabase.SaveAssets();
+             Debug.Log("[Bootstrap] Generated beasts ready (Bear, Rat).");
+         }
+diff --git a/game/Assets/Editor/HandpaintedGroundArt.cs b/game/Assets/Editor/HandpaintedGroundArt.cs
+index a0c3897..f35f203 100644
+--- a/game/Assets/Editor/HandpaintedGroundArt.cs
++++ b/game/Assets/Editor/HandpaintedGroundArt.cs
+@@ -57,12 +57,90 @@ namespace RadiantPool.EditorTools
+                 AssetDatabase.CreateAsset(material, materialPath);
+             }
+             var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(texturePath);
+             material.SetTexture("_BaseMap", texture);
+             material.SetTextureScale("_BaseMap", new Vector2(4.5f, 4.5f));
++            var normal = NormalFor(texturePath, textureName);
++            if (normal != null)
++            {
++                material.SetTexture("_BumpMap", normal);
++                material.SetTextureScale("_BumpMap", new Vector2(4.5f, 4.5f));
++                material.SetFloat("_BumpScale", 0.55f);
++                material.EnableKeyword("_NORMALMAP");
++            }
+             material.SetColor("_BaseColor", Color.Lerp(Color.white, tint, 0.18f));
+             material.SetFloat("_Smoothness", 0.02f);
+             EditorUtility.SetDirty(material);
+             return material;
+         }
++
++        private static Texture2D NormalFor(string texturePath, string textureName)
++        {
++            string sourceDir = Path.GetDirectoryName(texturePath).Replace('\\', '/');
++            string stem = textureName.ToLowerInvariant().Replace("_up", "");
++            foreach (string guid in AssetDatabase.FindAssets("t:Texture2D", new[] { sourceDir }))
++            {
++                string candidatePath = AssetDatabase.GUIDToAssetPath(guid);
++                if (candidatePath == texturePath || candidatePath.StartsWith(Generated)) continue;
++                string candidate = Path.GetFileNameWithoutExtension(candidatePath).ToLowerInvariant();
++                bool namedNormal = candidate.Contains("normalmap") || candidate.EndsWith("_n")
++                                   || candidate.Contains("_nrm") || candidate.Contains("_bump");
++                if (!namedNormal || !candidate.Contains(stem)) continue;
++                ConfigureNormal(candidatePath);
++                return AssetDatabase.LoadAssetAtPath<Texture2D>(candidatePath);
++            }
++
++            string normalPath = $"{Generated}/N_{textureName}.png";
++            var existing = AssetDatabase.LoadAssetAtPath<Texture2D>(normalPath);
++            if (existing != null)
++            {
++                ConfigureNormal(normalPath);
++                return AssetDatabase.LoadAssetAtPath<Texture2D>(normalPath);
++            }
++
++            string absolute = Path.Combine(Path.GetDirectoryName(Application.dataPath), texturePath);
++            var source = new Texture2D(2, 2, TextureFormat.RGBA32, false);
++            if (!source.LoadImage(File.ReadAllBytes(absolute)))
++            {
++                Object.DestroyImmediate(source);
++                return null;
++            }
++            int width = source.width;
++            int height = source.height;
++            var pixels = source.GetPixels();
++            var output = new Texture2D(width, height, TextureFormat.RGBA32, false, true);
++            Color Sample(int x, int y) => pixels[(y + height) % height * width + (x + width) % width];
++            float HeightAt(int x, int y)
++            {
++                Color c = Sample(x, y);
++                return c.r * 0.299f + c.g * 0.587f + c.b * 0.114f;
++            }
++            for (int y = 0; y < height; y++)
++            for (int x = 0; x < width; x++)
++            {
++                float dx = (HeightAt(x + 1, y) - HeightAt(x - 1, y)) * 0.8f;
++                float dy = (HeightAt(x, y + 1) - HeightAt(x, y - 1)) * 0.8f;
++                Vector3 n = new Vector3(-dx, -dy, 1f).normalized;
++                output.SetPixel(x, y, new Color(n.x * 0.5f + 0.5f,
++                    n.y * 0.5f + 0.5f, n.z * 0.5f + 0.5f, 1f));
++            }
++            output.Apply();
++            File.WriteAllBytes(normalPath, output.EncodeToPNG());
++            Object.DestroyImmediate(source);
++            Object.DestroyImmediate(output);
++            AssetDatabase.ImportAsset(normalPath);
++            ConfigureNormal(normalPath);
++            return AssetDatabase.LoadAssetAtPath<Texture2D>(normalPath);
++        }
++
++        private static void ConfigureNormal(string path)
++        {
++            var importer = AssetImporter.GetAtPath(path) as TextureImporter;
++            if (importer == null) return;
++            bool changed = importer.textureType != TextureImporterType.NormalMap
++                           || importer.wrapMode != TextureWrapMode.Repeat;
++            importer.textureType = TextureImporterType.NormalMap;
++            importer.wrapMode = TextureWrapMode.Repeat;
++            if (changed) importer.SaveAndReimport();
++        }
+     }
+ }
+diff --git a/game/Assets/Editor/KayKitArt.cs b/game/Assets/Editor/KayKitArt.cs
+index a984e0d..1450825 100644
+--- a/game/Assets/Editor/KayKitArt.cs
++++ b/game/Assets/Editor/KayKitArt.cs
+@@ -12,10 +12,16 @@ namespace RadiantPool.EditorTools
+     public static class KayKitArt
+     {
+         private const string Root = "Assets/Art/KayKit";
+         private const string ControllerPath = Root + "/CharacterAnimator.controller";
+         private const string PrefabDir = "Assets/Resources/Characters";
++        private static readonly string[] MetalWords =
++            { "knight", "warrior", "blade", "sword", "axe", "dagger", "shield", "weapon" };
++        private static readonly string[] ClothWords =
++            { "mage", "rogue", "hood", "ranger", "cloth", "robe", "banner" };
++        private static readonly string[] SkinWords =
++            { "barbarian", "skin", "fur", "hide", "leather" };
+ 
+         public static void Setup()
+         {
+             if (!AssetDatabase.IsValidFolder(Root))
+             {
+@@ -75,11 +81,11 @@ namespace RadiantPool.EditorTools
+                         mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                         if (tex != null) mat.SetTexture("_BaseMap", tex);
+                         AssetDatabase.CreateAsset(mat, matPath);
+                     }
+                     // Outside the creation guard so a retune reaches already-baked mats.
+-                    mat.SetFloat("_Smoothness", 0.18f);
++                    mat.SetFloat("_Smoothness", SmoothnessFor(baseName, folder));
+ 
+                     var importer = (ModelImporter)AssetImporter.GetAtPath(path);
+                     bool changed = false;
+                     // KayKit defaults to Generic. The Warrior Pack is Humanoid, so opt
+                     // party and skeleton bodies into Mecanim retargeting only when the
+@@ -160,10 +166,20 @@ namespace RadiantPool.EditorTools
+                     AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+                 }
+             }
+         }
+ 
++        private static float SmoothnessFor(params string[] names)
++        {
++            string value = string.Join(" ", names).ToLowerInvariant();
++            if (MetalWords.Any(word => value.Contains(word))) return 0.58f;
++            if (ClothWords.Any(word => value.Contains(word))) return 0.11f;
++            if (SkinWords.Any(word => value.Contains(word))) return 0.25f;
++            if (value.Contains("skeleton") || value.Contains("bone")) return 0.20f;
++            return 0.22f;
++        }
++
+         private static AnimationClip FindClip(AnimationClip[] all, params string[] keywords)
+         {
+             foreach (string k in keywords)
+             {
+                 var clip = all.FirstOrDefault(c => c.name.Contains(k));
+diff --git a/game/Assets/Editor/KenneyArt.cs b/game/Assets/Editor/KenneyArt.cs
+index 53eec12..b0b5fe9 100644
+--- a/game/Assets/Editor/KenneyArt.cs
++++ b/game/Assets/Editor/KenneyArt.cs
+@@ -9,10 +9,21 @@ namespace RadiantPool.EditorTools
+     /// Standard-shader and would render magenta in URP), and places models with
+     /// bounds-normalized scale so layout code can think in meters.</summary>
+     public static class KenneyArt
+     {
+         private const string Root = "Assets/Art/Kenney";
++        private enum SurfaceKind { Default, Water, Metal, Cloth, Skin, WoodStone }
++        private static readonly string[] WaterWords = { "water", "fountain" };
++
++        private static readonly string[] MetalWords =
++            { "metal", "iron", "steel", "blade", "sword", "axe", "weapon", "lantern" };
++        private static readonly string[] ClothWords =
++            { "cloth", "canvas", "banner", "flag", "tent", "sail" };
++        private static readonly string[] SkinWords =
++            { "skin", "fur", "hide", "leather", "animal" };
++        private static readonly string[] WoodStoneWords =
++            { "wood", "plank", "log", "tree", "rock", "stone", "road", "wall", "brick" };
+ 
+         public static void SetupMaterials()
+         {
+             foreach (string kit in new[] { "FantasyTown", "Pirate", "Nature", "Survival" })
+             {
+@@ -36,11 +47,11 @@ namespace RadiantPool.EditorTools
+                         atlasMat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                         atlasMat.SetTexture("_BaseMap", atlasTex);
+                         AssetDatabase.CreateAsset(atlasMat, matPath);
+                     }
+                     // Outside the creation guard so a retune reaches already-baked mats.
+-                    atlasMat.SetFloat("_Smoothness", 0.18f);
++                    atlasMat.SetFloat("_Smoothness", SmoothnessFor(kit, atlasTex.name));
+                 }
+                 else if (!AssetDatabase.IsValidFolder($"{kitPath}/Mats"))
+                 {
+                     AssetDatabase.CreateFolder(kitPath, "Mats");
+                 }
+@@ -55,40 +66,85 @@ namespace RadiantPool.EditorTools
+                         .OfType<Material>().Distinct().ToList();
+                     var existing = importer.GetExternalObjectMap();
+                     foreach (var src in embedded)
+                     {
+                         var id = new AssetImporter.SourceAssetIdentifier(typeof(Material), src.name);
+-                        if (existing.ContainsKey(id)) continue;
+-                        importer.AddRemap(id, atlasMat != null ? atlasMat : ColorMat(kitPath, src));
++                        var target = atlasMat != null
++                            ? AtlasMat(kitPath, kit, atlasTex, path, src.name)
++                            : ColorMat(kitPath, src);
++                        if (existing.TryGetValue(id, out var current) && current == target) continue;
++                        importer.AddRemap(id, target);
+                         changed = true;
+                     }
+                     if (changed)
+                         AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+                 }
+             }
+             AssetDatabase.SaveAssets();
+             Debug.Log("[Bootstrap] Kenney materials remapped to URP.");
+         }
+ 
++        private static float SmoothnessFor(params string[] names)
++        {
++            switch (SurfaceFor(names))
++            {
++                case SurfaceKind.Water: return 0.68f;
++                case SurfaceKind.Metal: return 0.58f;
++                case SurfaceKind.Cloth: return 0.11f;
++                case SurfaceKind.Skin: return 0.25f;
++                case SurfaceKind.WoodStone: return 0.20f;
++                default: return 0.18f;
++            }
++        }
++
++        private static SurfaceKind SurfaceFor(params string[] names)
++        {
++            string value = string.Join(" ", names).ToLowerInvariant();
++            if (WaterWords.Any(word => value.Contains(word))) return SurfaceKind.Water;
++            if (MetalWords.Any(word => value.Contains(word))) return SurfaceKind.Metal;
++            if (ClothWords.Any(word => value.Contains(word))) return SurfaceKind.Cloth;
++            if (SkinWords.Any(word => value.Contains(word))) return SurfaceKind.Skin;
++            if (WoodStoneWords.Any(word => value.Contains(word))) return SurfaceKind.WoodStone;
++            return SurfaceKind.Default;
++        }
++
++        private static Material AtlasMat(string kitPath, string kit, Texture2D atlas,
++            params string[] names)
++        {
++            SurfaceKind kind = SurfaceFor(names);
++            string suffix = kind == SurfaceKind.Default ? "" : "_" + kind;
++            string path = $"{kitPath}/M_{kit}{suffix}.mat";
++            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
++            if (material == null)
++            {
++                material = new Material(Shader.Find("Universal Render Pipeline/Lit"));
++                AssetDatabase.CreateAsset(material, path);
++            }
++            material.SetTexture("_BaseMap", atlas);
++            material.SetFloat("_Smoothness", SmoothnessFor(names));
++            EditorUtility.SetDirty(material);
++            return material;
++        }
++
+         /// <summary>URP material per embedded-material name, copying its base color —
+         /// shared across every model in the kit that uses the same material name.</summary>
+         private static Material ColorMat(string kitPath, Material source)
+         {
+             string safe = string.Concat(source.name.Split(System.IO.Path.GetInvalidFileNameChars()));
+             string matPath = $"{kitPath}/Mats/M_{safe}.mat";
+             var mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+             if (mat != null)
+             {
+-                mat.SetFloat("_Smoothness", 0.18f);   // retune reaches baked mats too
++                mat.SetFloat("_Smoothness", SmoothnessFor(source.name));
+                 return mat;
+             }
+             Color color = Color.white;
+             if (source.HasProperty("_BaseColor")) color = source.GetColor("_BaseColor");
+             else if (source.HasProperty("_Color")) color = source.GetColor("_Color");
+             mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+             mat.SetColor("_BaseColor", color);
+-            mat.SetFloat("_Smoothness", 0.18f);
++            mat.SetFloat("_Smoothness", SmoothnessFor(source.name));
+             AssetDatabase.CreateAsset(mat, matPath);
+             return mat;
+         }
+ 
+         /// <summary>Instantiates a kit model. targetSize > 0 uniformly rescales so the
+diff --git a/game/Assets/Editor/PolyPackArt.cs b/game/Assets/Editor/PolyPackArt.cs
+index 9f08cc7..5763ad2 100644
+--- a/game/Assets/Editor/PolyPackArt.cs
++++ b/game/Assets/Editor/PolyPackArt.cs
+@@ -225,12 +225,13 @@ namespace RadiantPool.EditorTools
+                 {
+                     mat.SetTexture("_MetallicGlossMap", metallic);
+                     mat.EnableKeyword("_METALLICSPECGLOSSMAP");
+                 }
+                 if (occlusion != null) mat.SetTexture("_OcclusionMap", occlusion);
+-                mat.SetFloat("_Smoothness", sourceRoot.Key == Source.GraveyardNature
+-                    ? Mathf.Clamp(sourceSmoothness, 0.08f, 0.65f) : 0.08f);
++                // Preserve each pack's authored response instead of flattening three
++                // sources to chalk. The clamp keeps legacy glossy values plausible.
++                mat.SetFloat("_Smoothness", Mathf.Clamp(sourceSmoothness, 0.08f, 0.65f));
+ 
+                 string lower = assetPath.ToLowerInvariant();
+                 bool cutout = sourceRoot.Key == Source.GraveyardNature
+                               && (lower.Contains("leaf") || lower.Contains("grass")
+                                   || lower.Contains("ivy") || lower.Contains("fern")
+diff --git a/game/Assets/Editor/ProjectBootstrap.cs b/game/Assets/Editor/ProjectBootstrap.cs
+index ae0b8a4..63758cf 100644
+--- a/game/Assets/Editor/ProjectBootstrap.cs
++++ b/game/Assets/Editor/ProjectBootstrap.cs
+@@ -79,18 +79,22 @@ namespace RadiantPool.EditorTools
+                 AssetDatabase.CreateFolder("Assets/Resources", "URP");
+ 
+             var desktop = PipelineVariant("URP_Desktop",
+                 msaa: 4, hdr: true, renderScale: 1f, shadowDistance: 70f,
+                 mainShadowmapResolution: 2048, cascadeCount: 4,
+-                maxAdditionalLights: 8, additionalLightShadows: true, ssao: true);
++                maxAdditionalLights: 8, additionalLightShadows: true,
++                softShadowQuality: SoftShadowQuality.High,
++                ssao: true, ssaoIntensity: 0.6f, ssaoRadius: 0.3f);
+             // HDR stays ON for web: bloom/ACES fall apart in LDR and modern desktop
+             // browsers handle RGBA16F targets fine. Full render scale — the shell
+             // already caps devicePixelRatio at 1.5, so the real pixel count is sane.
+             PipelineVariant("URP_Web",
+                 msaa: 2, hdr: true, renderScale: 1f, shadowDistance: 40f,
+                 mainShadowmapResolution: 1024, cascadeCount: 2,
+-                maxAdditionalLights: 4, additionalLightShadows: false, ssao: false);
++                maxAdditionalLights: 4, additionalLightShadows: false,
++                softShadowQuality: SoftShadowQuality.Low,
++                ssao: true, ssaoIntensity: 0.4f, ssaoRadius: 0.25f);
+ 
+             GraphicsSettings.defaultRenderPipeline = desktop;
+             // EVERY quality level gets the pipeline, not just the active one — a level
+             // without a pipeline silently falls back to Built-in the moment
+             // SettingsMenu switches quality, and nothing renders through URP anymore.
+@@ -116,11 +120,12 @@ namespace RadiantPool.EditorTools
+         /// (Library/PackageCache/com.unity.render-pipelines.universal@*/Runtime/Data/
+         /// UniversalRenderPipelineAsset.cs).</summary>
+         private static UniversalRenderPipelineAsset PipelineVariant(string name,
+             int msaa, bool hdr, float renderScale, float shadowDistance,
+             int mainShadowmapResolution, int cascadeCount, int maxAdditionalLights,
+-            bool additionalLightShadows, bool ssao)
++            bool additionalLightShadows, SoftShadowQuality softShadowQuality,
++            bool ssao, float ssaoIntensity, float ssaoRadius)
+         {
+             string rendererPath = $"Assets/Resources/URP/{name}_Renderer.asset";
+             string pipelinePath = $"Assets/Resources/URP/{name}.asset";
+             var rendererData = AssetDatabase.LoadAssetAtPath<UniversalRendererData>(rendererPath);
+             if (rendererData == null)
+@@ -145,10 +150,11 @@ namespace RadiantPool.EditorTools
+             pipeline.supportsCameraDepthTexture = true;   // SSAO reads depth
+ 
+             var so = new SerializedObject(pipeline);
+             so.FindProperty("m_MainLightShadowsSupported").boolValue = true;
+             so.FindProperty("m_SoftShadowsSupported").boolValue = true;
++            so.FindProperty("m_SoftShadowQuality").intValue = (int)softShadowQuality;
+             so.FindProperty("m_AdditionalLightsRenderingMode").intValue =
+                 (int)LightRenderingMode.PerPixel;
+             so.FindProperty("m_AdditionalLightShadowsSupported").boolValue =
+                 additionalLightShadows;
+             // Editor-only aggregate the internal setters normally maintain; without it
+@@ -160,11 +166,11 @@ namespace RadiantPool.EditorTools
+             var rendererList = so.FindProperty("m_RendererDataList");
+             if (rendererList != null && rendererList.arraySize > 0)
+                 rendererList.GetArrayElementAtIndex(0).objectReferenceValue = rendererData;
+             so.ApplyModifiedPropertiesWithoutUndo();
+ 
+-            if (ssao) EnsureSsaoFeature(rendererData);
++            if (ssao) EnsureSsaoFeature(rendererData, ssaoIntensity, ssaoRadius);
+ 
+             EditorUtility.SetDirty(rendererData);
+             EditorUtility.SetDirty(pipeline);
+             return pipeline;
+         }
+@@ -173,11 +179,12 @@ namespace RadiantPool.EditorTools
+         /// renderer feature as a sub-asset of the renderer data, registering it in
+         /// m_RendererFeatures + m_RendererFeatureMap exactly the way the package's
+         /// ScriptableRendererDataEditor.AddComponent does. The settings class is
+         /// internal, so values go through SerializedObject too (field names verified in
+         /// Runtime/RendererFeatures/ScreenSpaceAmbientOcclusion.cs).</summary>
+-        private static void EnsureSsaoFeature(UniversalRendererData rendererData)
++        private static void EnsureSsaoFeature(UniversalRendererData rendererData,
++            float intensity, float radius)
+         {
+             ScreenSpaceAmbientOcclusion feature = null;
+             foreach (var f in rendererData.rendererFeatures)
+                 if (f is ScreenSpaceAmbientOcclusion existing) { feature = existing; break; }
+             if (feature == null)
+@@ -197,12 +204,12 @@ namespace RadiantPool.EditorTools
+                 dataSo.ApplyModifiedPropertiesWithoutUndo();
+             }
+ 
+             var featureSo = new SerializedObject(feature);
+             featureSo.FindProperty("m_Settings.Downsample").boolValue = true; // half-res AO
+-            featureSo.FindProperty("m_Settings.Intensity").floatValue = 0.6f;
+-            featureSo.FindProperty("m_Settings.Radius").floatValue = 0.3f;
++            featureSo.FindProperty("m_Settings.Intensity").floatValue = intensity;
++            featureSo.FindProperty("m_Settings.Radius").floatValue = radius;
+             featureSo.FindProperty("m_Settings.DirectLightingStrength").floatValue = 0.25f;
+             featureSo.ApplyModifiedPropertiesWithoutUndo();
+             EditorUtility.SetDirty(feature);
+         }
+ 
+@@ -211,16 +218,17 @@ namespace RadiantPool.EditorTools
+         /// <summary>The ground is GRASS, not pavement. It used to be a 4x4 cobblestone tile
+         /// repeated across the whole 120 m map — which reads as one enormous stone floor
+         /// with a forest growing out of it, and left the dirt roads with nothing to be a
+         /// road THROUGH. Soft green noise instead: no grid, no mortar lines, just enough
+         /// variation to stop it looking like flat paint.</summary>
+-        private static Texture2D GroundTexture()
++        private static Texture2D GroundTexture(out Texture2D normal)
+         {
+             string path = SettingsDir + "/T_GroundGrass.png";
+             const int size = 128;
+             var tex = new Texture2D(size, size, TextureFormat.RGB24, false);
+             var rand = new System.Random(7);
++            var heights = new float[size, size];
+ 
+             // Two octaves of value noise: broad patches + a fine speckle, so the tiling
+             // never resolves into a visible grid the way the stones did.
+             float Noise(int x, int y, int cells)
+             {
+@@ -234,10 +242,11 @@ namespace RadiantPool.EditorTools
+                 for (int y = 0; y < size; y++)
+                 {
+                     float broad = Noise(x, y, 8) * 0.14f;          // patchiness
+                     float fine = (float)rand.NextDouble() * 0.06f;  // blade speckle
+                     float v = 0.88f + broad + fine;
++                    heights[x, y] = v;
+                     // Vivid painted-grass green. The texture CARRIES the colour and the
+                     // material tint stays white — the old dark-green-times-dark-green
+                     // multiply left the hub at ~5% albedo (near-black grass at noon).
+                     tex.SetPixel(x, y, new Color(0.30f * v, 0.47f * v, 0.17f * v));
+                 }
+@@ -245,13 +254,114 @@ namespace RadiantPool.EditorTools
+             System.IO.File.WriteAllBytes(path, tex.EncodeToPNG());
+             AssetDatabase.ImportAsset(path);
+             var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+             importer.wrapMode = TextureWrapMode.Repeat;
+             importer.SaveAndReimport();
++            normal = NormalTexture(heights, SettingsDir + "/T_GroundGrass_Normal.png", 2.4f);
+             return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+         }
+ 
++        private static Texture2D NormalTexture(float[,] heights, string path, float strength)
++        {
++            int width = heights.GetLength(0);
++            int height = heights.GetLength(1);
++            var tex = new Texture2D(width, height, TextureFormat.RGBA32, false, true);
++            float Sample(int x, int y) => heights[(x + width) % width, (y + height) % height];
++            for (int y = 0; y < height; y++)
++            for (int x = 0; x < width; x++)
++            {
++                float dx = (Sample(x + 1, y) - Sample(x - 1, y)) * strength;
++                float dy = (Sample(x, y + 1) - Sample(x, y - 1)) * strength;
++                Vector3 n = new Vector3(-dx, -dy, 1f).normalized;
++                tex.SetPixel(x, y, new Color(n.x * 0.5f + 0.5f,
++                    n.y * 0.5f + 0.5f, n.z * 0.5f + 0.5f, 1f));
++            }
++            tex.Apply();
++            File.WriteAllBytes(path, tex.EncodeToPNG());
++            Object.DestroyImmediate(tex);
++            AssetDatabase.ImportAsset(path);
++            var importer = (TextureImporter)AssetImporter.GetAtPath(path);
++            importer.textureType = TextureImporterType.NormalMap;
++            importer.wrapMode = TextureWrapMode.Repeat;
++            importer.SaveAndReimport();
++            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
++        }
++
++        private static Texture2D WaterRippleNormal()
++        {
++            const int size = 256;
++            var heights = new float[size, size];
++            for (int y = 0; y < size; y++)
++            for (int x = 0; x < size; x++)
++            {
++                float u = x / (float)size;
++                float v = y / (float)size;
++                heights[x, y] = Mathf.Sin(Mathf.PI * 2f * (3f * u + 2f * v)) * 0.48f
++                                + Mathf.Sin(Mathf.PI * 2f * (-2f * u + 5f * v) + 1.7f) * 0.32f
++                                + Mathf.Sin(Mathf.PI * 2f * (7f * u - v) + 0.4f) * 0.20f;
++            }
++            return NormalTexture(heights, SettingsDir + "/T_WaterRipple_Normal.png", 0.32f);
++        }
++
++        private static Texture2D CloudNoiseTexture()
++        {
++            string path = SettingsDir + "/T_CloudNoise.png";
++            const int size = 256;
++            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
++            for (int y = 0; y < size; y++)
++            for (int x = 0; x < size; x++)
++            {
++                float u = x / (float)size;
++                float v = y / (float)size;
++                float broad = Mathf.Sin(Mathf.PI * 2f * (u + v))
++                              + Mathf.Sin(Mathf.PI * 2f * (2f * u - 3f * v) + 0.8f) * 0.55f
++                              + Mathf.Sin(Mathf.PI * 2f * (5f * u + 2f * v) + 2.1f) * 0.25f;
++                float wisps = Mathf.PerlinNoise(
++                    Mathf.Sin(u * Mathf.PI * 2f) * 0.7f + 1.3f,
++                    Mathf.Cos(v * Mathf.PI * 2f) * 0.7f + 2.2f);
++                float alpha = Mathf.SmoothStep(0.38f, 0.82f,
++                    Mathf.InverseLerp(-1.4f, 1.5f, broad) * 0.72f + wisps * 0.28f);
++                tex.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
++            }
++            tex.Apply();
++            File.WriteAllBytes(path, tex.EncodeToPNG());
++            Object.DestroyImmediate(tex);
++            AssetDatabase.ImportAsset(path);
++            var importer = (TextureImporter)AssetImporter.GetAtPath(path);
++            importer.wrapMode = TextureWrapMode.Repeat;
++            importer.alphaIsTransparency = true;
++            importer.maxTextureSize = size;
++            importer.textureCompression = TextureImporterCompression.Compressed;
++            importer.SaveAndReimport();
++            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
++        }
++
++        private static Material CloudMaterial()
++        {
++            string path = SettingsDir + "/M_CloudLayer.mat";
++            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
++            if (material == null)
++            {
++                material = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
++                AssetDatabase.CreateAsset(material, path);
++            }
++            material.SetTexture("_BaseMap", CloudNoiseTexture());
++            material.SetTextureScale("_BaseMap", new Vector2(2.2f, 2.2f));
++            material.SetColor("_BaseColor", new Color(1f, 0.97f, 0.91f, 0.13f));
++            material.SetFloat("_Surface", 1f);
++            material.SetFloat("_Blend", 0f);
++            material.SetFloat("_Cull", 0f);
++            material.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
++            material.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
++            material.SetInt("_ZWrite", 0);
++            material.SetOverrideTag("RenderType", "Transparent");
++            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
++            material.renderQueue = (int)RenderQueue.Transparent;
++            EditorUtility.SetDirty(material);
++            return material;
++        }
++
+         private static Material Mat(string name, Color color)
+         {
+             string path = $"{SettingsDir}/{name}.mat";
+             var m = AssetDatabase.LoadAssetAtPath<Material>(path);
+             if (m == null)
+@@ -259,11 +369,24 @@ namespace RadiantPool.EditorTools
+                 m = new Material(Shader.Find("Universal Render Pipeline/Lit")) { color = color };
+                 AssetDatabase.CreateAsset(m, path);
+             }
+             m.color = color;
+             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);
+-            m.SetFloat("_Smoothness", name == "M_Water" ? 0.62f : 0.16f);
++            bool water = name == "M_Water";
++            m.SetFloat("_Smoothness", water ? 0.75f : 0.16f);
++            if (water)
++            {
++                var ripple = WaterRippleNormal();
++                m.SetTexture("_BumpMap", ripple);
++                m.SetTextureScale("_BumpMap", new Vector2(5f, 18f));
++                m.SetFloat("_BumpScale", 0.55f);
++                m.SetTexture("_DetailNormalMap", ripple);
++                m.SetTextureScale("_DetailNormalMap", new Vector2(11f, 7f));
++                m.SetFloat("_DetailNormalMapScale", 0.32f);
++                m.EnableKeyword("_NORMALMAP");
++                m.EnableKeyword("_DETAIL_MULX2");
++            }
+             EditorUtility.SetDirty(m);
+             return m;
+         }
+ 
+         private static NetworkObject CreatePlayerPrefab()
+@@ -593,10 +716,37 @@ namespace RadiantPool.EditorTools
+             sky.SetColor("_SkyTint", new Color(0.42f, 0.55f, 0.78f));
+             sky.SetColor("_GroundColor", new Color(0.40f, 0.44f, 0.50f));
+             sky.SetFloat("_Exposure", 1.25f);
+             RenderSettings.skybox = sky;
+ 
++            // One low-resolution realtime capture gives metal and water a plausible
++            // local environment. WorldAtmosphere renders it once after scene load.
++            var probeGo = new GameObject("Hub Reflection Probe");
++            probeGo.transform.position = new Vector3(-10f, 8f, -4f);
++            var probe = probeGo.AddComponent<ReflectionProbe>();
++            probe.mode = ReflectionProbeMode.Realtime;
++            probe.refreshMode = ReflectionProbeRefreshMode.ViaScripting;
++            probe.timeSlicingMode = ReflectionProbeTimeSlicingMode.AllFacesAtOnce;
++            probe.boxProjection = true;
++            probe.size = new Vector3(100f, 30f, 110f);
++            probe.blendDistance = 8f;
++            probe.importance = 100;
++            probe.resolution = 128;
++            probe.hdr = true;
++            probe.shadowDistance = 55f;
++
++            // A single transparent texture sample adds a restrained painted cloud layer.
++            var clouds = GameObject.CreatePrimitive(PrimitiveType.Plane);
++            clouds.name = "Painted Cloud Layer";
++            clouds.transform.position = new Vector3(0f, 42f, 0f);
++            clouds.transform.localScale = new Vector3(32f, 1f, 32f);
++            Object.DestroyImmediate(clouds.GetComponent<Collider>());
++            var cloudRenderer = clouds.GetComponent<MeshRenderer>();
++            cloudRenderer.sharedMaterial = CloudMaterial();
++            cloudRenderer.shadowCastingMode = ShadowCastingMode.Off;
++            cloudRenderer.receiveShadows = false;
++
+             // Camera with URP post-processing (bloom + vignette + slight warmth).
+             var camGo = new GameObject("Main Camera") { tag = "MainCamera" };
+             var cam = camGo.AddComponent<Camera>();
+             camGo.AddComponent<AudioListener>();
+             camGo.AddComponent<OrbitCamera>();
+@@ -736,12 +886,16 @@ namespace RadiantPool.EditorTools
+             // Drowned Market north (gated), Glasslit Temple east (gated).
+             var ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
+             ground.name = "Ground";
+             ground.transform.localScale = new Vector3(12f, 1f, 12f); // 120x120 m
+             var groundMat = Mat("M_Ground", new Color(0.97f, 1f, 0.93f));
+-            groundMat.mainTexture = GroundTexture();
++            groundMat.mainTexture = GroundTexture(out var groundNormal);
+             groundMat.mainTextureScale = new Vector2(48f, 48f);
++            groundMat.SetTexture("_BumpMap", groundNormal);
++            groundMat.SetTextureScale("_BumpMap", new Vector2(48f, 48f));
++            groundMat.SetFloat("_BumpScale", 0.6f);
++            groundMat.EnableKeyword("_NORMALMAP");
+             ground.GetComponent<Renderer>().sharedMaterial = groundMat;
+ 
+             GameObject Box(string name, Vector3 pos, Vector3 scale, Material mat)
+             {
+                 var b = GameObject.CreatePrimitive(PrimitiveType.Cube);
+diff --git a/game/Assets/Editor/QuaterniusArt.cs b/game/Assets/Editor/QuaterniusArt.cs
+index 70ce393..b06c666 100644
+--- a/game/Assets/Editor/QuaterniusArt.cs
++++ b/game/Assets/Editor/QuaterniusArt.cs
+@@ -13,10 +13,16 @@ namespace RadiantPool.EditorTools
+     /// so CombatManager.MonsterModels picks them up by name.</summary>
+     public static class QuaterniusArt
+     {
+         private const string Root = "Assets/Art/Quaternius";
+         private const string PrefabDir = "Assets/Resources/Characters";
++        private static readonly string[] MetalWords =
++            { "weapon", "blade", "sword", "axe", "armor", "armour", "shield" };
++        private static readonly string[] ClothWords =
++            { "cloth", "banner", "robe", "hood" };
++        private static readonly string[] SkinFurWords =
++            { "skin", "fur", "hide", "orc", "spider", "beast", "animal" };
+ 
+         public static void Setup()
+         {
+             if (!AssetDatabase.IsValidFolder(Root))
+             {
+@@ -50,11 +56,11 @@ namespace RadiantPool.EditorTools
+                 mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                 if (tex != null) mat.SetTexture("_BaseMap", tex);
+                 AssetDatabase.CreateAsset(mat, matPath);
+             }
+             // Outside the creation guard so a retune reaches already-baked mats.
+-            mat.SetFloat("_Smoothness", 0.18f);
++            mat.SetFloat("_Smoothness", SmoothnessFor(name, tex != null ? tex.name : ""));
+ 
+             var importer = (ModelImporter)AssetImporter.GetAtPath(path);
+             bool changed = false;
+             var map = importer.GetExternalObjectMap();
+             foreach (string embedded in AssetDatabase.LoadAllAssetsAtPath(path)
+@@ -83,10 +89,20 @@ namespace RadiantPool.EditorTools
+ 
+             var controller = BuildController(dir, name, path);
+             BuildPrefab(path, name, controller);
+         }
+ 
++        private static float SmoothnessFor(params string[] names)
++        {
++            string value = string.Join(" ", names).ToLowerInvariant();
++            if (MetalWords.Any(word => value.Contains(word))) return 0.58f;
++            if (ClothWords.Any(word => value.Contains(word))) return 0.11f;
++            if (SkinFurWords.Any(word => value.Contains(word))) return 0.25f;
++            if (value.Contains("wood") || value.Contains("stone")) return 0.20f;
++            return 0.22f;
++        }
++
+         private static AnimationClip Find(AnimationClip[] all, params string[] keys)
+         {
+             foreach (string k in keys)
+             {
+                 var c = all.FirstOrDefault(x => x.name.Contains(k));
+diff --git a/game/Assets/Scripts/Game/WorldAtmosphere.cs b/game/Assets/Scripts/Game/WorldAtmosphere.cs
+index 2a3ad95..11414d3 100644
+--- a/game/Assets/Scripts/Game/WorldAtmosphere.cs
++++ b/game/Assets/Scripts/Game/WorldAtmosphere.cs
+@@ -67,17 +67,24 @@ namespace RadiantPool.Game
+         private Light _moon;
+         private Light _partyTorch;
+         private Light _combatLight;
+         private Transform _partyAnchor;
+         private Material _sky;
++        private Material _cloudMaterial;
++        private Material _waterMaterial;
+         private ParticleSystem _motes;
++        private Transform _cloudLayer;
++        private ReflectionProbe _reflectionProbe;
+         private readonly Dictionary<Light, float> _lamps = new Dictionary<Light, float>();
+         private float _visualHour = 20.5f;
+         private float _nightWeight;
+         private float _nextReferenceScan;
+         private bool _ready;
+         private float _nextPartyScan;
++        private Vector2 _waterOffset;
++        private Vector2 _waterDetailOffset;
++        private bool _probeRendered;
+ 
+         // Daylight palette: high-key painted-fantasy (the Warcraft reference) — a vivid
+         // azure sky and a light AIRY BLUE distance haze, never parchment. The old brown
+         // day fog read as permanent overcast and turned every remote-site horizon to mud.
+         private static readonly Color DaySky = new Color(0.42f, 0.56f, 0.85f);
+@@ -102,16 +109,20 @@ namespace RadiantPool.Game
+                 StartCoroutine(AtmosphereSelfTest());
+ 
+             int capture = System.Array.IndexOf(args, "-atmospherecapture");
+             if (capture >= 0 && capture + 1 < args.Length)
+                 StartCoroutine(CaptureRepresentativeTimes(args[capture + 1]));
++
++            StartCoroutine(RenderReflectionProbeOnce());
+         }
+ 
+         private void OnDestroy()
+         {
+             if (Instance == this) Instance = null;
+             if (_sky != null) Destroy(_sky);
++            if (_cloudMaterial != null) Destroy(_cloudMaterial);
++            if (_waterMaterial != null) Destroy(_waterMaterial);
+             if (_combatLight != null) Destroy(_combatLight.gameObject);
+         }
+ 
+         private void Update()
+         {
+@@ -130,10 +141,11 @@ namespace RadiantPool.Game
+                 _visualHour = Mathf.Repeat(_visualHour
+                     + RealHoursPerSecond * Time.unscaledDeltaTime
+                     + hourDelta * Mathf.Min(1f, Time.unscaledDeltaTime * 2f), 24f);
+             _ready = true;
+             ApplyAtmosphere(_visualHour);
++            UpdateSurfaceMotion();
+             UpdatePartyTorch();
+             UpdateCombatLight();
+ 
+             if (!_syncLogged && GameDirector.Instance != null
+                 && GameDirector.Instance.IsClientStarted)
+@@ -169,18 +181,68 @@ namespace RadiantPool.Game
+             }
+ 
+             if (_motes == null)
+                 _motes = GameObject.Find("Ambient Sun Motes")?.GetComponent<ParticleSystem>();
+ 
++            if (_reflectionProbe == null)
++            {
++                var probeGo = GameObject.Find("Hub Reflection Probe");
++                if (probeGo != null) _reflectionProbe = probeGo.GetComponent<ReflectionProbe>();
++            }
++
++            if (_cloudLayer == null)
++            {
++                var cloudGo = GameObject.Find("Painted Cloud Layer");
++                if (cloudGo != null)
++                {
++                    _cloudLayer = cloudGo.transform;
++                    var renderer = cloudGo.GetComponent<Renderer>();
++                    if (renderer != null) _cloudMaterial = renderer.material;
++                }
++            }
++
++            if (_waterMaterial == null)
++            {
++                var waterGo = GameObject.Find("Water");
++                if (waterGo != null)
++                {
++                    var renderer = waterGo.GetComponent<Renderer>();
++                    if (renderer != null) _waterMaterial = renderer.material;
++                }
++            }
++
+             foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None))
+                 if (light != null && light.gameObject.name == "GlowLight"
+                     && !_lamps.ContainsKey(light))
+                     _lamps[light] = Mathf.Max(1.6f, light.intensity);
+ 
+             if (_lamps.Count == 0) CreateFallbackLanterns();
+         }
+ 
++        private IEnumerator RenderReflectionProbeOnce()
++        {
++            yield return null;
++            RefreshSceneReferences();
++            if (_reflectionProbe == null || _probeRendered) yield break;
++            _reflectionProbe.RenderProbe();
++            _probeRendered = true;
++            Debug.Log("[Atmosphere] hub reflection probe refreshed once.");
++        }
++
++        private void UpdateSurfaceMotion()
++        {
++            if (SettingsMenu.ReducedMotion) return;
++            float dt = Time.unscaledDeltaTime;
++            if (_cloudLayer != null)
++                _cloudLayer.Rotate(Vector3.up, dt * 0.16f, Space.World);
++            if (_waterMaterial == null) return;
++            _waterOffset += new Vector2(0.006f, 0.003f) * dt;
++            _waterDetailOffset += new Vector2(-0.004f, 0.007f) * dt;
++            _waterMaterial.SetTextureOffset("_BumpMap", _waterOffset);
++            _waterMaterial.SetTextureOffset("_DetailNormalMap", _waterDetailOffset);
++        }
++
+         private void CreatePartyTorch()
+         {
+             var root = new GameObject("Party Torch Light");
+             _partyTorch = root.AddComponent<Light>();
+             _partyTorch.type = LightType.Point;
+@@ -387,10 +449,20 @@ namespace RadiantPool.Game
+                         + combatWeight * 0.06f);
+                 if (_sky.HasProperty("_AtmosphereThickness"))
+                     _sky.SetFloat("_AtmosphereThickness", Mathf.Lerp(0.45f, 1.05f, daylight));
+             }
+ 
++            if (_cloudMaterial != null)
++            {
++                Color cloud = Color.Lerp(new Color(0.13f, 0.17f, 0.25f, 0.055f),
++                    new Color(1f, 0.97f, 0.90f, 0.13f), daylight);
++                cloud = Color.Lerp(cloud, new Color(1f, 0.58f, 0.34f, 0.15f),
++                    twilight * 0.72f);
++                if (combat) cloud *= new Color(0.86f, 0.82f, 0.82f, 1f);
++                _cloudMaterial.SetColor("_BaseColor", cloud);
++            }
++
+             foreach (var pair in _lamps.ToArray())
+             {
+                 var lamp = pair.Key;
+                 if (lamp == null) { _lamps.Remove(lamp); continue; }
+                 float flicker = 0.92f + Mathf.PerlinNoise(

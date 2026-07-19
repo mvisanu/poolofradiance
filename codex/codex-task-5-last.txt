@@ -1,0 +1,11 @@
+STATUS: COMPLETE — Task 5 implemented; no commit created.
+
+Files touched:
+
+- `game/Assets/Editor/{ProjectBootstrap,PolyPackArt,KenneyArt,KayKitArt,QuaterniusArt,HandpaintedGroundArt,GeneratedArt}.cs`
+- `game/Assets/Scripts/Game/WorldAtmosphere.cs`
+- [codex-task-5-report.md](C:\Users\Bruce\source\repo\poolofradiance\codex\codex-task-5-report.md)
+
+Evidence: offline compile succeeded with 0 errors; rules tests passed 166/166.
+
+Concerns: Editor scripts await the controller’s Unity bootstrap compile and visual/WebGL verification. Normal restore was sandbox-blocked, so both gates used the instructed `--no-restore` fallback.

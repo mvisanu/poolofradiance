@@ -1,0 +1,11 @@
+STATUS: COMPLETE — implemented on `ui/combat-health-grouping`; no commit created.
+
+Files touched:
+
+- [CombatClientUI.cs](C:/Users/Bruce/source/repo/poolofradiance/game/Assets/Scripts/Combat/CombatClientUI.cs)
+- [ProgressUI.cs](C:/Users/Bruce/source/repo/poolofradiance/game/Assets/Scripts/Game/ProgressUI.cs)
+- [QuestTracker.cs](C:/Users/Bruce/source/repo/poolofradiance/game/Assets/Scripts/Game/QuestTracker.cs)
+- [PlayerCharacterHolder.cs](C:/Users/Bruce/source/repo/poolofradiance/game/Assets/Scripts/Player/PlayerCharacterHolder.cs)
+- [codex-task-8-report.md](C:/Users/Bruce/source/repo/poolofradiance/codex/codex-task-8-report.md)
+
+Test evidence: permitted `--no-restore` compile fallback passed with 0 errors; rules tests passed 166/166.

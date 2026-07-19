@@ -1,0 +1,9 @@
+STATUS: COMPLETE — all three Task 8 findings fixed; no commit created.
+
+Files touched:
+
+- `game/Assets/Scripts/Combat/CombatClientUI.cs`
+- `game/Assets/Scripts/Game/ProgressUI.cs`
+- `codex/codex-task-8-report.md`
+
+Test evidence: no-restore runtime compile passed with 0 errors; rules tests passed 166/166. The normal compile script was blocked by sandbox access to the user NuGet.Config.
