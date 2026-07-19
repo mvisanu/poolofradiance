@@ -6,10 +6,9 @@ namespace RadiantPool.Game
 {
     /// <summary>The character's progress, in two pieces.
     ///
-    /// LEVEL AND XP live on the CHARACTER SHEET (I), not on the main screen: they say who you
-    /// are, not what is happening, and the battlefield is what the main screen is for. The
-    /// sheet's block is drawn by XpBlock below, so there is one definition of it — the level,
-    /// the bar, the XP either side, MAX at the campaign cap.
+    /// LEVEL AND XP have a full block on the CHARACTER SHEET (I), while a thin MMO progress
+    /// track also sits above the action bar. Both call the shared progress helper below, so
+    /// level, XP, fraction, and MAX still have one definition.
     ///
     /// The LEVEL-UP SCREEN (L, or the button on the sheet) spends the points a level-up
     /// granted: one per level, two at 4th (Progression's house rule). Each row says what the
@@ -44,24 +43,23 @@ namespace RadiantPool.Game
         /// looks like, so the sheet and the screen can never disagree about it.</summary>
         public static void XpBlock(PlayerCharacterHolder me)
         {
-            int level = Mathf.Clamp(me.LevelSynced.Value, 1, Progression.MaxLevel);
+            var progress = XpProgress(me);
             int points = me.PendingPointsSynced.Value;
-            var (into, span, fraction) = Progression.Progress(level, me.XpSynced.Value);
-            bool capped = level >= Progression.MaxLevel;
 
             GUILayout.BeginHorizontal();
-            GUILayout.Label($"<color=#f2ca50><b>LEVEL {level}</b></color>",
+            GUILayout.Label($"<color=#f2ca50><b>LEVEL {progress.level}</b></color>",
                 new GUIStyle(Theme.Body) { richText = true, fontSize = 13 });
             GUILayout.FlexibleSpace();
-            GUILayout.Label(capped
+            GUILayout.Label(progress.capped
                     ? "<color=#cbbb9c>MAX</color>"
-                    : $"<color=#cbbb9c>{into}/{span} XP " +
-                      $"({Mathf.FloorToInt(fraction * 100f)}% to {level + 1})</color>",
+                    : $"<color=#cbbb9c>{progress.into}/{progress.span} XP " +
+                      $"({Mathf.FloorToInt(progress.fraction * 100f)}% to " +
+                      $"{progress.level + 1})</color>",
                 new GUIStyle(Theme.Body) { richText = true, fontSize = 11, wordWrap = false });
             GUILayout.EndHorizontal();
 
             var track = GUILayoutUtility.GetRect(60f, 12f, GUILayout.ExpandWidth(true));
-            Theme.XpBar(track, capped ? 1f : fraction);
+            DrawXpTrack(track, me, false);
 
             if (points > 0)
             {
@@ -73,6 +71,42 @@ namespace RadiantPool.Game
                     Ui.Show(Ui.Panel.LevelUp);
             }
             GUILayout.Space(6);
+        }
+
+        /// <summary>The one XP calculation consumed by the sheet and compact HUD track.</summary>
+        private static (int level, int into, int span, float fraction, bool capped)
+            XpProgress(PlayerCharacterHolder me)
+        {
+            int level = Mathf.Clamp(me.LevelSynced.Value, 1, Progression.MaxLevel);
+            var (into, span, fraction) = Progression.Progress(level, me.XpSynced.Value);
+            return (level, into, span, fraction, level >= Progression.MaxLevel);
+        }
+
+        /// <summary>Shared XP track. Compact mode adds the terse MMO readout directly to the
+        /// strip; the sheet supplies its fuller labels above the same track.</summary>
+        public static void DrawXpTrack(Rect rect, PlayerCharacterHolder me, bool compact)
+        {
+            var progress = XpProgress(me);
+            Theme.XpBar(rect, progress.capped ? 1f : progress.fraction);
+            if (!compact) return;
+
+            var label = new GUIStyle(Theme.Caps)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = 8,
+                wordWrap = false,
+                clipping = TextClipping.Clip
+            };
+            label.normal.textColor = Theme.OnSurface;
+            Color old = GUI.color;
+            GUI.color = new Color(0.04f, 0.03f, 0.02f, 0.58f);
+            GUI.DrawTexture(new Rect(rect.center.x - rect.width * 0.24f, rect.y,
+                rect.width * 0.48f, rect.height), Texture2D.whiteTexture);
+            GUI.color = old;
+            string text = progress.capped
+                ? $"LEVEL {progress.level}  MAX"
+                : $"LEVEL {progress.level}  {progress.into}/{progress.span} XP";
+            GUI.Label(rect, text, label);
         }
 
         private void DrawLevelUpPanel(PlayerCharacterHolder me)

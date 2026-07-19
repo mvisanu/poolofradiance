@@ -3,6 +3,81 @@
 3D co-op party CRPG (2–4 players, SRD 5.1 rules, Pool of Radiance structure, original IP).
 Read `goal.md` for the spec, `ARCHITECTURE.md` for design, `IP-CHECKLIST.md` before naming anything.
 
+
+# Division of Labor: Claude Plans, Codex Codes
+
+You (Claude Fable 5) are the architect, researcher, and reviewer on this project.
+You do NOT write implementation code yourself. All coding work is delegated to
+OpenAI Codex (GPT 5.6) via the /handoff workflow, which wraps the /codex plugin.
+Your job is everything around the code: understanding, planning, specifying,
+verifying.
+
+## The /handoff workflow (default path for ALL coding work)
+When I invoke /handoff <task>, follow its four phases: Research → Design (wait
+for my approval) → Delegate → Verify.
+
+When I request coding work WITHOUT invoking /handoff — e.g. "fix that bug",
+"add a field to this model", "refactor this" — do not write the code yourself.
+Instead, treat the request as if I had run /handoff with it and enter the same
+four-phase workflow: research, present the design for approval, then delegate.
+There is no direct-implementation path; /handoff phases are the only route from
+request to code.
+
+## Your responsibilities (do these yourself)
+- **Research & investigation**: Read the codebase, trace logic, search docs,
+  understand the problem space fully before anything is delegated.
+- **Design & planning**: Produce the architecture, file-level plan, interface
+  definitions, data models, and sequencing of work. Decide *what* gets built
+  and *how it should be structured* — Codex decides only the line-level details.
+- **Task decomposition**: Break work into small, independently verifiable tasks.
+  One task = one delegation. Never hand Codex a multi-feature blob.
+- **Specification writing**: For each task, write a precise implementation spec
+  (see handoff spec format below).
+- **Review & verification**: When Codex returns work, read the full diff, run
+  the acceptance commands yourself, and either accept, or send it back with
+  specific corrections. You are the quality gate.
+- **Integration & commit hygiene**: You decide what gets committed, in what
+  order, with what messages.
+
+## Codex's responsibilities (always delegated, never done by you)
+- Writing new code, modifying existing code, writing tests, fixing bugs,
+  refactors — ANY change to source files.
+- Delegation happens in Phase 3 of /handoff via: /codex:rescue <spec>
+- For long tasks, use --background, monitor with /codex:status, and continue
+  planning the next subtask while it runs. Fetch with /codex:result.
+
+## Handoff spec format (required for every /codex:rescue delegation)
+1. **Goal** — one sentence describing the outcome.
+2. **Design decisions already made** — the structure Codex must follow:
+   file paths to create/modify, function/class signatures, naming, patterns
+   to mirror from existing code (cite the exact files).
+3. **Context** — relevant files, branch, existing behavior, prior attempts.
+4. **Constraints** — do-not-touch files, API compatibility, no new deps
+   without approval, style/lint rules.
+5. **Acceptance criteria** — exact commands that must pass
+   (tests, build, lint). No spec ships without these.
+
+If you cannot write sections 2 and 5 concretely, your planning is not done —
+stay in the Research phase until you can.
+
+## Review loop (Phase 4 of every /handoff)
+- Treat every Codex result as a proposal. Verify acceptance criteria yourself.
+- If it fails or deviates from the spec, re-delegate via a new /codex:rescue
+  with the specific defects listed — do not fix the code yourself unless the
+  fix is a one-line correction and re-delegation would be wasteful.
+- After each accepted task, run /codex:review (or --base main at milestones)
+  as an independent second-pass review, and reconcile findings.
+
+## Exceptions (you may edit code directly ONLY for)
+- One-line fixes to a returned diff (typos, imports, obvious slips).
+- Config/docs/markdown files that are part of your planning output.
+- Emergency reverts.
+Everything else goes through the /handoff workflow, no matter how small.
+
+## Reporting
+At each milestone, summarize: the plan, tasks delegated, what Codex produced,
+what you accepted/rejected and why. I always know which model did what.
+
 ## Commands
 
 ```powershell
@@ -167,15 +242,18 @@ mouse and the self-test drive the very same code.
   (`CombatClientUI.PickAttack`, keyboard A), named spells delegate to `PickSpell`, and the
   bar shrinks/wraps combat actions above utilities instead of overflowing (a combat cleric
   needs 13 slots). Only a temporary responsive target picker appears above the bar (fixed-width
-  two-line cards, columns from `Ui.W`, capped scroll). **The combat message log never owns the
+  two-line cards, columns from `Ui.W`, capped scroll). **The combat message log sits bottom-left
+  and never owns the
   bottom edge**: `CombatClientUI.LogRect` docks at least 8 logical units above the complete
-  `HotBar.BarRect` (including the health strip), and `_logRect` is cleared while an attack or
+  `HotBar.BarRect` (including the XP strip), and `_logRect` is cleared while an attack or
   spell target picker is open so the temporary casting/target bar and main bar cannot be
   covered. `IsMouseOverHud` gates clicks with the same published visible rect. **Your HEALTH
-  rides above the bar**
-  (`HotBar.DrawHealth`): bar + `hp/max` + percentage — the combat unit's HP in a fight
-  (`RpcHpSync`), `PlayerCharacterHolder.CurrentHpSynced` between fights. Stays when the bar is
-  stowed. In combat: **click enemy = close in AND attack, one click, however far away**
+  lives in the top-left player unit frame**: generated class emblem + name/level + `hp/max` +
+  percentage, using the combat unit's HP in a fight (`RpcHpSync`) and
+  `PlayerCharacterHolder.CurrentHpSynced` between fights. Caster frames add a thin spell-slot
+  resource bar; compact party frames stack below, and a picked hostile gets a top-centre-left
+  target frame. Health remains visible when the action bar is stowed. In combat: **click enemy
+  = close in AND attack, one click, however far away**
   (`CombatClientUI.ClickCell` is the ONE definition of a board click: in reach it swings, out
   of reach it walks and REMEMBERS the target, `TickAutoAttack` lands the blow when the body
   settles). A completed weapon attack **auto-ends that player's turn after impact + recovery**
@@ -213,10 +291,11 @@ mouse and the self-test drive the very same code.
   handle; `BarRect` still reports the handle so combat clicks can't fall through it.
 - `SessionPanel.cs` — status + invite code, opened/closed from a **hotbar icon** (generated
   texture, not a font glyph). `SessionLauncher` still OWNS that state (`Status`/`HostCode`
-  statics) and draws only the title screen; the old permanent top-left strip is gone, which
-  is what freed the corner for the quest card.
+  statics) and draws only the title screen; the old permanent top-left strip is gone, leaving
+  that corner to the player and party unit frames.
 - **Wayfinding** — the player must always know what to do and where. `QuestTracker` = quest
-  card top-left, **collapsible to a title pill (Hide/Show, PlayerPrefs)** (active quest +
+  card on the right below the minimap (below initiative in combat), **collapsible to a title
+  pill (Hide/Show, PlayerPrefs)** (active quest +
   `[x]/[ ]` checklist), centre banner, gold steering arrow above the hotbar (camera-space: up =
   forward), world beacon. >26 m from the active quarter it aims at + names the QUARTER ("The Old
   Docks"); inside, it switches to the next fight. Bootstrap plants a lit **district sign** per
@@ -254,8 +333,9 @@ mouse and the self-test drive the very same code.
   line + totals (AC breakdown, HP, attack, damage); right column = stash, each item showing
   damage/protection compared vs equipped ("upgrade: +2 AC", `ItemCompare`). Derived stats are
   server-only, so `PlayerCharacterHolder` mirrors them as SyncVars on a slow poll.
-- `ProgressUI.cs` — **level and XP live on the CHARACTER SHEET (I), never the main screen**
-  (`ProgressUI.XpBlock` drawn by `InventoryUI`: level, bar, XP, MAX at cap — one definition)
+- `ProgressUI.cs` — **level and XP have a full block on the CHARACTER SHEET (I) plus a thin
+  XP strip above the action bar** (`ProgressUI.XpBlock` and the compact strip share the same
+  progress helper: level, bar, XP, MAX at cap — one definition)
   plus the **level-up screen (L)** that spends ability points; each row says what the ability
   buys *this* character (odd score buys nothing until the next point completes the modifier).
   Client asks (`CmdSpendAbilityPoint`), rules lib decides.
@@ -417,8 +497,9 @@ mouse and the self-test drive the very same code.
 - **CombatClientUI HUD rects gate click-to-move**: `IsMouseOverHud` must test the exact
   same rects the panels draw with. It used to re-declare them as hand-copied literals
   (`new Rect(12, Ui.H - 174, ...)`), which drifted from the panels the moment either moved.
-  They are now `Rect` PROPERTIES (`LogRect`, `MyCardRect`, `InitiativeRect`, plus
-  `HotBar.BarRect` / `MiniMap.MapRect`) — one definition, both users. Never re-type a rect.
+  They are now `Rect` PROPERTIES (`LogRect`, player/party/target frame rects,
+  `InitiativeRect`, `QuestTracker.CardRect`, plus `HotBar.BarRect` / `MiniMap.MapRect`) — one
+  definition, both users. Never re-type a rect.
   **Bottom HUD panels dock from `HotBar.BarRect`, never `Ui.H`**: a screen-bottom log covered
   both wrapped hotbar rows. The combat log now ends at `BarRect.yMin - 8`; while `_mode` is an
   attack/spell target picker it draws nothing and publishes `default`, so neither rendering
@@ -439,8 +520,8 @@ mouse and the self-test drive the very same code.
   (`[x]`, `[ ]`, `>`), words (`Theme.Ready()` = "ready"/"spent", bearings as "ahead-right"),
   or a **generated texture** (`QuestTracker.MakeSteerArrow`, `MiniMap.Make*`).
 - **The initiative panel sits BELOW the minimap** (`MiniMap.MapRect.yMax`), not in the
-  top-right corner — pinned to the corner it drew straight through the map. Any new
-  top-right HUD must dock off the same anchor, and cap its height with a scroll view.
+  top-right corner — pinned to the corner it drew straight through the map. The quest tracker
+  docks below initiative in combat; both cap their height with scroll views.
 - **`compile-check.ps1` does NOT compile `Assets/Editor`** — only the runtime scripts. An
   editor-only error (a missing `using RadiantPool.Rules`) sails past it and only surfaces as
   a failed bootstrap. After editing anything under `Assets/Editor`, run the bootstrap.

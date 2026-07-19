@@ -29,6 +29,8 @@ namespace RadiantPool.Game
         private float _nextScan;
         private Texture2D _steerArrow;
         private GUIStyle _distStyle, _questTitle, _stepStyle, _stepDone, _cardBtn;
+        private Vector2 _objectiveScroll;
+        public static Rect CardRect { get; private set; }
         public const string TrackedQuestPreference = "questTracker.zoneId";
 
         private void Awake() => Instance = this;
@@ -312,12 +314,13 @@ namespace RadiantPool.Game
             Ui.Begin();
             // A screen is up: the card, the banner and the steering arrow all step aside —
             // the banner used to land right on the top edge of the open panel.
-            if (Ui.PanelOpen) return;
+            if (Ui.PanelOpen) { CardRect = default; return; }
             var player = LocalPlayer();
             bool inCombat = CombatManager.Instance != null && CombatManager.Instance.InCombat.Value;
-            if (player == null || inCombat) return;
+            if (player == null) { CardRect = default; return; }
 
             DrawObjectives();   // shown even with no target, so the party is never adrift
+            if (inCombat) return;
             if (!HasTarget) return;
 
             Vector3 delta = TargetPosition - player.position;
@@ -336,12 +339,21 @@ namespace RadiantPool.Game
             DrawWorldMarker(dist);
         }
 
-        /// <summary>Persistent quest card, top-left: the active quest and a checklist of
+        /// <summary>Persistent quest card, right-side: the active quest and a checklist of
         /// what is still outstanding. It updates the instant a quest hands over, so
         /// finishing one immediately shows the next.</summary>
-        /// <summary>The card sits in the top-left corner itself now — the hosting strip that
-        /// used to hold that spot moved onto the hotbar (SessionPanel), so nothing is above it.</summary>
-        private const float CardTop = 12f;
+        /// <summary>The card docks below the minimap, or below initiative in combat, so the
+        /// top-left corner remains dedicated to player and party unit frames.</summary>
+        private static float CardTop
+        {
+            get
+            {
+                var combat = CombatManager.Instance;
+                if (combat != null && combat.InCombat.Value && combat.ClientUnits.Count > 0)
+                    return CombatClientUI.InitiativeRect(combat).yMax + 8f;
+                return MiniMap.MapRect.yMax + 8f;
+            }
+        }
 
         /// <summary>Collapsed state, remembered like the minimap's size: a player who wants the
         /// city rather than the checklist should not have to hide it again every session.</summary>
@@ -354,7 +366,7 @@ namespace RadiantPool.Game
         private void DrawObjectives()
         {
             var (title, steps) = Objectives();
-            if (string.IsNullOrEmpty(title)) return;
+            if (string.IsNullOrEmpty(title)) { CardRect = default; return; }
 
             if (_questTitle == null)
             {
@@ -376,7 +388,8 @@ namespace RadiantPool.Game
             // Collapsed: one slim bar with the quest's name, and the way back.
             if (Collapsed)
             {
-                var pill = new Rect(12, CardTop, w, 30f);
+                var pill = new Rect(Ui.W - w - 12f, CardTop, w, 30f);
+                CardRect = pill;
                 GUI.Box(pill, GUIContent.none, Theme.PanelStyle);
                 var nameStyle = new GUIStyle(Theme.Body) { fontSize = 12, wordWrap = false,
                     clipping = TextClipping.Clip };
@@ -392,7 +405,9 @@ namespace RadiantPool.Game
             foreach (var (text, _) in steps)
                 h += _stepStyle.CalcHeight(new GUIContent(text), w - pad * 2f - 18f) + 2f;
 
-            var panel = new Rect(12, CardTop, w, Mathf.Min(h, Ui.H - CardTop - 140f));
+            var panel = new Rect(Ui.W - w - 12f, CardTop, w,
+                Mathf.Min(h, Mathf.Max(64f, Ui.H - CardTop - 12f)));
+            CardRect = panel;
             GUI.Box(panel, GUIContent.none, Theme.PanelStyle);
 
             float y = panel.y + pad;
@@ -403,17 +418,26 @@ namespace RadiantPool.Game
                 Collapsed = true;
             y += tH + 4f;
 
+            float contentH = 0f;
+            float textW = w - pad * 2f - 34f;
+            foreach (var (text, done) in steps)
+                contentH += (done ? _stepDone : _stepStyle)
+                    .CalcHeight(new GUIContent(text), textW) + 2f;
+            var viewport = new Rect(panel.x + pad, y, panel.width - pad * 2f,
+                Mathf.Max(1f, panel.yMax - y - pad));
+            _objectiveScroll = GUI.BeginScrollView(viewport, _objectiveScroll,
+                new Rect(0f, 0f, viewport.width - 16f, Mathf.Max(viewport.height, contentH)));
+            float rowY = 0f;
             foreach (var (text, done) in steps)
             {
                 var style = done ? _stepDone : _stepStyle;
-                float sH = style.CalcHeight(new GUIContent(text), w - pad * 2f - 18f);
-                if (y + sH > panel.yMax - pad) break;   // never spill out of the card
-                // ASCII markers only: the body font has no box/tick glyphs, and a missing
-                // glyph renders as tofu. State is carried by the marker, not just colour.
-                GUI.Label(new Rect(panel.x + pad, y, 18f, sH), Theme.Check(done), style);
-                GUI.Label(new Rect(panel.x + pad + 18f, y, w - pad * 2f - 18f, sH), text, style);
-                y += sH + 2f;
+                float sH = style.CalcHeight(new GUIContent(text), textW);
+                // ASCII markers only: state is carried by the marker, not just colour.
+                GUI.Label(new Rect(0f, rowY, 18f, sH), Theme.Check(done), style);
+                GUI.Label(new Rect(18f, rowY, textW, sH), text, style);
+                rowY += sH + 2f;
             }
+            GUI.EndScrollView();
         }
 
         /// <summary>The big "go this way" arrow: a gold chevron above the hotbar, rotated

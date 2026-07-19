@@ -17,6 +17,8 @@ namespace RadiantPool.Game
         /// <summary>This frame's bar rect in Ui space — CombatClientUI excludes it from
         /// click-to-move.</summary>
         public static Rect BarRect { get; private set; }
+        /// <summary>The thin XP track immediately above the action-bar chrome.</summary>
+        public static Rect XpStripRect { get; private set; }
 
         private const float MaxSlot = 46f;   // design size
         private const float MinSlot = 34f;   // still an easy click target
@@ -24,7 +26,7 @@ namespace RadiantPool.Game
 
         private float _slot = MaxSlot;
         private Texture2D _hideIcon;
-        private GUIStyle _hpLabel;
+        private GUIStyle _keyTag;
 
         private static GUIContent IconOnly(string id, string fallback)
         {
@@ -45,11 +47,12 @@ namespace RadiantPool.Game
             Ui.Begin();
             // A screen is up (bags, journal, settings, level-up): it owns the display, and the
             // bar is not allowed to show through it.
-            if (Ui.PanelOpen) { BarRect = default; return; }
+            if (Ui.PanelOpen) { BarRect = default; XpStripRect = default; return; }
 
             var holder = CombatClientUI.LocalPlayerHolder();
             var director = GameDirector.Instance;
-            if (holder == null || director == null) { BarRect = default; return; }
+            if (holder == null || director == null)
+            { BarRect = default; XpStripRect = default; return; }
 
             if (Ui.BarCollapsed) { DrawHandle(holder); return; }
 
@@ -94,7 +97,7 @@ namespace RadiantPool.Game
                 : Mathf.Min(avail, slots * (_slot + 4f) + chrome);
             float barHeight = wrapCombat ? _slot * 2f + 24f : _slot + 16f;
             var rect = new Rect(Ui.W / 2f - w / 2f, Ui.H - barHeight - 22f, w, barHeight);
-            BarRect = DrawHealth(holder, rect);
+            BarRect = WithXpStrip(holder, rect);
 
             GUILayout.BeginArea(rect, Theme.PanelStyle);
             GUILayout.BeginVertical();
@@ -107,26 +110,6 @@ namespace RadiantPool.Game
                 GUILayout.EndHorizontal();
             }
             GUILayout.BeginHorizontal();
-
-            // Coin glyph rides left of the amount (licensed art, drawn at a fixed 16 px so
-            // the large baked source never blows up the layout); without the pack the number
-            // keeps its "g" suffix so the purse still reads as gold.
-            GUILayout.Label(new GUIContent(
-                    coin != null ? $"<color=#f2ca50><b>{gold}</b></color>"
-                                 : $"<color=#f2ca50><b>{gold}</b>g</color>",
-                    $"{gold} gold — the party's purse"),
-                new GUIStyle(Theme.Body)
-                {
-                    richText = true, fontSize = 13, wordWrap = false,
-                    alignment = TextAnchor.MiddleCenter,
-                    padding = coin != null ? new RectOffset(16, 0, 0, 0) : new RectOffset()
-                },
-                GUILayout.Width(goldW), GUILayout.Height(_slot));
-            if (coin != null)
-            {
-                var gr = GUILayoutUtility.GetLastRect();
-                Theme.CurrencyGlyph(gr.x + 2f, gr.center.y, 16f);
-            }
 
             if (inCombat && !wrapCombat)
             {
@@ -160,15 +143,33 @@ namespace RadiantPool.Game
             }
             GUI.enabled = true;
 
-            if (Btn("bag", "Inventory (I)")) Ui.Toggle(Ui.Panel.Inventory);
-            if (Btn("journal", "Journal (J)")) Ui.Toggle(Ui.Panel.Journal);
+            if (Btn("bag", "Inventory (I)", "I")) Ui.Toggle(Ui.Panel.Inventory);
+            if (Btn("journal", "Journal (J)", "J")) Ui.Toggle(Ui.Panel.Journal);
             // Session: the invite code and who you are connected to, on demand instead of
             // parked in the corner of the screen for the whole campaign.
             if (GUILayout.Button(new GUIContent(SessionPanel.Icon, "Session / invite code"),
                     Theme.SlotStyle,
                     GUILayout.Width(_slot), GUILayout.Height(_slot)))
                 Ui.Toggle(Ui.Panel.Session);
-            if (Btn("settings", "Settings (Esc)")) Ui.Toggle(Ui.Panel.Settings);
+            if (Btn("settings", "Settings (Esc)", "ESC")) Ui.Toggle(Ui.Panel.Settings);
+
+            // Compact purse chip at the right end, after every action and utility slot.
+            GUILayout.Label(new GUIContent(
+                    coin != null ? $"<color=#f2ca50><b>{gold}</b></color>"
+                                 : $"<color=#f2ca50><b>{gold}</b>g</color>",
+                    $"{gold} gold — the party's purse"),
+                new GUIStyle(Theme.Body)
+                {
+                    richText = true, fontSize = 13, wordWrap = false,
+                    alignment = TextAnchor.MiddleCenter,
+                    padding = coin != null ? new RectOffset(16, 0, 0, 0) : new RectOffset()
+                },
+                GUILayout.Width(goldW), GUILayout.Height(_slot));
+            if (coin != null)
+            {
+                var gr = GUILayoutUtility.GetLastRect();
+                Theme.CurrencyGlyph(gr.x + 2f, gr.center.y, 16f);
+            }
 
             // Stow the whole bar. A generated chevron, not a glyph: the body font has no "▼"
             // and a missing glyph renders as a tofu box. The icon is DRAWN OVER the button
@@ -208,7 +209,7 @@ namespace RadiantPool.Game
         private void DrawCombatActions(CombatManager combat, bool myTurn, string[] spells)
         {
             GUI.enabled = myTurn && combat.ActionLeft;
-            if (Btn("attack", "Attack (A)"))
+            if (Btn("attack", "Attack (A)", "A"))
             {
                 var ui = CombatClientUI.Instance;
                 if (ui != null) ui.PickAttack();
@@ -231,69 +232,60 @@ namespace RadiantPool.Game
             }
 
             GUI.enabled = myTurn;
-            if (Btn("end_turn", "End Turn (Space)")) combat.CmdEndTurn();
+            if (Btn("end_turn", "End Turn (Space)", "SPC")) combat.CmdEndTurn();
             GUI.enabled = true;
         }
 
-        private bool Btn(string icon, string tooltip) =>
-            GUILayout.Button(IconOnly(icon, tooltip),
-                Theme.SlotStyle,
-                GUILayout.Width(_slot), GUILayout.Height(_slot));
-
-        /// <summary>Your health, right where your hands are: a slim strip directly above the
-        /// bar — hit points and the percentage, both, because "18/28" and "64%" answer
-        /// different questions ("can I survive that hit" vs "how close am I to the floor").
-        /// It reads the combat unit while a fight is on (RpcHpSync updates it the instant a
-        /// blow lands) and the character's own SyncVar between fights. Kept short and slim:
-        /// it sits under the steering arrow and must not become a second panel.
-        ///
-        /// Returns the HUD rect the caller should publish as BarRect — the strip and the bar
-        /// together, so a click on either can never fall through onto the battlefield.</summary>
-        private Rect DrawHealth(PlayerCharacterHolder holder, Rect bar)
+        private bool Btn(string icon, string tooltip, string key = "")
         {
-            var combat = CombatManager.Instance;
-            var unit = combat != null && combat.InCombat.Value ? combat.MyUnit : null;
-            int max = unit != null ? unit.MaxHp : holder.MaxHpSynced.Value;
-            if (max <= 0) return bar;   // sheet hasn't reached this client yet
+            bool pressed = GUILayout.Button(IconOnly(icon, tooltip), Theme.SlotStyle,
+                GUILayout.Width(_slot), GUILayout.Height(_slot));
+            if (key.Length > 0) DrawKeyTag(GUILayoutUtility.GetLastRect(), key);
+            return pressed;
+        }
 
-            int hp = Mathf.Clamp(unit != null ? unit.Hp : holder.CurrentHpSynced.Value, 0, max);
-            float fraction = (float)hp / max;
-            int percent = Mathf.RoundToInt(fraction * 100f);
+        private void DrawKeyTag(Rect slot, string key)
+        {
+            if (_keyTag == null)
+            {
+                _keyTag = new GUIStyle(Theme.Caps)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    fontSize = 8,
+                    wordWrap = false,
+                    padding = new RectOffset(2, 2, 0, 0)
+                };
+                _keyTag.normal.textColor = Theme.OnSurface;
+            }
+            float w = Mathf.Max(12f, key.Length * 6f + 4f);
+            var tag = new Rect(slot.xMax - w - 2f, slot.y + 2f, w, 11f);
+            Color old = GUI.color;
+            GUI.color = new Color(0.09f, 0.07f, 0.05f, 0.92f);
+            GUI.DrawTexture(tag, Texture2D.whiteTexture);
+            GUI.color = old;
+            GUI.Label(tag, key, _keyTag);
+        }
 
-            const float h = 16f;
-            float w = Mathf.Min(bar.width, 250f);
-            var strip = new Rect(bar.center.x - w / 2f, bar.y - h - 6f, w, h);
-            GUI.Box(new Rect(strip.x - 5f, strip.y - 3f, strip.width + 10f, strip.height + 6f),
-                GUIContent.none);
-
-            if (_hpLabel == null)
-                _hpLabel = new GUIStyle(Theme.Caps)
-                    { alignment = TextAnchor.MiddleRight, wordWrap = false };
-
-            // Bar left, numbers right — the numbers never sit ON the bar (text over a fill is
-            // the one place this HUD cannot hold its 4.5:1 contrast). Your own health is
-            // green: the party side reads green everywhere, the enemy red.
-            const float readout = 96f;
-            Theme.Bar(new Rect(strip.x, strip.y + 4f, strip.width - readout - 6f, 9f),
-                fraction, Theme.HpGreen);
-            _hpLabel.normal.textColor = hp == 0 ? Theme.Crimson
-                : fraction <= 0.34f ? Theme.Gold : Theme.OnSurface;
-            GUI.Label(new Rect(strip.xMax - readout, strip.y, readout, h),
-                hp == 0 ? "DOWN" : $"{hp}/{max}  {percent}%", _hpLabel);
-
-            return Rect.MinMaxRect(Mathf.Min(bar.x, strip.x - 5f), strip.y - 3f,
-                Mathf.Max(bar.xMax, strip.xMax + 5f), bar.yMax);
+        /// <summary>Add the shared thin XP track above the bar and publish both as BarRect,
+        /// so the log, target picker, steering arrow, and battlefield hit-test all dock from
+        /// the complete bottom-centre HUD footprint.</summary>
+        private static Rect WithXpStrip(PlayerCharacterHolder holder, Rect bar)
+        {
+            const float h = 8f;
+            XpStripRect = new Rect(bar.x, bar.y - h - 4f, bar.width, h);
+            ProgressUI.DrawXpTrack(XpStripRect, holder, true);
+            return Rect.MinMaxRect(bar.x, XpStripRect.y, bar.xMax, bar.yMax);
         }
 
         /// <summary>Stowed: one slim handle where the bar was, so hiding it is never a one-way
         /// door — the same rule the minimap's collapsed pill follows. BarRect still reports the
         /// handle, so combat click-to-move can't fire through it, and the steering arrow keeps
-        /// docking off the bar's top edge (it just gets more room). The health strip STAYS: the
-        /// bar is furniture, your hit points are not.</summary>
+        /// docking off the bar's top edge (it just gets more room). The XP track remains above
+        /// the handle; health lives in the top-left player frame.</summary>
         private void DrawHandle(PlayerCharacterHolder holder)
         {
             var rect = new Rect(Ui.W / 2f - 62f, Ui.H - 34f, 124f, 26f);
-            BarRect = DrawHealth(holder, rect);
+            BarRect = WithXpStrip(holder, rect);
             var style = new GUIStyle(GUI.skin.button)
                 { fontSize = 11, wordWrap = false, clipping = TextClipping.Overflow };
             if (GUI.Button(rect, "SHOW BAR (H)", style)) Ui.BarCollapsed = false;

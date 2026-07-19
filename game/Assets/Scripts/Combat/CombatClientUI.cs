@@ -23,6 +23,7 @@ namespace RadiantPool.Game
         // into reach, one to swing — and the second was the easiest thing in the game to
         // forget, so a turn ended having done nothing but shuffle a square.
         private string _autoTarget = "";
+        private string _hudTarget = "";
         private Vector2Int _autoFrom;    // where we stood when the walk was ordered
         private float _autoUntil;        // give up if the walk never resolves (blocked path)
 
@@ -33,6 +34,7 @@ namespace RadiantPool.Game
         public void PickAttack()
         {
             _autoTarget = "";
+            _hudTarget = "";
             _pendingSpell = "";
             _mode = Mode.PickAttackTarget;
         }
@@ -40,6 +42,7 @@ namespace RadiantPool.Game
         public void PickSpell(string spellId)
         {
             _autoTarget = "";
+            _hudTarget = "";
             _pendingSpell = spellId;
             _mode = Mode.PickSpellTarget;
         }
@@ -50,6 +53,8 @@ namespace RadiantPool.Game
         {
             var combat = CombatManager.Instance;
             if (combat == null || !combat.CanAcceptPlayerInput) return;
+            var picked = combat.ClientUnits.FirstOrDefault(u => u.Id == targetId);
+            _hudTarget = picked != null && !picked.IsPc ? picked.Id : "";
             if (_mode == Mode.PickAttackTarget)
             {
                 var target = combat.ClientUnits.FirstOrDefault(u => u.Id == targetId);
@@ -312,6 +317,7 @@ namespace RadiantPool.Game
 
             var enemy = combat.ClientUnits.FirstOrDefault(
                 u => !u.IsPc && !u.Dead && u.Cell == cell);
+            _hudTarget = enemy != null ? enemy.Id : "";
 
             // Click an enemy in reach: swing now. Out of reach: walk in (CmdMoveTo stops
             // adjacent to occupied cells) and REMEMBER it — TickAutoAttack lands the blow the
@@ -456,7 +462,10 @@ namespace RadiantPool.Game
             var m = Ui.Mouse;
             if (InitiativeRect(combat).Contains(m)) return true;
             if (_logRect.Contains(m)) return true;
-            if (MyCardRect.Contains(m)) return true;
+            if (PlayerFrameRect.Contains(m)) return true;
+            if (PartyFramesRect.Contains(m)) return true;
+            if (TargetFrameRect.Contains(m)) return true;
+            if (QuestTracker.CardRect.Contains(m)) return true;
             if (HotBar.BarRect.Contains(m)) return true;
             if (MiniMap.MapRect.Contains(m)) return true;
             if (combat.IsMyTurn && _mode != Mode.Root && _actionsRect.Contains(m)) return true;
@@ -585,13 +594,18 @@ namespace RadiantPool.Game
             {
                 _logRect = default;
                 _actionsRect = default;
+                PartyFramesRect = default;
+                TargetFrameRect = default;
                 return;
             }
+            var holder = LocalPlayerHolder();
+            if (holder != null) DrawUnitFrames(holder);
             var combat = CombatManager.Instance;
             if (combat == null)
             {
                 _logRect = default;
                 _actionsRect = default;
+                TargetFrameRect = default;
                 return;
             }
 
@@ -611,7 +625,6 @@ namespace RadiantPool.Game
             // hotbar on narrow canvases.
             if (choosingTarget) _logRect = default;
             else DrawLog(combat);
-            DrawMyCard(combat);
             if (choosingTarget) DrawActions(combat);
             else
             {
@@ -622,14 +635,26 @@ namespace RadiantPool.Game
 
         // ---------- HUD geometry (one definition per panel; IsMouseOverHud reuses these) ----------
 
+        public static Rect PlayerFrameRect
+        {
+            get
+            {
+                float w = Mathf.Clamp(Ui.W * 0.25f, 220f, 278f);
+                return new Rect(12f, 12f, w, 76f);
+            }
+        }
+
+        public static Rect PartyFramesRect { get; private set; }
+        public static Rect TargetFrameRect { get; private set; }
+
         /// <summary>Combat log, bottom-left but docked above the complete hotbar bounds
-        /// (including its health strip). It used to anchor to Ui.H and physically cover the
+        /// (including its XP strip). It used to anchor to Ui.H and physically cover the
         /// combat/spell row and utility row whenever the hotbar grew wide enough.</summary>
         private static Rect LogRect
         {
             get
             {
-                float w = Mathf.Clamp(Ui.W * 0.32f, 240f, 384f);
+                float w = Mathf.Clamp(Ui.W * 0.40f, 250f, 460f);
                 float wantedHeight = Mathf.Clamp(Ui.H * 0.26f, 110f, 162f);
                 // BarRect is the one authoritative definition shared with click blocking.
                 // The conservative fallback protects the first OnGUI frame, before HotBar
@@ -637,66 +662,186 @@ namespace RadiantPool.Game
                 float barTop = HotBar.BarRect.height > 0f
                     ? HotBar.BarRect.yMin : Ui.H - 170f;
                 float bottom = Mathf.Min(Ui.H - 12f, barTop - 8f);
-                // Preserve room for the 100-unit player card stacked above this panel.
-                float h = Mathf.Min(wantedHeight, Mathf.Max(84f, bottom - 120f));
+                float h = Mathf.Min(wantedHeight, Mathf.Max(84f, bottom - 12f));
                 return new Rect(12f, bottom - h, w, h);
-            }
-        }
-
-        /// <summary>Player card, stacked directly above the log.</summary>
-        private static Rect MyCardRect
-        {
-            get
-            {
-                float w = Mathf.Min(264f, Ui.W * 0.28f);
-                var log = LogRect;
-                return new Rect(12f, log.y - 8f - 100f, Mathf.Max(w, 200f), 100f);
             }
         }
 
         /// <summary>Initiative order, top-right — docked BELOW the minimap (it used to be
         /// pinned to the top-right corner and drew straight through it) and capped so a
         /// nine-unit fight scrolls instead of running off the bottom of the screen.</summary>
-        private static Rect InitiativeRect(CombatManager combat)
+        public static Rect InitiativeRect(CombatManager combat)
         {
             float w = Mathf.Clamp(Ui.W * 0.22f, 190f, 250f);
             float top = MiniMap.MapRect.yMax + 8f;
             // Round title + two grouped section headers (PARTY / ENEMIES) + a row per unit.
             float wanted = 44f + 40f + combat.ClientUnits.Count * 36f;
-            float h = Mathf.Min(wanted, Ui.H - top - 12f);
+            float h = Mathf.Min(wanted,
+                Mathf.Min(Ui.H * 0.38f, Mathf.Max(80f, Ui.H - top - 130f)));
             return new Rect(Ui.W - w - 12f, top, w, Mathf.Max(h, 80f));
         }
 
-        /// <summary>Persistent player card above the log (mock: portrait card with HP/MP
-        /// bars): name in serif gold, red HP bar, remaining spell slots as pips.</summary>
-        private void DrawMyCard(CombatManager combat)
+        private static readonly Texture2D[] ClassEmblems = new Texture2D[4];
+
+        /// <summary>WoW-style unit cluster: the local character owns the top-left corner,
+        /// party frames stack beneath it, and a selected hostile appears to its right.</summary>
+        private void DrawUnitFrames(PlayerCharacterHolder holder)
         {
-            var mine = combat.MyUnit;
-            if (mine == null) return;
-            var rect = MyCardRect;
-            GUILayout.BeginArea(rect, Theme.PanelStyle);
-            GUILayout.Label(mine.Name +
-                (combat.IsMyTurn ? "   <size=11><color=#d0c5af>— your turn</color></size>" : ""),
-                Theme.Header);
+            var combat = CombatManager.Instance;
+            var mine = combat != null && combat.InCombat.Value ? combat.MyUnit : null;
+            int max = mine != null ? mine.MaxHp : holder.MaxHpSynced.Value;
+            int hp = Mathf.Clamp(mine != null ? mine.Hp : holder.CurrentHpSynced.Value,
+                0, Mathf.Max(0, max));
+            DrawPlayerFrame(holder, mine != null ? mine.Name : holder.CharacterName.Value, hp, max);
 
-            float inner = rect.width - 28f;
-            var row = GUILayoutUtility.GetRect(inner, 14f);
-            GUI.Label(new Rect(row.x, row.y - 2, 26, 14), "HP", Theme.Caps);
-            float barW = Mathf.Max(60f, inner - 28f - 56f);
-            Theme.Bar(new Rect(row.x + 28, row.y + 1, barW, 9),
-                mine.MaxHp > 0 ? mine.DisplayHp / mine.MaxHp : 0f, Theme.HpGreen);
-            GUI.Label(new Rect(row.x + 32 + barW, row.y - 2, 56, 14),
-                $"{mine.Hp}/{mine.MaxHp}", Theme.Caps);
+            if (combat != null && combat.InCombat.Value && combat.ClientUnits.Count > 0)
+            {
+                var party = combat.ClientUnits.Where(u => u.IsPc && u != mine).Take(3).ToList();
+                DrawCombatPartyFrames(party);
+                var target = combat.ClientUnits.FirstOrDefault(
+                    u => u.Id == _hudTarget && !u.IsPc && !u.Dead);
+                DrawTargetFrame(target);
+            }
+            else
+            {
+                var party = FindObjectsByType<PlayerCharacterHolder>(FindObjectsSortMode.None)
+                    .Where(p => p != holder).OrderBy(p => p.CharacterName.Value).Take(3).ToList();
+                DrawWorldPartyFrames(party);
+                TargetFrameRect = default;
+                _hudTarget = "";
+            }
+        }
 
-            // Pips = spell slots still available (the client only knows what is left, not
-            // the capacity, so every pip drawn is one you can actually spend).
-            int slots = combat.MySlots.Sum();
-            if (slots > 0)
-                GUILayout.Label($"SLOTS  {Theme.Pips(slots, Mathf.Min(slots, 10))}", Theme.Caps);
-            if (mine.Down)
-                GUILayout.Label("<color=#ff8a80><b>DOWN — rolling death saves</b></color>",
-                    Theme.Caps);
-            GUILayout.EndArea();
+        private void DrawPlayerFrame(PlayerCharacterHolder holder, string name, int hp, int max)
+        {
+            var rect = PlayerFrameRect;
+            GUI.Box(rect, GUIContent.none, Theme.PanelStyle);
+            const float portrait = 48f;
+            var portraitRect = new Rect(rect.x + 8f, rect.y + 10f, portrait, portrait);
+            GUI.Box(portraitRect, GUIContent.none, Theme.SlotStyle);
+            int classIndex = Mathf.Clamp(holder.ClassIndex.Value, 0, ClassEmblems.Length - 1);
+            GUI.DrawTexture(new Rect(portraitRect.x + 5f, portraitRect.y + 5f,
+                portrait - 10f, portrait - 10f), ClassEmblem(classIndex), ScaleMode.ScaleToFit, true);
+
+            float x = portraitRect.xMax + 8f;
+            float w = rect.xMax - x - 8f;
+            int level = Mathf.Clamp(holder.LevelSynced.Value, 1, Progression.MaxLevel);
+            string safeName = string.IsNullOrWhiteSpace(name) ? "Adventurer" : name;
+            GUI.Label(new Rect(x, rect.y + 8f, w, 18f),
+                $"<b>{safeName}</b>  <color=#cbbb9c>level {level}</color>", Theme.Body);
+            float fraction = max > 0 ? (float)hp / max : 0f;
+            const float hpReadout = 88f;
+            var hpRect = new Rect(x, rect.y + 33f, Mathf.Max(42f, w - hpReadout), 10f);
+            Theme.Bar(hpRect, fraction, Theme.HpGreen);
+            var centered = new GUIStyle(Theme.Caps)
+                { alignment = TextAnchor.MiddleRight, wordWrap = false };
+            centered.normal.textColor = Theme.OnSurface;
+            int percent = max > 0 ? Mathf.RoundToInt(fraction * 100f) : 0;
+            GUI.Label(new Rect(hpRect.xMax + 4f, rect.y + 29f, hpReadout - 4f, 18f),
+                max > 0 ? $"{hp}/{max}  {percent}%" : "HP syncing", centered);
+
+            var cls = (CharacterClass)classIndex;
+            if (ClassData.SpellcastingAbility(cls) != null)
+            {
+                int[] cap = ClassData.SpellSlots(cls, level);
+                int slotLevel = System.Array.FindIndex(cap, n => n > 0);
+                if (slotLevel >= 0)
+                {
+                    var combat = CombatManager.Instance;
+                    int remaining = combat != null && combat.InCombat.Value
+                        && slotLevel < combat.MySlots.Length ? combat.MySlots[slotLevel] : cap[slotLevel];
+                    const float slotReadout = 76f;
+                    var resource = new Rect(x, rect.y + 52f,
+                        Mathf.Max(42f, w - slotReadout), 8f);
+                    Theme.Bar(resource, cap[slotLevel] > 0
+                        ? (float)remaining / cap[slotLevel] : 0f, Theme.MpBlue);
+                    centered.fontSize = 8;
+                    GUI.Label(new Rect(resource.xMax + 4f, rect.y + 48f,
+                            slotReadout - 4f, 16f),
+                        $"slots L{slotLevel + 1} {remaining}/{cap[slotLevel]}", centered);
+                }
+            }
+        }
+
+        private static void DrawCombatPartyFrames(IReadOnlyList<CombatManager.UnitView> party)
+        {
+            if (party.Count == 0) { PartyFramesRect = default; return; }
+            PartyFramesRect = new Rect(PlayerFrameRect.x, PlayerFrameRect.yMax + 6f,
+                PlayerFrameRect.width, party.Count * 36f + 8f);
+            GUI.Box(PartyFramesRect, GUIContent.none, Theme.PanelStyle);
+            for (int i = 0; i < party.Count; i++)
+                DrawCompactPartyRow(PartyFramesRect, i, party[i].Name, party[i].Hp,
+                    party[i].MaxHp, party[i].Down || party[i].Dead);
+        }
+
+        private static void DrawWorldPartyFrames(IReadOnlyList<PlayerCharacterHolder> party)
+        {
+            if (party.Count == 0) { PartyFramesRect = default; return; }
+            PartyFramesRect = new Rect(PlayerFrameRect.x, PlayerFrameRect.yMax + 6f,
+                PlayerFrameRect.width, party.Count * 36f + 8f);
+            GUI.Box(PartyFramesRect, GUIContent.none, Theme.PanelStyle);
+            for (int i = 0; i < party.Count; i++)
+                DrawCompactPartyRow(PartyFramesRect, i, party[i].CharacterName.Value,
+                    party[i].CurrentHpSynced.Value, party[i].MaxHpSynced.Value,
+                    party[i].CurrentHpSynced.Value <= 0);
+        }
+
+        private static void DrawCompactPartyRow(Rect group, int index, string name,
+            int hp, int max, bool down)
+        {
+            float y = group.y + 5f + index * 36f;
+            string label = string.IsNullOrWhiteSpace(name) ? "Party member" : name;
+            GUI.Label(new Rect(group.x + 8f, y, group.width - 16f, 15f),
+                down ? $"{label}  <color=#ff9e9e>down</color>" : label, Theme.Body);
+            var bar = new Rect(group.x + 8f, y + 18f, group.width - 16f, 9f);
+            Theme.Bar(bar, max > 0 ? (float)Mathf.Clamp(hp, 0, max) / max : 0f, Theme.HpGreen);
+        }
+
+        private static void DrawTargetFrame(CombatManager.UnitView target)
+        {
+            if (target == null) { TargetFrameRect = default; return; }
+            float w = Mathf.Clamp(Ui.W * 0.23f, 210f, 270f);
+            TargetFrameRect = new Rect(PlayerFrameRect.xMax + 24f, 12f, w, 54f);
+            GUI.Box(TargetFrameRect, GUIContent.none, Theme.PanelStyle);
+            GUI.Label(new Rect(TargetFrameRect.x + 10f, TargetFrameRect.y + 7f,
+                w - 20f, 18f), target.Name, Theme.Header);
+            var hpRect = new Rect(TargetFrameRect.x + 10f, TargetFrameRect.y + 31f,
+                w - 90f, 10f);
+            Theme.Bar(hpRect, target.MaxHp > 0 ? target.DisplayHp / target.MaxHp : 0f,
+                Theme.HpRed);
+            var centered = new GUIStyle(Theme.Caps)
+                { alignment = TextAnchor.MiddleRight, wordWrap = false };
+            centered.normal.textColor = Theme.OnSurface;
+            GUI.Label(new Rect(hpRect.xMax + 4f, hpRect.y - 3f, 66f, 16f),
+                $"{target.Hp}/{target.MaxHp}", centered);
+        }
+
+        private static Texture2D ClassEmblem(int classIndex)
+        {
+            classIndex = Mathf.Clamp(classIndex, 0, ClassEmblems.Length - 1);
+            if (ClassEmblems[classIndex] != null) return ClassEmblems[classIndex];
+            const int size = 32;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
+                { hideFlags = HideFlags.HideAndDontSave, filterMode = FilterMode.Bilinear };
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float cx = x - 15.5f, cy = y - 15.5f;
+                    bool ink = classIndex switch
+                    {
+                        0 => Mathf.Abs(cx - cy) < 2.2f || Mathf.Abs(cx + cy) < 2.2f,
+                        1 => cx * cx + cy * cy < 92f ||
+                             (Mathf.Abs(cx) < 2f && Mathf.Abs(cy) < 14f),
+                        2 => (Mathf.Abs(cx) < 3f && Mathf.Abs(cy) < 13f) ||
+                             (Mathf.Abs(cy) < 3f && Mathf.Abs(cx) < 13f),
+                        _ => Mathf.Abs(cx) + Mathf.Abs(cy) < 12f &&
+                             !(Mathf.Abs(cx) < 3f && cy < -2f)
+                    };
+                    tex.SetPixel(x, y, ink ? Theme.Gold : Color.clear);
+                }
+            tex.Apply(false, true);
+            ClassEmblems[classIndex] = tex;
+            return tex;
         }
 
         /// <summary>Big centered VICTORY / DEFEATED card, shown for a few seconds after
