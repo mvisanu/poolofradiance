@@ -258,11 +258,22 @@ mouse and the self-test drive the very same code.
   `HotBar.BarRect` (including the XP strip), and `_logRect` is cleared while an attack or
   spell target picker is open so the temporary casting/target bar and main bar cannot be
   covered. `IsMouseOverHud` gates clicks with the same published visible rect. **Your HEALTH
-  lives in the top-left player unit frame**: generated class emblem + name/level + `hp/max` +
-  percentage, using the combat unit's HP in a fight (`RpcHpSync`) and
-  `PlayerCharacterHolder.CurrentHpSynced` between fights. Caster frames add a thin spell-slot
-  resource bar; compact party frames stack below, and a picked hostile gets a top-centre-left
-  target frame. Health remains visible when the action bar is stowed. In combat: **click enemy
+  lives in the top-left player unit frame**, deliberately COMPACT (~150-172 units — the
+  `hp/max` readout rides ON the bar, monster-overhead style, after the wide strip clipped
+  its own percentage): generated class emblem + name/level + short bar, using the combat
+  unit's HP in a fight (`RpcHpSync`) and `PlayerCharacterHolder.CurrentHpSynced` between
+  fights. Caster frames add a thin spell-slot resource bar; compact party frames stack
+  below. **A picked hostile gets a same-size WoW-style target frame directly to the
+  player frame's right** (portrait mirrored to the right side, carrying the enemy's
+  generated target-shape icon in the overhead colour language — gold when it is the
+  pending auto-attack target — and clamped to `MiniMap.MapRect.xMin`, hidden below 110
+  units of room). `[TargetFrameTest]` in `-attacktest` pins the pairing, and
+  `-combatuicapture` writes a second `<name>-target.png` frame proving it visually.
+  Health remains visible when the action bar is stowed. The initiative panel budgets
+  padding + scrollbar out of its bar width and clips scrolled rosters ON row boundaries;
+  the quest card falls back to its title pill whenever the combat HUD starves its corner
+  below one title block (64 units); monster nameplates are single-line, sized to the name
+  (96-150 units). In combat: **click enemy
   = close in AND attack, one click, however far away**
   (`CombatClientUI.ClickCell` is the ONE definition of a board click: in reach it swings, out
   of reach it walks and REMEMBERS the target, `TickAutoAttack` lands the blow when the body

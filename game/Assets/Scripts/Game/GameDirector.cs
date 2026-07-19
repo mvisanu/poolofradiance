@@ -1794,6 +1794,36 @@ namespace RadiantPool.Game
                       $"(move {combat.MoveLeft} ft, action {combat.ActionLeft})");
             combatUi.PickTarget(enemy.Id);
 
+            // Picking a hostile publishes the WoW-style target frame: docked beside the
+            // player frame in the upper-left, clear of the minimap column, carrying the
+            // same generated shape icon as the enemy's overhead plate.
+            yield return null;
+            yield return null;
+            Rect pFrame = CombatClientUI.PlayerFrameRect;
+            Rect tFrame = CombatClientUI.TargetFrameRect;
+            bool frameShown = !renderedUi || (tFrame.width > 0f && tFrame.height > 0f
+                && tFrame.xMin >= pFrame.xMax + 0.5f
+                && Mathf.Abs(tFrame.yMin - pFrame.yMin) < 0.5f
+                && tFrame.xMax <= MiniMap.MapRect.xMin - 7.5f);
+            bool frameIcon = CombatClientUI.TargetShapeTexture(enemy.TargetShape) != null;
+            Debug.Log($"[TargetFrameTest] {(frameShown && frameIcon ? "PASS" : "FAIL")} - " +
+                      $"target frame {tFrame.width:0}x{tFrame.height:0} at x {tFrame.xMin:0} " +
+                      $"beside player frame (xMax {pFrame.xMax:0}), enemy icon " +
+                      $"{(frameIcon ? "texture ready" : "MISSING")}");
+            if (uiCaptureIndex >= 0 && uiCaptureIndex + 1 < args.Length)
+            {
+                // Second frame of the same capture: the picker shot above proves the
+                // bottom HUD; this one proves the player/target frame pair.
+                string basePath = args[uiCaptureIndex + 1];
+                string targetShot = System.IO.Path.Combine(
+                    System.IO.Path.GetDirectoryName(basePath) ?? ".",
+                    System.IO.Path.GetFileNameWithoutExtension(basePath) + "-target" +
+                    System.IO.Path.GetExtension(basePath));
+                ScreenCapture.CaptureScreenshot(targetShot);
+                yield return new WaitForSeconds(1f);
+                Debug.Log($"[CombatUiCapture] wrote target frame view to {targetShot}");
+            }
+
             float until = Time.time + 15f;
             while (combat.ActionLeft && combat.IsMyTurn && combat.InCombat.Value
                    && Time.time < until)

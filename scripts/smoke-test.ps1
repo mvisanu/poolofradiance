@@ -264,6 +264,8 @@ $checks = @(
     @{ Name = "no failed attack assertion";        Ok = $fightText -notmatch "\[AttackTest\] FAIL|\[AttackTurnEndTest\] FAIL" },
     @{ Name = "monster overhead HP, target shapes, and renderer clicks work"; Ok = $fightText -match "\[MonsterHudTest\] PASS.+renderer click TARGETED" },
     @{ Name = "no failed monster HUD assertion"; Ok = $fightText -notmatch "\[MonsterHudTest\] FAIL" },
+    @{ Name = "target frame with enemy icon docks beside the player frame"; Ok = $fightText -match "\[TargetFrameTest\] PASS" },
+    @{ Name = "no failed target frame assertion"; Ok = $fightText -notmatch "\[TargetFrameTest\] FAIL" },
     @{ Name = "combat attack produces graphics and sound feedback"; Ok = $fightText -match "presentation FX/SFX" },
     @{ Name = "licensed exploration and battle music are active"; Ok = $fightText -match "\[CombatAudioTest\] PASS.+Action RPG battle track.+Caves and Dungeons 5/5 zones" },
     @{ Name = "realistic weapon sounds are used"; Ok = $fightText -match "\[CombatAudioTest\] PASS.+licensed weapon SFX played" },

@@ -29,8 +29,6 @@ namespace RadiantPool.Game
         private float _nextPartyScan;
         private readonly List<PlayerCharacterHolder> _cachedPartyHolders =
             new List<PlayerCharacterHolder>();
-        private GUIStyle _playerReadoutStyle;
-        private GUIStyle _targetReadoutStyle;
 
         private void Awake() => Instance = this;
         private void OnDestroy() { if (Instance == this) Instance = null; }
@@ -538,6 +536,9 @@ namespace RadiantPool.Game
                     alignment = TextAnchor.MiddleCenter,
                     fontSize = 10,
                     fontStyle = FontStyle.Bold,
+                    // One line, clipped: inherited word wrap let long names fold into a
+                    // second line that spilled above the plate and across the hp bar.
+                    wordWrap = false,
                     clipping = TextClipping.Clip
                 };
                 _worldHpStyle = new GUIStyle(Theme.Caps)
@@ -560,7 +561,9 @@ namespace RadiantPool.Game
                 float y = (Screen.height - screen.y) / Ui.Scale;
                 if (x < -80f || x > Ui.W + 80f || y < -40f || y > Ui.H + 40f) continue;
 
-                const float barWidth = 96f;
+                // Plate hugs the name (capped): a fixed 96 clipped long names mid-word.
+                float nameWidth = _worldNameStyle.CalcSize(new GUIContent(unit.Name)).x;
+                float barWidth = Mathf.Clamp(nameWidth + 24f, 96f, 150f);
                 // Rounded dark nameplate so the name and bar stay legible over bright scenery
                 // (contrast > decoration); the current target gets a gold-lit rim behind it.
                 bool targeted = unit.Id == _autoTarget;
@@ -644,8 +647,10 @@ namespace RadiantPool.Game
         {
             get
             {
-                float w = Mathf.Clamp(Ui.W * 0.25f, 220f, 278f);
-                return new Rect(12f, 12f, w, 76f);
+                // Compact WoW-style frame: the hp/max readout rides ON the bar, so the
+                // frame hugs portrait + a ~60%-shorter bar instead of a wide strip.
+                float w = Mathf.Clamp(Ui.W * 0.155f, 150f, 172f);
+                return new Rect(12f, 12f, w, 64f);
             }
         }
 
@@ -683,6 +688,10 @@ namespace RadiantPool.Game
             float wanted = 44f + 40f + combat.ClientUnits.Count * 36f;
             float h = Mathf.Min(wanted,
                 Mathf.Min(Ui.H * 0.38f, Mathf.Max(80f, Ui.H - top - 130f)));
+            // When the list scrolls, clip on a row boundary — a row cut mid-text reads
+            // as a broken panel, not as scrollable content.
+            if (h < wanted)
+                h = 84f + Mathf.Max(1, Mathf.FloorToInt((h - 92f) / 36f)) * 36f + 8f;
             return new Rect(Ui.W - w - 12f, top, w, Mathf.Max(h, 80f));
         }
 
@@ -735,7 +744,7 @@ namespace RadiantPool.Game
         {
             var rect = PlayerFrameRect;
             GUI.Box(rect, GUIContent.none, Theme.PanelStyle);
-            const float portrait = 48f;
+            const float portrait = 44f;
             var portraitRect = new Rect(rect.x + 8f, rect.y + 10f, portrait, portrait);
             GUI.Box(portraitRect, GUIContent.none, Theme.SlotStyle);
             int classIndex = Mathf.Clamp(holder.ClassIndex.Value, 0, ClassEmblems.Length - 1);
@@ -746,23 +755,15 @@ namespace RadiantPool.Game
             float w = rect.xMax - x - 8f;
             int level = Mathf.Clamp(holder.LevelSynced.Value, 1, Progression.MaxLevel);
             string safeName = string.IsNullOrWhiteSpace(name) ? "Adventurer" : name;
-            GUI.Label(new Rect(x, rect.y + 8f, w, 18f),
-                $"<b>{safeName}</b>  <color=#cbbb9c>level {level}</color>", Theme.Body);
+            GUI.Label(new Rect(x, rect.y + 7f, w, 15f),
+                $"<b>{safeName}</b>  <color=#cbbb9c>L{level}</color>", NameLineStyle());
             float fraction = max > 0 ? (float)hp / max : 0f;
-            const float hpReadout = 88f;
-            var hpRect = new Rect(x, rect.y + 33f, Mathf.Max(42f, w - hpReadout), 10f);
+            // The readout rides ON the bar (like the monster overheads), which is what
+            // lets the bar run this short without clipping text off the frame edge.
+            var hpRect = new Rect(x, rect.y + 25f, w, 13f);
             Theme.Bar(hpRect, fraction, Theme.HpGreen);
-            if (_playerReadoutStyle == null)
-                _playerReadoutStyle = new GUIStyle(Theme.Caps)
-                    { alignment = TextAnchor.MiddleRight, wordWrap = false };
-            _playerReadoutStyle.fontSize = Theme.Caps.fontSize;
-            _playerReadoutStyle.normal.textColor = down ? Theme.Crimson : Theme.OnSurface;
-            int percent = max > 0 ? Mathf.RoundToInt(fraction * 100f) : 0;
-            string hpText = down
-                ? (inCombat ? "DOWN - death saves" : "DOWN")
-                : (max > 0 ? $"{hp}/{max}  {percent}%" : "HP syncing");
-            GUI.Label(new Rect(hpRect.xMax + 4f, rect.y + 29f, hpReadout - 4f, 18f),
-                hpText, _playerReadoutStyle);
+            string hpText = down ? "DOWN" : (max > 0 ? $"{hp}/{max}" : "syncing");
+            GUI.Label(hpRect, hpText, BarReadoutStyle(down ? Theme.Crimson : Color.white));
 
             var cls = (CharacterClass)classIndex;
             int capacity = ClassData.SpellSlots(cls, level).Sum();
@@ -772,15 +773,38 @@ namespace RadiantPool.Game
                 int remaining = combat != null && combat.InCombat.Value
                     ? combat.MySlots.Sum() : holder.SlotsRemainingTotalSynced.Value;
                 remaining = Mathf.Clamp(remaining, 0, capacity);
-                const float slotReadout = 76f;
-                var resource = new Rect(x, rect.y + 52f,
-                    Mathf.Max(42f, w - slotReadout), 8f);
+                var resource = new Rect(x, rect.y + 42f, w, 11f);
                 Theme.Bar(resource, (float)remaining / capacity, Theme.MpBlue);
-                _playerReadoutStyle.fontSize = 8;
-                GUI.Label(new Rect(resource.xMax + 4f, rect.y + 48f,
-                        slotReadout - 4f, 16f),
-                    $"slots {remaining}/{capacity}", _playerReadoutStyle);
+                GUI.Label(resource, $"slots {remaining}/{capacity}",
+                    BarReadoutStyle(Color.white, 8));
             }
+        }
+
+        private static GUIStyle _nameLineStyle;
+        private static GUIStyle _barReadoutStyle;
+
+        private static GUIStyle NameLineStyle()
+        {
+            if (_nameLineStyle == null)
+                _nameLineStyle = new GUIStyle(Theme.Body)
+                    { fontSize = 12, wordWrap = false, clipping = TextClipping.Clip };
+            return _nameLineStyle;
+        }
+
+        /// <summary>Centred mini-readout drawn over a Theme.Bar, monster-overhead style.</summary>
+        private static GUIStyle BarReadoutStyle(Color color, int fontSize = 9)
+        {
+            if (_barReadoutStyle == null)
+                _barReadoutStyle = new GUIStyle(Theme.Caps)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    fontStyle = FontStyle.Bold,
+                    wordWrap = false,
+                    clipping = TextClipping.Clip
+                };
+            _barReadoutStyle.fontSize = fontSize;
+            _barReadoutStyle.normal.textColor = color;
+            return _barReadoutStyle;
         }
 
         private static void DrawCombatPartyFrames(IReadOnlyList<CombatManager.UnitView> party)
@@ -825,25 +849,40 @@ namespace RadiantPool.Game
             Theme.Bar(bar, max > 0 ? (float)Mathf.Clamp(hp, 0, max) / max : 0f, Theme.HpGreen);
         }
 
+        /// <summary>WoW-style target frame: mirror of the player frame directly to its
+        /// right — bars on the left, the enemy's generated target-shape icon as the
+        /// portrait on the right, so the frame pair reads player-vs-target.</summary>
         private void DrawTargetFrame(CombatManager.UnitView target)
         {
             if (target == null) { TargetFrameRect = default; return; }
-            float w = Mathf.Clamp(Ui.W * 0.23f, 210f, 270f);
-            TargetFrameRect = new Rect(PlayerFrameRect.xMax + 24f, 12f, w, 54f);
+            float x = PlayerFrameRect.xMax + 12f;
+            // Never reach the minimap column, however narrow the window gets.
+            float w = Mathf.Min(PlayerFrameRect.width,
+                MiniMap.MapRect.xMin - 8f - x);
+            if (w < 110f) { TargetFrameRect = default; return; }
+            TargetFrameRect = new Rect(x, PlayerFrameRect.y, w, PlayerFrameRect.height);
             GUI.Box(TargetFrameRect, GUIContent.none, Theme.PanelStyle);
-            GUI.Label(new Rect(TargetFrameRect.x + 10f, TargetFrameRect.y + 7f,
-                w - 20f, 18f), target.Name, Theme.Header);
-            var hpRect = new Rect(TargetFrameRect.x + 10f, TargetFrameRect.y + 31f,
-                w - 90f, 10f);
+
+            const float portrait = 44f;
+            var portraitRect = new Rect(TargetFrameRect.xMax - 8f - portrait,
+                TargetFrameRect.y + 10f, portrait, portrait);
+            GUI.Box(portraitRect, GUIContent.none, Theme.SlotStyle);
+            // Same icon + colour language as the overhead plates: gold when this enemy
+            // is the pending auto-attack target, hostile red otherwise.
+            Color iconColor = target.Id == _autoTarget
+                ? Theme.Gold : new Color(1f, 0.38f, 0.32f);
+            DrawTargetShape(new Rect(portraitRect.x + 9f, portraitRect.y + 9f,
+                portrait - 18f, portrait - 18f), target.TargetShape, iconColor);
+
+            float tx = TargetFrameRect.x + 8f;
+            float tw = portraitRect.x - 8f - tx;
+            GUI.Label(new Rect(tx, TargetFrameRect.y + 7f, tw, 15f),
+                $"<b>{target.Name}</b>", NameLineStyle());
+            var hpRect = new Rect(tx, TargetFrameRect.y + 25f, tw, 13f);
             Theme.Bar(hpRect, target.MaxHp > 0 ? target.DisplayHp / target.MaxHp : 0f,
                 Theme.HpRed);
-            if (_targetReadoutStyle == null)
-                _targetReadoutStyle = new GUIStyle(Theme.Caps)
-                    { alignment = TextAnchor.MiddleRight, wordWrap = false };
-            _targetReadoutStyle.fontSize = Theme.Caps.fontSize;
-            _targetReadoutStyle.normal.textColor = Theme.OnSurface;
-            GUI.Label(new Rect(hpRect.xMax + 4f, hpRect.y - 3f, 66f, 16f),
-                $"{target.Hp}/{target.MaxHp}", _targetReadoutStyle);
+            GUI.Label(hpRect, $"{target.Hp}/{target.MaxHp}",
+                BarReadoutStyle(Color.white));
         }
 
         private static Texture2D ClassEmblem(int classIndex)
@@ -943,7 +982,9 @@ namespace RadiantPool.Game
             GUILayout.Label($"Round {combat.Round}", Theme.Header);
 
             _initScroll = GUILayout.BeginScrollView(_initScroll);
-            float barW = Mathf.Max(80f, rect.width - 28f - 52f);
+            // Panel padding + a possible vertical scrollbar both eat viewport width;
+            // budgeting only the padding is what clipped the hp readouts off the edge.
+            float barW = Mathf.Max(70f, rect.width - 96f);
             // Two clearly separated rosters so allies and foes never read as one list:
             // your party in green, the enemy in red. The active unit still lights gold, so
             // whose turn it is stays obvious even though the order is grouped by side now.

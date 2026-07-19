@@ -393,7 +393,11 @@ namespace RadiantPool.Game
                 ? HotBar.BarRect.yMin - 8f : Ui.H - 12f;
             float availableHeight = Mathf.Max(0f, cardBottom - cardTop);
             if (availableHeight < 30f) { CardRect = default; return; }
-            if (Collapsed)
+            // Too little height for even the title block (a combat initiative panel above a
+            // wrapped hotbar can starve this corner): a sliver panel with the title spilling
+            // past its bottom edge is worse than the pill, so fall back to the pill.
+            bool starved = availableHeight < 64f;
+            if (Collapsed || starved)
             {
                 var pill = new Rect(Ui.W - w - 12f, cardTop, w,
                     Mathf.Min(30f, availableHeight));
@@ -401,8 +405,10 @@ namespace RadiantPool.Game
                 GUI.Box(pill, GUIContent.none, Theme.PanelStyle);
                 var nameStyle = new GUIStyle(Theme.Body) { fontSize = 12, wordWrap = false,
                     clipping = TextClipping.Clip };
-                GUI.Label(new Rect(pill.x + 8f, pill.y + 6f, w - btn - 14f, 18f), title, nameStyle);
-                if (GUI.Button(new Rect(pill.xMax - btn - 5f, pill.y + 4f, btn, 22f),
+                float titleRight = starved ? w - 14f : w - btn - 14f;
+                GUI.Label(new Rect(pill.x + 8f, pill.y + 6f, titleRight, 18f), title, nameStyle);
+                // No toggle while starved: expanding could not show more than this pill.
+                if (!starved && GUI.Button(new Rect(pill.xMax - btn - 5f, pill.y + 4f, btn, 22f),
                         "Show", _cardBtn))
                     Collapsed = false;
                 return;
