@@ -69,13 +69,20 @@ namespace RadiantPool.Game
         private Light _combatLight;
         private Transform _partyAnchor;
         private Material _sky;
+        private Material _cloudMaterial;
+        private Material _waterMaterial;
         private ParticleSystem _motes;
+        private Transform _cloudLayer;
+        private ReflectionProbe _reflectionProbe;
         private readonly Dictionary<Light, float> _lamps = new Dictionary<Light, float>();
         private float _visualHour = 20.5f;
         private float _nightWeight;
         private float _nextReferenceScan;
         private bool _ready;
         private float _nextPartyScan;
+        private Vector2 _waterOffset;
+        private Vector2 _waterDetailOffset;
+        private bool _probeRendered;
 
         // Daylight palette: high-key painted-fantasy (the Warcraft reference) — a vivid
         // azure sky and a light AIRY BLUE distance haze, never parchment. The old brown
@@ -104,12 +111,16 @@ namespace RadiantPool.Game
             int capture = System.Array.IndexOf(args, "-atmospherecapture");
             if (capture >= 0 && capture + 1 < args.Length)
                 StartCoroutine(CaptureRepresentativeTimes(args[capture + 1]));
+
+            StartCoroutine(RenderReflectionProbeOnce());
         }
 
         private void OnDestroy()
         {
             if (Instance == this) Instance = null;
             if (_sky != null) Destroy(_sky);
+            if (_cloudMaterial != null) Destroy(_cloudMaterial);
+            if (_waterMaterial != null) Destroy(_waterMaterial);
             if (_combatLight != null) Destroy(_combatLight.gameObject);
         }
 
@@ -132,6 +143,7 @@ namespace RadiantPool.Game
                     + hourDelta * Mathf.Min(1f, Time.unscaledDeltaTime * 2f), 24f);
             _ready = true;
             ApplyAtmosphere(_visualHour);
+            UpdateSurfaceMotion();
             UpdatePartyTorch();
             UpdateCombatLight();
 
@@ -171,12 +183,62 @@ namespace RadiantPool.Game
             if (_motes == null)
                 _motes = GameObject.Find("Ambient Sun Motes")?.GetComponent<ParticleSystem>();
 
+            if (_reflectionProbe == null)
+            {
+                var probeGo = GameObject.Find("Hub Reflection Probe");
+                if (probeGo != null) _reflectionProbe = probeGo.GetComponent<ReflectionProbe>();
+            }
+
+            if (_cloudLayer == null)
+            {
+                var cloudGo = GameObject.Find("Painted Cloud Layer");
+                if (cloudGo != null)
+                {
+                    _cloudLayer = cloudGo.transform;
+                    var renderer = cloudGo.GetComponent<Renderer>();
+                    if (renderer != null) _cloudMaterial = renderer.material;
+                }
+            }
+
+            if (_waterMaterial == null)
+            {
+                var waterGo = GameObject.Find("Water");
+                if (waterGo != null)
+                {
+                    var renderer = waterGo.GetComponent<Renderer>();
+                    if (renderer != null) _waterMaterial = renderer.material;
+                }
+            }
+
             foreach (var light in FindObjectsByType<Light>(FindObjectsSortMode.None))
                 if (light != null && light.gameObject.name == "GlowLight"
                     && !_lamps.ContainsKey(light))
                     _lamps[light] = Mathf.Max(1.6f, light.intensity);
 
             if (_lamps.Count == 0) CreateFallbackLanterns();
+        }
+
+        private IEnumerator RenderReflectionProbeOnce()
+        {
+            yield return null;
+            RefreshSceneReferences();
+            if (_reflectionProbe == null || _probeRendered) yield break;
+            _reflectionProbe.RenderProbe();
+            _probeRendered = true;
+            Debug.Log("[Atmosphere] hub reflection probe refreshed once.");
+        }
+
+        private void UpdateSurfaceMotion()
+        {
+            if (SettingsMenu.ReducedMotion) return;
+            float dt = Time.unscaledDeltaTime;
+            if (_cloudLayer != null)
+                _cloudLayer.Rotate(Vector3.up, dt * 0.16f, Space.World);
+            if (_waterMaterial == null) return;
+            _waterOffset += new Vector2(0.006f, 0.003f) * dt;
+            _waterDetailOffset += new Vector2(-0.004f, 0.007f) * dt;
+            _waterMaterial.SetTextureOffset("_BumpMap", _waterOffset);
+            _waterMaterial.SetTextureOffset("_DetailNormalMap", _waterDetailOffset);
         }
 
         private void CreatePartyTorch()
@@ -387,6 +449,16 @@ namespace RadiantPool.Game
                         + combatWeight * 0.06f);
                 if (_sky.HasProperty("_AtmosphereThickness"))
                     _sky.SetFloat("_AtmosphereThickness", Mathf.Lerp(0.45f, 1.05f, daylight));
+            }
+
+            if (_cloudMaterial != null)
+            {
+                Color cloud = Color.Lerp(new Color(0.13f, 0.17f, 0.25f, 0.055f),
+                    new Color(1f, 0.97f, 0.90f, 0.13f), daylight);
+                cloud = Color.Lerp(cloud, new Color(1f, 0.58f, 0.34f, 0.15f),
+                    twilight * 0.72f);
+                if (combat) cloud *= new Color(0.86f, 0.82f, 0.82f, 1f);
+                _cloudMaterial.SetColor("_BaseColor", cloud);
             }
 
             foreach (var pair in _lamps.ToArray())

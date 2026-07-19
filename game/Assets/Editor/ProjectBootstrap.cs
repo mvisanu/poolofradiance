@@ -81,14 +81,18 @@ namespace RadiantPool.EditorTools
             var desktop = PipelineVariant("URP_Desktop",
                 msaa: 4, hdr: true, renderScale: 1f, shadowDistance: 70f,
                 mainShadowmapResolution: 2048, cascadeCount: 4,
-                maxAdditionalLights: 8, additionalLightShadows: true, ssao: true);
+                maxAdditionalLights: 8, additionalLightShadows: true,
+                softShadowQuality: SoftShadowQuality.High,
+                ssao: true, ssaoIntensity: 0.6f, ssaoRadius: 0.3f);
             // HDR stays ON for web: bloom/ACES fall apart in LDR and modern desktop
             // browsers handle RGBA16F targets fine. Full render scale — the shell
             // already caps devicePixelRatio at 1.5, so the real pixel count is sane.
             PipelineVariant("URP_Web",
                 msaa: 2, hdr: true, renderScale: 1f, shadowDistance: 40f,
                 mainShadowmapResolution: 1024, cascadeCount: 2,
-                maxAdditionalLights: 4, additionalLightShadows: false, ssao: false);
+                maxAdditionalLights: 4, additionalLightShadows: false,
+                softShadowQuality: SoftShadowQuality.Low,
+                ssao: true, ssaoIntensity: 0.4f, ssaoRadius: 0.25f);
 
             GraphicsSettings.defaultRenderPipeline = desktop;
             // EVERY quality level gets the pipeline, not just the active one — a level
@@ -118,7 +122,8 @@ namespace RadiantPool.EditorTools
         private static UniversalRenderPipelineAsset PipelineVariant(string name,
             int msaa, bool hdr, float renderScale, float shadowDistance,
             int mainShadowmapResolution, int cascadeCount, int maxAdditionalLights,
-            bool additionalLightShadows, bool ssao)
+            bool additionalLightShadows, SoftShadowQuality softShadowQuality,
+            bool ssao, float ssaoIntensity, float ssaoRadius)
         {
             string rendererPath = $"Assets/Resources/URP/{name}_Renderer.asset";
             string pipelinePath = $"Assets/Resources/URP/{name}.asset";
@@ -147,6 +152,7 @@ namespace RadiantPool.EditorTools
             var so = new SerializedObject(pipeline);
             so.FindProperty("m_MainLightShadowsSupported").boolValue = true;
             so.FindProperty("m_SoftShadowsSupported").boolValue = true;
+            so.FindProperty("m_SoftShadowQuality").intValue = (int)softShadowQuality;
             so.FindProperty("m_AdditionalLightsRenderingMode").intValue =
                 (int)LightRenderingMode.PerPixel;
             so.FindProperty("m_AdditionalLightShadowsSupported").boolValue =
@@ -162,7 +168,7 @@ namespace RadiantPool.EditorTools
                 rendererList.GetArrayElementAtIndex(0).objectReferenceValue = rendererData;
             so.ApplyModifiedPropertiesWithoutUndo();
 
-            if (ssao) EnsureSsaoFeature(rendererData);
+            if (ssao) EnsureSsaoFeature(rendererData, ssaoIntensity, ssaoRadius);
 
             EditorUtility.SetDirty(rendererData);
             EditorUtility.SetDirty(pipeline);
@@ -175,7 +181,8 @@ namespace RadiantPool.EditorTools
         /// ScriptableRendererDataEditor.AddComponent does. The settings class is
         /// internal, so values go through SerializedObject too (field names verified in
         /// Runtime/RendererFeatures/ScreenSpaceAmbientOcclusion.cs).</summary>
-        private static void EnsureSsaoFeature(UniversalRendererData rendererData)
+        private static void EnsureSsaoFeature(UniversalRendererData rendererData,
+            float intensity, float radius)
         {
             ScreenSpaceAmbientOcclusion feature = null;
             foreach (var f in rendererData.rendererFeatures)
@@ -199,8 +206,8 @@ namespace RadiantPool.EditorTools
 
             var featureSo = new SerializedObject(feature);
             featureSo.FindProperty("m_Settings.Downsample").boolValue = true; // half-res AO
-            featureSo.FindProperty("m_Settings.Intensity").floatValue = 0.6f;
-            featureSo.FindProperty("m_Settings.Radius").floatValue = 0.3f;
+            featureSo.FindProperty("m_Settings.Intensity").floatValue = intensity;
+            featureSo.FindProperty("m_Settings.Radius").floatValue = radius;
             featureSo.FindProperty("m_Settings.DirectLightingStrength").floatValue = 0.25f;
             featureSo.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(feature);
@@ -213,12 +220,13 @@ namespace RadiantPool.EditorTools
         /// with a forest growing out of it, and left the dirt roads with nothing to be a
         /// road THROUGH. Soft green noise instead: no grid, no mortar lines, just enough
         /// variation to stop it looking like flat paint.</summary>
-        private static Texture2D GroundTexture()
+        private static Texture2D GroundTexture(out Texture2D normal)
         {
             string path = SettingsDir + "/T_GroundGrass.png";
             const int size = 128;
             var tex = new Texture2D(size, size, TextureFormat.RGB24, false);
             var rand = new System.Random(7);
+            var heights = new float[size, size];
 
             // Two octaves of value noise: broad patches + a fine speckle, so the tiling
             // never resolves into a visible grid the way the stones did.
@@ -236,6 +244,7 @@ namespace RadiantPool.EditorTools
                     float broad = Noise(x, y, 8) * 0.14f;          // patchiness
                     float fine = (float)rand.NextDouble() * 0.06f;  // blade speckle
                     float v = 0.88f + broad + fine;
+                    heights[x, y] = v;
                     // Vivid painted-grass green. The texture CARRIES the colour and the
                     // material tint stays white — the old dark-green-times-dark-green
                     // multiply left the hub at ~5% albedo (near-black grass at noon).
@@ -247,7 +256,108 @@ namespace RadiantPool.EditorTools
             var importer = (TextureImporter)AssetImporter.GetAtPath(path);
             importer.wrapMode = TextureWrapMode.Repeat;
             importer.SaveAndReimport();
+            normal = NormalTexture(heights, SettingsDir + "/T_GroundGrass_Normal.png", 2.4f);
             return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+        }
+
+        private static Texture2D NormalTexture(float[,] heights, string path, float strength)
+        {
+            int width = heights.GetLength(0);
+            int height = heights.GetLength(1);
+            var tex = new Texture2D(width, height, TextureFormat.RGBA32, false, true);
+            float Sample(int x, int y) => heights[(x + width) % width, (y + height) % height];
+            for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+            {
+                float dx = (Sample(x + 1, y) - Sample(x - 1, y)) * strength;
+                float dy = (Sample(x, y + 1) - Sample(x, y - 1)) * strength;
+                Vector3 n = new Vector3(-dx, -dy, 1f).normalized;
+                tex.SetPixel(x, y, new Color(n.x * 0.5f + 0.5f,
+                    n.y * 0.5f + 0.5f, n.z * 0.5f + 0.5f, 1f));
+            }
+            tex.Apply();
+            File.WriteAllBytes(path, tex.EncodeToPNG());
+            Object.DestroyImmediate(tex);
+            AssetDatabase.ImportAsset(path);
+            var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+            importer.textureType = TextureImporterType.NormalMap;
+            importer.wrapMode = TextureWrapMode.Repeat;
+            importer.SaveAndReimport();
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+        }
+
+        private static Texture2D WaterRippleNormal()
+        {
+            const int size = 256;
+            var heights = new float[size, size];
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float u = x / (float)size;
+                float v = y / (float)size;
+                heights[x, y] = Mathf.Sin(Mathf.PI * 2f * (3f * u + 2f * v)) * 0.48f
+                                + Mathf.Sin(Mathf.PI * 2f * (-2f * u + 5f * v) + 1.7f) * 0.32f
+                                + Mathf.Sin(Mathf.PI * 2f * (7f * u - v) + 0.4f) * 0.20f;
+            }
+            return NormalTexture(heights, SettingsDir + "/T_WaterRipple_Normal.png", 0.32f);
+        }
+
+        private static Texture2D CloudNoiseTexture()
+        {
+            string path = SettingsDir + "/T_CloudNoise.png";
+            const int size = 256;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float u = x / (float)size;
+                float v = y / (float)size;
+                float broad = Mathf.Sin(Mathf.PI * 2f * (u + v))
+                              + Mathf.Sin(Mathf.PI * 2f * (2f * u - 3f * v) + 0.8f) * 0.55f
+                              + Mathf.Sin(Mathf.PI * 2f * (5f * u + 2f * v) + 2.1f) * 0.25f;
+                float wisps = Mathf.PerlinNoise(
+                    Mathf.Sin(u * Mathf.PI * 2f) * 0.7f + 1.3f,
+                    Mathf.Cos(v * Mathf.PI * 2f) * 0.7f + 2.2f);
+                float alpha = Mathf.SmoothStep(0.38f, 0.82f,
+                    Mathf.InverseLerp(-1.4f, 1.5f, broad) * 0.72f + wisps * 0.28f);
+                tex.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
+            }
+            tex.Apply();
+            File.WriteAllBytes(path, tex.EncodeToPNG());
+            Object.DestroyImmediate(tex);
+            AssetDatabase.ImportAsset(path);
+            var importer = (TextureImporter)AssetImporter.GetAtPath(path);
+            importer.wrapMode = TextureWrapMode.Repeat;
+            importer.alphaIsTransparency = true;
+            importer.maxTextureSize = size;
+            importer.textureCompression = TextureImporterCompression.Compressed;
+            importer.SaveAndReimport();
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+        }
+
+        private static Material CloudMaterial()
+        {
+            string path = SettingsDir + "/M_CloudLayer.mat";
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null)
+            {
+                material = new Material(Shader.Find("Universal Render Pipeline/Unlit"));
+                AssetDatabase.CreateAsset(material, path);
+            }
+            material.SetTexture("_BaseMap", CloudNoiseTexture());
+            material.SetTextureScale("_BaseMap", new Vector2(2.2f, 2.2f));
+            material.SetColor("_BaseColor", new Color(1f, 0.97f, 0.91f, 0.13f));
+            material.SetFloat("_Surface", 1f);
+            material.SetFloat("_Blend", 0f);
+            material.SetFloat("_Cull", 0f);
+            material.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
+            material.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
+            material.SetInt("_ZWrite", 0);
+            material.SetOverrideTag("RenderType", "Transparent");
+            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            material.renderQueue = (int)RenderQueue.Transparent;
+            EditorUtility.SetDirty(material);
+            return material;
         }
 
         private static Material Mat(string name, Color color)
@@ -261,7 +371,20 @@ namespace RadiantPool.EditorTools
             }
             m.color = color;
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);
-            m.SetFloat("_Smoothness", name == "M_Water" ? 0.62f : 0.16f);
+            bool water = name == "M_Water";
+            m.SetFloat("_Smoothness", water ? 0.75f : 0.16f);
+            if (water)
+            {
+                var ripple = WaterRippleNormal();
+                m.SetTexture("_BumpMap", ripple);
+                m.SetTextureScale("_BumpMap", new Vector2(5f, 18f));
+                m.SetFloat("_BumpScale", 0.55f);
+                m.SetTexture("_DetailNormalMap", ripple);
+                m.SetTextureScale("_DetailNormalMap", new Vector2(11f, 7f));
+                m.SetFloat("_DetailNormalMapScale", 0.32f);
+                m.EnableKeyword("_NORMALMAP");
+                m.EnableKeyword("_DETAIL_MULX2");
+            }
             EditorUtility.SetDirty(m);
             return m;
         }
@@ -595,6 +718,33 @@ namespace RadiantPool.EditorTools
             sky.SetFloat("_Exposure", 1.25f);
             RenderSettings.skybox = sky;
 
+            // One low-resolution realtime capture gives metal and water a plausible
+            // local environment. WorldAtmosphere renders it once after scene load.
+            var probeGo = new GameObject("Hub Reflection Probe");
+            probeGo.transform.position = new Vector3(-10f, 8f, -4f);
+            var probe = probeGo.AddComponent<ReflectionProbe>();
+            probe.mode = ReflectionProbeMode.Realtime;
+            probe.refreshMode = ReflectionProbeRefreshMode.ViaScripting;
+            probe.timeSlicingMode = ReflectionProbeTimeSlicingMode.AllFacesAtOnce;
+            probe.boxProjection = true;
+            probe.size = new Vector3(100f, 30f, 110f);
+            probe.blendDistance = 8f;
+            probe.importance = 100;
+            probe.resolution = 128;
+            probe.hdr = true;
+            probe.shadowDistance = 55f;
+
+            // A single transparent texture sample adds a restrained painted cloud layer.
+            var clouds = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            clouds.name = "Painted Cloud Layer";
+            clouds.transform.position = new Vector3(0f, 42f, 0f);
+            clouds.transform.localScale = new Vector3(32f, 1f, 32f);
+            Object.DestroyImmediate(clouds.GetComponent<Collider>());
+            var cloudRenderer = clouds.GetComponent<MeshRenderer>();
+            cloudRenderer.sharedMaterial = CloudMaterial();
+            cloudRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            cloudRenderer.receiveShadows = false;
+
             // Camera with URP post-processing (bloom + vignette + slight warmth).
             var camGo = new GameObject("Main Camera") { tag = "MainCamera" };
             var cam = camGo.AddComponent<Camera>();
@@ -738,8 +888,12 @@ namespace RadiantPool.EditorTools
             ground.name = "Ground";
             ground.transform.localScale = new Vector3(12f, 1f, 12f); // 120x120 m
             var groundMat = Mat("M_Ground", new Color(0.97f, 1f, 0.93f));
-            groundMat.mainTexture = GroundTexture();
+            groundMat.mainTexture = GroundTexture(out var groundNormal);
             groundMat.mainTextureScale = new Vector2(48f, 48f);
+            groundMat.SetTexture("_BumpMap", groundNormal);
+            groundMat.SetTextureScale("_BumpMap", new Vector2(48f, 48f));
+            groundMat.SetFloat("_BumpScale", 0.6f);
+            groundMat.EnableKeyword("_NORMALMAP");
             ground.GetComponent<Renderer>().sharedMaterial = groundMat;
 
             GameObject Box(string name, Vector3 pos, Vector3 scale, Material mat)

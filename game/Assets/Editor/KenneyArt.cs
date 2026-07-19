@@ -11,6 +11,17 @@ namespace RadiantPool.EditorTools
     public static class KenneyArt
     {
         private const string Root = "Assets/Art/Kenney";
+        private enum SurfaceKind { Default, Water, Metal, Cloth, Skin, WoodStone }
+        private static readonly string[] WaterWords = { "water", "fountain" };
+
+        private static readonly string[] MetalWords =
+            { "metal", "iron", "steel", "blade", "sword", "axe", "weapon", "lantern" };
+        private static readonly string[] ClothWords =
+            { "cloth", "canvas", "banner", "flag", "tent", "sail" };
+        private static readonly string[] SkinWords =
+            { "skin", "fur", "hide", "leather", "animal" };
+        private static readonly string[] WoodStoneWords =
+            { "wood", "plank", "log", "tree", "rock", "stone", "road", "wall", "brick" };
 
         public static void SetupMaterials()
         {
@@ -38,7 +49,7 @@ namespace RadiantPool.EditorTools
                         AssetDatabase.CreateAsset(atlasMat, matPath);
                     }
                     // Outside the creation guard so a retune reaches already-baked mats.
-                    atlasMat.SetFloat("_Smoothness", 0.18f);
+                    atlasMat.SetFloat("_Smoothness", SmoothnessFor(kit, atlasTex.name));
                 }
                 else if (!AssetDatabase.IsValidFolder($"{kitPath}/Mats"))
                 {
@@ -57,8 +68,11 @@ namespace RadiantPool.EditorTools
                     foreach (var src in embedded)
                     {
                         var id = new AssetImporter.SourceAssetIdentifier(typeof(Material), src.name);
-                        if (existing.ContainsKey(id)) continue;
-                        importer.AddRemap(id, atlasMat != null ? atlasMat : ColorMat(kitPath, src));
+                        var target = atlasMat != null
+                            ? AtlasMat(kitPath, kit, atlasTex, path, src.name)
+                            : ColorMat(kitPath, src);
+                        if (existing.TryGetValue(id, out var current) && current == target) continue;
+                        importer.AddRemap(id, target);
                         changed = true;
                     }
                     if (changed)
@@ -67,6 +81,48 @@ namespace RadiantPool.EditorTools
             }
             AssetDatabase.SaveAssets();
             Debug.Log("[Bootstrap] Kenney materials remapped to URP.");
+        }
+
+        private static float SmoothnessFor(params string[] names)
+        {
+            switch (SurfaceFor(names))
+            {
+                case SurfaceKind.Water: return 0.68f;
+                case SurfaceKind.Metal: return 0.58f;
+                case SurfaceKind.Cloth: return 0.11f;
+                case SurfaceKind.Skin: return 0.25f;
+                case SurfaceKind.WoodStone: return 0.20f;
+                default: return 0.18f;
+            }
+        }
+
+        private static SurfaceKind SurfaceFor(params string[] names)
+        {
+            string value = string.Join(" ", names).ToLowerInvariant();
+            if (WaterWords.Any(word => value.Contains(word))) return SurfaceKind.Water;
+            if (MetalWords.Any(word => value.Contains(word))) return SurfaceKind.Metal;
+            if (ClothWords.Any(word => value.Contains(word))) return SurfaceKind.Cloth;
+            if (SkinWords.Any(word => value.Contains(word))) return SurfaceKind.Skin;
+            if (WoodStoneWords.Any(word => value.Contains(word))) return SurfaceKind.WoodStone;
+            return SurfaceKind.Default;
+        }
+
+        private static Material AtlasMat(string kitPath, string kit, Texture2D atlas,
+            params string[] names)
+        {
+            SurfaceKind kind = SurfaceFor(names);
+            string suffix = kind == SurfaceKind.Default ? "" : "_" + kind;
+            string path = $"{kitPath}/M_{kit}{suffix}.mat";
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null)
+            {
+                material = new Material(Shader.Find("Universal Render Pipeline/Lit"));
+                AssetDatabase.CreateAsset(material, path);
+            }
+            material.SetTexture("_BaseMap", atlas);
+            material.SetFloat("_Smoothness", SmoothnessFor(names));
+            EditorUtility.SetDirty(material);
+            return material;
         }
 
         /// <summary>URP material per embedded-material name, copying its base color —
@@ -78,7 +134,7 @@ namespace RadiantPool.EditorTools
             var mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
             if (mat != null)
             {
-                mat.SetFloat("_Smoothness", 0.18f);   // retune reaches baked mats too
+                mat.SetFloat("_Smoothness", SmoothnessFor(source.name));
                 return mat;
             }
             Color color = Color.white;
@@ -86,7 +142,7 @@ namespace RadiantPool.EditorTools
             else if (source.HasProperty("_Color")) color = source.GetColor("_Color");
             mat = new Material(Shader.Find("Universal Render Pipeline/Lit"));
             mat.SetColor("_BaseColor", color);
-            mat.SetFloat("_Smoothness", 0.18f);
+            mat.SetFloat("_Smoothness", SmoothnessFor(source.name));
             AssetDatabase.CreateAsset(mat, matPath);
             return mat;
         }

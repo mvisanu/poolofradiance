@@ -227,8 +227,9 @@ namespace RadiantPool.EditorTools
                     mat.EnableKeyword("_METALLICSPECGLOSSMAP");
                 }
                 if (occlusion != null) mat.SetTexture("_OcclusionMap", occlusion);
-                mat.SetFloat("_Smoothness", sourceRoot.Key == Source.GraveyardNature
-                    ? Mathf.Clamp(sourceSmoothness, 0.08f, 0.65f) : 0.08f);
+                // Preserve each pack's authored response instead of flattening three
+                // sources to chalk. The clamp keeps legacy glossy values plausible.
+                mat.SetFloat("_Smoothness", Mathf.Clamp(sourceSmoothness, 0.08f, 0.65f));
 
                 string lower = assetPath.ToLowerInvariant();
                 bool cutout = sourceRoot.Key == Source.GraveyardNature

@@ -15,6 +15,12 @@ namespace RadiantPool.EditorTools
     {
         private const string Root = "Assets/Art/Quaternius";
         private const string PrefabDir = "Assets/Resources/Characters";
+        private static readonly string[] MetalWords =
+            { "weapon", "blade", "sword", "axe", "armor", "armour", "shield" };
+        private static readonly string[] ClothWords =
+            { "cloth", "banner", "robe", "hood" };
+        private static readonly string[] SkinFurWords =
+            { "skin", "fur", "hide", "orc", "spider", "beast", "animal" };
 
         public static void Setup()
         {
@@ -52,7 +58,7 @@ namespace RadiantPool.EditorTools
                 AssetDatabase.CreateAsset(mat, matPath);
             }
             // Outside the creation guard so a retune reaches already-baked mats.
-            mat.SetFloat("_Smoothness", 0.18f);
+            mat.SetFloat("_Smoothness", SmoothnessFor(name, tex != null ? tex.name : ""));
 
             var importer = (ModelImporter)AssetImporter.GetAtPath(path);
             bool changed = false;
@@ -83,6 +89,16 @@ namespace RadiantPool.EditorTools
 
             var controller = BuildController(dir, name, path);
             BuildPrefab(path, name, controller);
+        }
+
+        private static float SmoothnessFor(params string[] names)
+        {
+            string value = string.Join(" ", names).ToLowerInvariant();
+            if (MetalWords.Any(word => value.Contains(word))) return 0.58f;
+            if (ClothWords.Any(word => value.Contains(word))) return 0.11f;
+            if (SkinFurWords.Any(word => value.Contains(word))) return 0.25f;
+            if (value.Contains("wood") || value.Contains("stone")) return 0.20f;
+            return 0.22f;
         }
 
         private static AnimationClip Find(AnimationClip[] all, params string[] keys)

@@ -39,10 +39,18 @@ namespace RadiantPool.EditorTools
                 return;
             }
 
-            foreach (string guid in AssetDatabase.FindAssets("t:Model", new[] { Root }))
+            foreach (string name in Colours.Keys)
             {
-                string path = AssetDatabase.GUIDToAssetPath(guid);
-                string name = System.IO.Path.GetFileNameWithoutExtension(path);
+                string hdPath = $"{Root}/{name}_hd.fbx";
+                string fallbackPath = $"{Root}/{name}.fbx";
+                string path = AssetDatabase.LoadAssetAtPath<GameObject>(hdPath) != null
+                    ? hdPath : fallbackPath;
+                if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null)
+                {
+                    Debug.LogWarning($"[Bootstrap] Missing generated beast {fallbackPath}");
+                    continue;
+                }
+                Debug.Log($"[Bootstrap] {name} source: {path}");
                 SetupModel(path, name);
             }
             AssetDatabase.SaveAssets();

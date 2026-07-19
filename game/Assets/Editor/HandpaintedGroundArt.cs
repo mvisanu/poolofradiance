@@ -59,10 +59,88 @@ namespace RadiantPool.EditorTools
             var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(texturePath);
             material.SetTexture("_BaseMap", texture);
             material.SetTextureScale("_BaseMap", new Vector2(4.5f, 4.5f));
+            var normal = NormalFor(texturePath, textureName);
+            if (normal != null)
+            {
+                material.SetTexture("_BumpMap", normal);
+                material.SetTextureScale("_BumpMap", new Vector2(4.5f, 4.5f));
+                material.SetFloat("_BumpScale", 0.55f);
+                material.EnableKeyword("_NORMALMAP");
+            }
             material.SetColor("_BaseColor", Color.Lerp(Color.white, tint, 0.18f));
             material.SetFloat("_Smoothness", 0.02f);
             EditorUtility.SetDirty(material);
             return material;
+        }
+
+        private static Texture2D NormalFor(string texturePath, string textureName)
+        {
+            string sourceDir = Path.GetDirectoryName(texturePath).Replace('\\', '/');
+            string stem = textureName.ToLowerInvariant().Replace("_up", "");
+            foreach (string guid in AssetDatabase.FindAssets("t:Texture2D", new[] { sourceDir }))
+            {
+                string candidatePath = AssetDatabase.GUIDToAssetPath(guid);
+                if (candidatePath == texturePath || candidatePath.StartsWith(Generated)) continue;
+                string candidate = Path.GetFileNameWithoutExtension(candidatePath).ToLowerInvariant();
+                bool namedNormal = candidate.Contains("normalmap") || candidate.EndsWith("_n")
+                                   || candidate.Contains("_nrm") || candidate.Contains("_bump");
+                if (!namedNormal || !candidate.Contains(stem)) continue;
+                ConfigureNormal(candidatePath);
+                return AssetDatabase.LoadAssetAtPath<Texture2D>(candidatePath);
+            }
+
+            string normalPath = $"{Generated}/N_{textureName}.png";
+            var existing = AssetDatabase.LoadAssetAtPath<Texture2D>(normalPath);
+            if (existing != null)
+            {
+                ConfigureNormal(normalPath);
+                return AssetDatabase.LoadAssetAtPath<Texture2D>(normalPath);
+            }
+
+            string absolute = Path.Combine(Path.GetDirectoryName(Application.dataPath), texturePath);
+            var source = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            if (!source.LoadImage(File.ReadAllBytes(absolute)))
+            {
+                Object.DestroyImmediate(source);
+                return null;
+            }
+            int width = source.width;
+            int height = source.height;
+            var pixels = source.GetPixels();
+            var output = new Texture2D(width, height, TextureFormat.RGBA32, false, true);
+            Color Sample(int x, int y) => pixels[(y + height) % height * width + (x + width) % width];
+            float HeightAt(int x, int y)
+            {
+                Color c = Sample(x, y);
+                return c.r * 0.299f + c.g * 0.587f + c.b * 0.114f;
+            }
+            for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+            {
+                float dx = (HeightAt(x + 1, y) - HeightAt(x - 1, y)) * 0.8f;
+                float dy = (HeightAt(x, y + 1) - HeightAt(x, y - 1)) * 0.8f;
+                Vector3 n = new Vector3(-dx, -dy, 1f).normalized;
+                output.SetPixel(x, y, new Color(n.x * 0.5f + 0.5f,
+                    n.y * 0.5f + 0.5f, n.z * 0.5f + 0.5f, 1f));
+            }
+            output.Apply();
+            File.WriteAllBytes(normalPath, output.EncodeToPNG());
+            Object.DestroyImmediate(source);
+            Object.DestroyImmediate(output);
+            AssetDatabase.ImportAsset(normalPath);
+            ConfigureNormal(normalPath);
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(normalPath);
+        }
+
+        private static void ConfigureNormal(string path)
+        {
+            var importer = AssetImporter.GetAtPath(path) as TextureImporter;
+            if (importer == null) return;
+            bool changed = importer.textureType != TextureImporterType.NormalMap
+                           || importer.wrapMode != TextureWrapMode.Repeat;
+            importer.textureType = TextureImporterType.NormalMap;
+            importer.wrapMode = TextureWrapMode.Repeat;
+            if (changed) importer.SaveAndReimport();
         }
     }
 }
