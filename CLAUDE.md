@@ -87,11 +87,12 @@ dotnet test rules/RadiantPool.Rules.sln
 # Compile-check ALL runtime game scripts without a Unity license (~2 s after first run):
 scripts/compile-check.ps1
 
-# Regenerate scene/prefabs/materials from code, then build the playable exe:
+# Regenerate scene/prefabs/materials from code, then build the playable exe.
+# ALL *.log files live in logs\ (user rule — never write a .log to the repo root):
 & "C:\Program Files\Unity\Hub\Editor\6000.0.79f1\Editor\Unity.exe" -batchmode -quit `
-  -projectPath game -executeMethod RadiantPool.EditorTools.ProjectBootstrap.Run -logFile boot.log
+  -projectPath game -executeMethod RadiantPool.EditorTools.ProjectBootstrap.Run -logFile logs\boot.log
 & "...same Unity.exe" -batchmode -quit -projectPath game `
-  -executeMethod RadiantPool.EditorTools.HeadlessBuild.Win64 -logFile build.log
+  -executeMethod RadiantPool.EditorTools.HeadlessBuild.Win64 -logFile logs\build.log
 # (scripts/build-all.ps1 chains tests → bootstrap → build)
 
 # Browser edition: bootstrap → WebGL player → webbase/game (first run adds a long
@@ -579,8 +580,22 @@ mouse and the self-test drive the very same code.
   writing its frame). Launching one with `Start-Process -Wait` waits forever — always the
   smoke-test pattern: launch, `Start-Sleep` a bounded budget, `Stop-Process -Force`, then
   read the copied log. A `-savedir` fresh save also lacks late-campaign zones, so
-  `-sitecapture`/`-questmarkercapture` of remote zones must run against the REAL campaign
-  (back up `campaign.json` first; restore after).
+  `-questmarkercapture` of remote zones must run against the REAL campaign
+  (back up `campaign.json` first; restore after). `-sitecapture` WARPS regardless of zone
+  state, so it works on a fresh `-savedir`; with no `-sitezone` it defaults to
+  `ember_crown_spire` (GameDirector).
+- **`-combatuicapture` is NOT a standalone flag** — it is read inside `AttackSelfTest`, so
+  it only fires alongside `-attacktest` on the same command line. Launched alone the game
+  sits idle at the clock-sync line forever and no PNG appears (looks exactly like a hang).
+- **The smoke gate's `-attacktest` instance can flake under load**: thirteen concurrent
+  game instances can starve the fight past its 30 s my-turn deadline → "the fight never
+  reached my turn" and every downstream combat assertion missing. Before diagnosing a
+  regression, re-run the gate once and try `-attacktest` standalone — a clean solo pass +
+  clustered smoke FAILs in fight.log = load flake, not code.
+- **`codex/` at the repo root holds the delegation records** (briefs, reports, review
+  verdicts, verification captures) and `logs/` holds every run log — both user-mandated
+  locations. Codex handoff mechanics (sandbox limits, no-commit rule): see the
+  division-of-labor section above and the handoff spec format.
 - **Read the save, not just the code**, when the user reports a stuck quest:
   `%USERPROFILE%\Saved Games\RadiantPool\campaign.json` holds `ZoneStates`,
   `ZoneClearedCounts` and `ConsumedEncounters` — it pinpointed the counter bug in one look.
