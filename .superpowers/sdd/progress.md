@@ -80,6 +80,18 @@ Pipeline: /handoff (Claude researches/designs, Codex implements, controller veri
   and fail exit 2 with arg errors; use brief FILES + quote-free prompts); Min1 (terrain
   chunks overhang past north rim) = ACCEPTED as horizon backdrop, negligible cost;
   Min2 (em dash in comment) = fixed by controller.
+- Review fixes COMMITTED 4d8b720: strict validator ground whitelist (Codex fix, verified
+  [OpenWorld] PASS 1207/1207 + dressing PASS 1522 on boot-openworld4.log), brief revision,
+  ASCII comment, regen assets. Final build at HEAD + final smoke gate in flight
+  (build-openworld3.log / smoke-openworld2.log) — goal closes when green.
+- OPEN WORLD GOAL COMPLETE (Jul 19 ~9:3x am): final build at HEAD exit 0; final smoke
+  68 PASS / 0 FAIL on the shipped artifact. Commits: cf6b04b (feature) + 4d8b720 (review
+  fixes). World: atlas-projected geography (34 sites, X -315..468 Z -392..392), rolling
+  terrain, winding region roads, 1522 wilderness props, open town (all walls/gates/cages
+  demolished), world-rim mountains + WorldEdge colliders, kill-Z shrine warp, waystones/
+  rules/saves untouched. Open danger approved (locked regions physically reachable).
+  Codex implemented Tasks A/B + validator fix from briefs in codex/; controller reviewed,
+  micro-fixed town road anchors, ran all gates, committed.
 - Task B brief written: codex/codex-openworld-b-brief.md (road ribbon meshes y=-0.02 +
   M_WildRoad dirt mat, Perlin forest/meadow scatter with region flavor + collider stripping,
   1600 prop cap + [OpenWorldDressing] PASS log, rim mountains, remove old horizon/highlands

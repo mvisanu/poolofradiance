@@ -411,11 +411,32 @@ mouse and the self-test drive the very same code.
   slots even with the shader missing, then converts all 40 to URP Lit. Buildings stay a
   **collider box with the model parented inside** (renderer off): box is gameplay, model is look.
   **Remote arenas are bigger and per-site randomized** (`ProjectBootstrap.RemoteSite`): the
-  boundary is `ArenaSize`/`S` (48, capped under the 50-unit site grid so edges + dressing never
+  arena is `ArenaSize`/`S` (48; site centers now sit 70+ units apart so edges + dressing never
   bleed into the neighbour), and each site's fights are placed by a seeded `layoutRng` spread
   across the northern field (non-overlapping, ≥12 apart, clear of the south waystone arrival)
   instead of the old three fixed offsets — so no two destinations share a formation. Every
   perimeter/backdrop placement scales by `S`, keeping the mausoleum-outside-the-wall rule.
+- **The world is OPEN — you can walk from town to every site** (`Editor/OpenWorld.cs` +
+  `Editor/OpenWorldDressing.cs`, all editor-baked). Site `Center`s in
+  `CampaignExpansionContent.Sites` are the campaign ATLAS projected into world space
+  (Council Hall at origin, atlas-north = +Z, scale 900; "the map is the world") — reposition
+  a site by editing its literal, everything at the site derives from `Center`. `OpenWorld.Build`
+  generates chunked rolling wilderness terrain (Perlin, smoothstep-flattened to y=-0.04 under
+  town/arenas/road corridors — 4 cm BELOW the y=0 slabs, killing z-fighting while staying under
+  the CharacterController step), a deterministic per-region road graph (`RoadPolylines`: Prim MST
+  per atlas region + a town spur starting on the town square's Chebyshev-66 boundary — a
+  Euclidean start lands on district rooftops), and invisible `WorldEdge_*` colliders at the
+  world bounds (the ONLY hard barrier left). `OpenWorldDressing.Dress` bakes visible dirt-road
+  ribbons (y=-0.02, no colliders), region-flavored forests/meadows (pines+rocks toward
+  Frostvein/Stormglass, marsh brush in Mirewatch, sparse burnt rock in the east; hard cap 1600
+  props, every collider stripped), and rim mountains. The old town perimeter walls, market/
+  temple dividers, ZoneGates, and per-site `SiteEdge` cages are GONE — zone locks live only in
+  the journal/travel UI, and walking into a locked region's fights is intended ("open danger").
+  `PlayerMotor` warps anyone below y=-25 to the town shrine (terrain gaps can't soft-lock).
+  **`OpenWorld.Validate` gates the bootstrap**: it raycasts every road at 4-unit steps and only
+  counts hits on real ground colliders (`Wilderness_*`/`SiteGround_*`/`Ground`) — grep boot.log
+  for `[OpenWorld] PASS` and `[OpenWorldDressing] PASS` after any world change. Terrain chunks
+  overhang the north rim by design (horizon backdrop past the rim mountains).
 - `game/Assets/Editor` — `ProjectBootstrap` regenerates the ENTIRE scene, prefabs, URP
   config, and materials from code (scene is disposable; never hand-edit it). Includes
   `DressWorld()` (seeded forests/scatter/wilds sites, sunny lighting) and the district
@@ -596,6 +617,12 @@ mouse and the self-test drive the very same code.
   verdicts, verification captures) and `logs/` holds every run log — both user-mandated
   locations. Codex handoff mechanics (sandbox limits, no-commit rule): see the
   division-of-labor section above and the handoff spec format.
+- **`codex exec` prompts must contain NO double quotes and NO angle brackets** — the npm
+  `codex.ps1` shim re-tokenizes the prompt for node, so an embedded `"Wilderness_"` or
+  `<name>` splits into bogus CLI args and codex exits 2 ("unexpected argument"). Put
+  everything real in a brief FILE under `codex/` and keep the prompt a plain quote-free
+  "read this brief and implement it" sentence (same family as the PS 5.1 git-commit
+  quoting gotcha).
 - **Read the save, not just the code**, when the user reports a stuck quest:
   `%USERPROFILE%\Saved Games\RadiantPool\campaign.json` holds `ZoneStates`,
   `ZoneClearedCounts` and `ConsumedEncounters` — it pinpointed the counter bug in one look.
