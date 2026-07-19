@@ -69,6 +69,17 @@ Pipeline: /handoff (Claude researches/designs, Codex implements, controller veri
   correctly; necropolis unregressed. Smoke gate running (logs/smoke-openworld.log).
   NOTE smoke-test.ps1 carries the parallel session's +2 lines (TargetFrameTest?) — if smoke
   fails ONLY on that assertion it is the parallel workstream's, not open-world's.
+- COMMIT cf6b04b: full open world (sources + generated scene/assets + codex records),
+  scoped AWAY from parallel session's uncommitted HUD files. Smoke gate on open world:
+  68/68 PASS, 0 FAIL.
+- Codex second-pass review verdict NEEDS-FIXES, adjudicated: Imp1 (town endpoints deviate
+  from brief) = controller's validated micro-fix, brief REVISED instead (documented in
+  codex-openworld-a-brief.md); Imp2 (validator accepts non-ground raycast hit as ground)
+  = REAL, fix delegated to Codex (codex/codex-openworld-fix-brief.md — note: codex exec
+  prompts with embedded double quotes or angle brackets get mangled by the PS5.1 npm shim
+  and fail exit 2 with arg errors; use brief FILES + quote-free prompts); Min1 (terrain
+  chunks overhang past north rim) = ACCEPTED as horizon backdrop, negligible cost;
+  Min2 (em dash in comment) = fixed by controller.
 - Task B brief written: codex/codex-openworld-b-brief.md (road ribbon meshes y=-0.02 +
   M_WildRoad dirt mat, Perlin forest/meadow scatter with region flavor + collider stripping,
   1600 prop cap + [OpenWorldDressing] PASS log, rim mountains, remove old horizon/highlands

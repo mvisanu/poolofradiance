@@ -157,7 +157,7 @@ namespace RadiantPool.EditorTools
 
                 Vector3 entry = centers[entryId];
                 // Start town roads on the town SQUARE's boundary (Chebyshev 66, just past
-                // the old wall line) — a Euclidean-58 start lands inside the built-up
+                // the old wall line) - a Euclidean-58 start lands inside the built-up
                 // district blocks and the validator flags their rooftops as blockers.
                 float maxComponent = Mathf.Max(Mathf.Abs(entry.x), Mathf.Abs(entry.z));
                 Vector3 townEdge = entry * (66f / maxComponent);
@@ -364,6 +364,18 @@ namespace RadiantPool.EditorTools
                 blocked++;
                 if (firstFailure == null)
                     firstFailure = $"height {hit.point.y:F2} at ({point.x:F1},{point.z:F1})";
+                return;
+            }
+
+            string colliderName = hit.collider.gameObject.name;
+            bool isGround = colliderName.StartsWith("Wilderness_", StringComparison.Ordinal)
+                || colliderName.StartsWith("SiteGround_", StringComparison.Ordinal)
+                || colliderName == "Ground";
+            if (!isGround)
+            {
+                blocked++;
+                if (firstFailure == null)
+                    firstFailure = $"non-ground {colliderName} at ({point.x:F1},{point.z:F1})";
                 return;
             }
 

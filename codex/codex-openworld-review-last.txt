@@ -1,0 +1,21 @@
+I completed the review, but the read-only sandbox rejected creation of `codex/codex-openworld-review.md`. Intended contents:
+
+# Open-world second-pass review
+
+## Critical
+
+None found.
+
+## Important
+
+1. [OpenWorld.cs](C:/Users/Bruce/source/repo/poolofradiance/game/Assets/Editor/OpenWorld.cs:158) does not implement the required `entry.normalized * 58` town endpoint. It projects onto a Chebyshev-radius-66 square instead, placing diagonal endpoints up to roughly 93 units from origin and shortening/detaching roads from the specified connection. Restore the formula or formally revise the brief.
+
+2. [OpenWorld.cs](C:/Users/Bruce/source/repo/poolofradiance/game/Assets/Editor/OpenWorld.cs:352) can falsely pass blocked roads. The raycast treats any first collider below three metres as ground, then unconditionally excludes that collider from clearance checks. A crate, low wall, or rock can therefore be certified as walkable. Only actual terrain/site-ground colliders should be ignored.
+
+## Minor
+
+1. [OpenWorld.cs](C:/Users/Bruce/source/repo/poolofradiance/game/Assets/Editor/OpenWorld.cs:47) generates full 120-unit chunks, extending the last row from Z=360 to Z=480 despite `MaxZ = 410`. This ships eight chunks of inaccessible renderer and MeshCollider geometry—about 67,200 square metres.
+
+2. [OpenWorld.cs](C:/Users/Bruce/source/repo/poolofradiance/game/Assets/Editor/OpenWorld.cs:159) adds a Unicode em dash despite the briefs’ ASCII-only constraint.
+
+VERDICT: NEEDS-FIXES

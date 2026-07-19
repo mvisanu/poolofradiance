@@ -1,0 +1,7 @@
+Implemented exactly as requested:
+
+- Updated only `ValidateRoadSample` in [OpenWorld.cs](C:/Users/Bruce/source/repo/poolofradiance/game/Assets/Editor/OpenWorld.cs:349).
+- Added the required note to [codex-openworld-b-report.md](C:/Users/Bruce/source/repo/poolofradiance/codex/codex-openworld-b-report.md:164).
+- ASCII and diff checks passed.
+- Normal compile check was blocked by NuGet config permissions; `--no-restore` fallback succeeded with 0 errors and one existing FishNet warning.
+- No commit created.

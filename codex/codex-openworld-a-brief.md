@@ -109,6 +109,11 @@ World bounds constants: X in [-400, 560], Z in [-480, 410].
   (deterministic: Prim's from the alphabetically-first site) PLUS one edge from the
   town to the region's closest-to-origin site. The town endpoint of that edge is
   `entry.normalized * 58` (on the old town boundary, pointing toward the region).
+  - REVISION (controller, accepted post-implementation): the town endpoint is the
+    Chebyshev-66 town-square boundary projection `entry * (66 / max(|x|,|z|))`, not
+    Euclidean 58. The original formula started roads inside the built-up district
+    blocks (validator FAIL: Ashen Ward rooftop at (52.2,46.4)); the square boundary
+    starts them just past the old wall line. Verified [OpenWorld] PASS 1207/1207.
 - Every road endpoint that lands on a site attaches at the site's SOUTH arena edge:
   `center + new Vector3(0, 0, -24)` (the waystone arrival side).
 - Winding: subdivide each edge every ~24 units and offset each interior point

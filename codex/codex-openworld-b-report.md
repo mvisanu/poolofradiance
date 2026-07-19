@@ -160,3 +160,14 @@ scene validation, and visual review.
 - Remaining verification risk: only Unity's editor compiler/bootstrap can validate Unity API
   integration and report exact scene counts. That run was blocked solely by licensing IPC in
   this environment and remains required before acceptance.
+
+## Validator fix
+
+`ValidateRoadSample` now accepts a raycast hit as ground only when its GameObject name starts
+with `Wilderness_` or `SiteGround_`, or is exactly `Ground`. Other first hits are reported as
+non-ground blockers so low road obstacles can no longer certify themselves as walkable ground;
+the existing clearance checks remain unchanged for accepted ground hits.
+
+`scripts/compile-check.ps1` was blocked during restore by denied access to the user NuGet config.
+The required `dotnet build scripts/compile-check/CompileCheck.csproj --no-restore` fallback
+succeeded with 0 errors and 1 existing FishNet unreachable-code warning.
