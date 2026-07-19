@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "unity-mcp": {
+      "type": "stdio",
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "C:\\Users\\Bruce\\source\\repo\\unity-mcp-server\\Server",
+        "mcp-for-unity"
+      ]
+    }
+  }
+}
