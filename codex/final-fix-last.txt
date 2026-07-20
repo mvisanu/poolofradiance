@@ -1,0 +1,2 @@
+STATUS: PASS
+EVIDENCE: Added the `< 30f` early-return guard in `DrawObjectives()` only; no-restore compile succeeded with 0 errors.

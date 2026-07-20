@@ -1,0 +1,5 @@
+- **Important** — [QuestTracker.cs:392](C:/Users/Bruce/source/repo/poolofradiance/game/Assets/Scripts/Game/QuestTracker.cs:392): In combat at high UI scale or short logical heights, `availableHeight` can reach zero, but the collapsed and expanded paths still draw fixed-height labels/buttons beyond `CardRect`. The quest controls can overlap the XP/hotbar while their published hit-test rect has zero height, allowing battlefield clicks through visible HUD.
+
+- **Minor** — [CLAUDE.md:417](C:/Users/Bruce/source/repo/poolofradiance/CLAUDE.md:417): Graphics-tier documentation is stale. It describes `URP_Web` as no HDR/SSAO, 0.85 render scale, and runtime-swapped by `WebQuality`; current bootstrap uses HDR, SSAO, full render scale, and `HeadlessBuild.WebGL` assigns the pipeline before building.
+
+- **Minor** — [.mcp.json:9](C:/Users/Bruce/source/repo/poolofradiance/.mcp.json:9): The committed project-scoped MCP registration hardcodes one user’s absolute sibling-clone path. Any checkout elsewhere fails to start `unity-mcp`, and no checked-in setup documentation explains or provisions that external directory.
